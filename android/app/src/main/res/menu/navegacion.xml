@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/tab_mapa" android:icon="@drawable/ic_mapa" android:title="@string/tab_mapa" />
+    <item android:id="@+id/tab_parques" android:icon="@drawable/ic_parque" android:title="@string/tab_parques" />
+    <item android:id="@+id/tab_sensor" android:icon="@drawable/ic_sensor" android:title="@string/tab_sensor" />
+    <item android:id="@+id/tab_puntos" android:icon="@drawable/ic_puntos" android:title="@string/tab_puntos" />
+    <item android:id="@+id/tab_mas" android:icon="@drawable/ic_mas" android:title="@string/tab_mas" />
+</menu>

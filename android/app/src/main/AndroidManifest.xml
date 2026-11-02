@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Red: datos del mapa y envío de mediciones -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Bluetooth en Android 11 y anteriores -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Bluetooth en Android 12 (API 31) y superiores -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Ubicación: dónde se ha medido cada dato y "mi ubicación" en el mapa -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Recorrido en segundo plano con notificación fija -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
+    <!-- Alertas de parques y aviso de puntos (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
+    <!-- usesCleartextTraffic: el servidor del Sprint 0 es http (sin s) -->
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:theme="@style/Theme.Respira">
+
+        <!-- La clave sale de local.properties (ver app/build.gradle.kts) -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}" />
+
+        <activity
+            android:name=".ui.SplashActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Respira.Splash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".ui.OnboardingActivity" android:exported="false" />
+        <activity android:name=".ui.MainActivity" android:exported="false" android:launchMode="singleTop" />
+        <activity android:name=".ui.ZonaActivity" android:exported="false" />
+        <activity android:name=".ui.AlertaActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.MisAlertasActivity" android:exported="false" />
+        <activity android:name=".ui.PercepcionActivity" android:exported="false" />
+        <activity android:name=".ui.MisPercepcionesActivity" android:exported="false" />
+        <activity android:name=".ui.LoginActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.RegistroActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.RecuperarActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ui.CuentaActivity" android:exported="false" />
+        <activity android:name=".ui.RegalosActivity" android:exported="false" />
+        <activity android:name=".ui.CanjesActivity" android:exported="false" />
+        <activity android:name=".ui.AjustesActivity" android:exported="false" />
+        <activity android:name=".ui.TextoActivity" android:exported="false" />
+
+        <service
+            android:name=".ble.ServicioEscuharBeacons"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+    </application>
+
+</manifest>

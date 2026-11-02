@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Respira" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primario</item>
+        <item name="colorOnPrimary">@color/primario_tinta</item>
+        <item name="colorPrimaryContainer">@color/primario_suave</item>
+        <item name="colorOnPrimaryContainer">@color/tinta</item>
+        <item name="colorSecondary">@color/acento</item>
+        <item name="colorSecondaryContainer">@color/primario_suave</item>
+        <item name="colorOnSecondaryContainer">@color/primario</item>
+        <item name="colorError">@color/nivel_alto</item>
+        <item name="android:colorBackground">@color/fondo</item>
+        <item name="colorSurface">@color/superficie</item>
+        <item name="colorOnSurface">@color/tinta</item>
+        <item name="colorOnSurfaceVariant">@color/tinta_2</item>
+        <item name="colorOutline">@color/linea</item>
+        <item name="android:windowBackground">@color/fondo</item>
+        <item name="android:statusBarColor">@color/fondo</item>
+        <item name="android:navigationBarColor">@color/superficie</item>
+    </style>
+
+    <style name="Theme.Respira.Splash">
+        <item name="android:windowBackground">@color/fondo</item>
+    </style>
+
+    <!-- Botones cuadrados del mapa (3D y mi ubicación) -->
+    <style name="Respira.BotonMapa" parent="Widget.Material3.Button.UnelevatedButton">
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:padding">0dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/primario</item>
+        <item name="backgroundTint">@color/primario_suave</item>
+        <item name="iconTint">@color/primario</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">0dp</item>
+        <item name="cornerRadius">14dp</item>
+        <item name="elevation">4dp</item>
+    </style>
+
+    <!-- Botones de zoom (estilo de los controles de Google Maps) -->
+    <style name="Respira.BotonZoom" parent="Widget.Material3.Button.TextButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:padding">0dp</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textColor">@color/tinta_2</item>
+        <item name="cornerRadius">0dp</item>
+    </style>
+
+    <style name="Respira.Titulo" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/tinta</item>
+    </style>
+</resources>

@@ -1,0 +1,9 @@
+{
+  "name": "respira",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Respira Web: mapa público y panel municipal (Nodia)",
+  "scripts": {
+    "start": "npx --yes serve -l 5500 ."
+  }
+}

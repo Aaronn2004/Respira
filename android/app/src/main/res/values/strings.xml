@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Respira</string>
+    <string name="developed_by">Developed by Nodia</string>
+    <string name="tab_mapa">Mapa</string>
+    <string name="tab_parques">Parques</string>
+    <string name="tab_sensor">Sensor</string>
+    <string name="tab_puntos">Puntos</string>
+    <string name="tab_mas">Más</string>
+    <string name="capa_mediciones">Sensores</string>
+    <string name="capa_comunidad">Comunidad</string>
+    <string name="sin_clave_maps">Falta la clave de Google Maps. Añade MAPS_API_KEY a local.properties y vuelve a compilar (ver README).</string>
+    <string name="canal_alertas">Alertas de parques</string>
+    <string name="canal_recorrido">Recorrido con sensor</string>
+    <string name="canal_puntos">Puntos</string>
+    <string name="nota_privacidad_mapa">Es la media de lo que han medido los portadores al pasar por esta zona. No se publica el recorrido de nadie. «Sin datos» no significa aire limpio.</string>
+</resources>

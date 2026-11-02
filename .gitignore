@@ -1,0 +1,24 @@
+# ---- Claves y configuración local: NUNCA al repositorio ----
+android/local.properties
+web/js/config.js
+**/config.php
+.env
+*.keystore
+*.jks
+
+# ---- Android Studio / Gradle ----
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/.kotlin/
+android/captures/
+*.iml
+
+# ---- Web / VS Code ----
+web/node_modules/
+
+# ---- Sistema ----
+.DS_Store
+Thumbs.db
+desktop.ini
