@@ -38,6 +38,7 @@ import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.Dash;
 import com.google.android.gms.maps.model.Gap;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -179,6 +180,11 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mapa = googleMap;
+        // En modo oscuro, Google Maps no se oscurece solo: se le pasa un estilo (res/raw/mapa_oscuro.json)
+        if ((getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
+            mapa.setMapStyle(MapStyleOptions.loadRawResourceStyle(requireContext(), R.raw.mapa_oscuro));
+        }
         mapa.getUiSettings().setZoomControlsEnabled(false); // usamos nuestros botones + / −
         mapa.getUiSettings().setCompassEnabled(true);
         mapa.getUiSettings().setMapToolbarEnabled(false);

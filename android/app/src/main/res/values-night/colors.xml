@@ -1,23 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Paleta de Respira en modo oscuro -->
+<!-- Paleta de Respira en modo oscuro: la misma que la web (casi negro con matiz verde azulado) -->
 <resources>
-    <color name="fondo">#0C1516</color>
-    <color name="superficie">#152123</color>
-    <color name="superficie_2">#1B2A2C</color>
+    <color name="fondo">#040809</color>
+    <color name="superficie">#0B1214</color>
+    <color name="superficie_2">#111A1C</color>
+    <color name="superficie_3">#182325</color>
     <color name="tinta">#E3EEEF</color>
     <color name="tinta_2">#A1B6B8</color>
-    <color name="tinta_3">#71888A</color>
-    <color name="linea">#2A3C3E</color>
+    <color name="tinta_3">#7A9092</color>
+    <color name="linea">#1C2729</color>
     <color name="primario">#5FC4C0</color>
     <color name="primario_tinta">#062224</color>
-    <color name="primario_suave">#143A3D</color>
+    <color name="primario_suave">#0F2D30</color>
     <color name="acento">#2F9599</color>
     <color name="nivel_bajo">#4CC27D</color>
     <color name="nivel_medio">#F0B53C</color>
     <color name="nivel_alto">#F06B5C</color>
     <color name="nivel_ninguno">#6E7F78</color>
-    <color name="nivel_bajo_suave">#173826</color>
-    <color name="nivel_medio_suave">#3A2E12</color>
-    <color name="nivel_alto_suave">#3E1D19</color>
+    <color name="nivel_bajo_suave">#10291B</color>
+    <color name="nivel_medio_suave">#2B220C</color>
+    <color name="nivel_alto_suave">#2E1512</color>
     <color name="nodia">#F2F6F3</color>
+    <color name="ef_molesta">#F0B53C</color>
+    <color name="ef_dana">#F06B5C</color>
+    <color name="ef_peligro">#FF8A8A</color>
 </resources>

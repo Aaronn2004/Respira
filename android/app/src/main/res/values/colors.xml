@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Paleta de la identidad visual de Respira (modo claro) -->
+<!-- Paleta de Respira en modo claro: la misma que la web (fondo blanco) -->
 <resources>
-    <color name="fondo">#EEF5F5</color>
+    <color name="fondo">#FFFFFF</color>
     <color name="superficie">#FFFFFF</color>
-    <color name="superficie_2">#E3EEEE</color>
+    <color name="superficie_2">#EEF4F4</color>
+    <color name="superficie_3">#DCE8E8</color>
     <color name="tinta">#12282B</color>
     <color name="tinta_2">#4A5F62</color>
     <color name="tinta_3">#738A8D</color>
-    <color name="linea">#D0DFDF</color>
+    <color name="linea">#DCE6E6</color>
     <color name="primario">#0A6C74</color>
     <color name="primario_tinta">#FFFFFF</color>
-    <color name="primario_suave">#D8EDED</color>
+    <color name="primario_suave">#E3F1F1</color>
     <color name="acento">#5FC4C0</color>
     <color name="nivel_bajo">#2E9D5B</color>
     <color name="nivel_medio">#D99A1E</color>
@@ -20,4 +21,15 @@
     <color name="nivel_medio_suave">#FAEED3</color>
     <color name="nivel_alto_suave">#F9E0DC</color>
     <color name="nodia">#0D3B31</color>
+    <!-- Efectos en la salud: Molesta · Daña · Peligro -->
+    <color name="ef_molesta">#E0A21B</color>
+    <color name="ef_dana">#E5533F</color>
+    <color name="ef_peligro">#B4232A</color>
+    <!-- Degradados de los iconos de cada magnitud (iguales en los dos modos) -->
+    <color name="grad_o3_ini">#2F9599</color>
+    <color name="grad_o3_fin">#0A6C74</color>
+    <color name="grad_temp_ini">#F0B53C</color>
+    <color name="grad_temp_fin">#E5533F</color>
+    <color name="grad_ruido_ini">#7C6FE0</color>
+    <color name="grad_ruido_fin">#4A3FB8</color>
 </resources>

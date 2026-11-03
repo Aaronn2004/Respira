@@ -27,6 +27,7 @@
 
     <!-- usesCleartextTraffic: el servidor del Sprint 0 es http (sin s) -->
     <application
+        android:name=".RespiraApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -65,6 +66,7 @@
         <activity android:name=".ui.CanjesActivity" android:exported="false" />
         <activity android:name=".ui.AjustesActivity" android:exported="false" />
         <activity android:name=".ui.TextoActivity" android:exported="false" />
+        <activity android:name=".ui.EfectosActivity" android:exported="false" />
 
         <service
             android:name=".ble.ServicioEscuharBeacons"

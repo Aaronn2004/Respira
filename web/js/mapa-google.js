@@ -66,7 +66,7 @@
       // Como en el visual: en pantallas estrechas no caben Mapa/Satélite ni pantalla completa
       mapTypeControl: window.innerWidth >= 700,
       mapTypeControlOptions: { position: google.maps.ControlPosition.TOP_RIGHT },
-      streetViewControl: true,
+      streetViewControl: false, // sin Street View (decisión de diseño)
       fullscreenControl: window.innerWidth >= 700,
       zoomControl: true,
     };

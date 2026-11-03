@@ -4,11 +4,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.nodia.respira.BuildConfig;
+import com.nodia.respira.R;
 import com.nodia.respira.datos.Magnitud;
+import com.nodia.respira.datos.Nivel;
+import com.nodia.respira.datos.Salud;
 
 // ==============================================================
 // Textos fijos: guía de valores, privacidad y acerca de.
@@ -37,20 +41,37 @@ public class TextoActivity extends AppCompatActivity {
         }
     }
 
+    // Mismo contenido y diseño que «Qué significan los valores» de la web
     private void guia(LinearLayout c) {
-        Ui.parrafo(c, "Cada zona muestra la media de lo que han medido los sensores al pasar por ella en la última hora.");
+        Ui.parrafo(c, "Cada zona se colorea según la media de la última hora.");
         for (Magnitud m : Magnitud.values()) {
-            LinearLayout card = Ui.tarjeta(c);
-            Ui.fila(card, m.nombre + " (" + m.unidad + ")",
-                    "Bajo: menos de " + m.formatear(m.limiteMedio) + "\nMedio: de " + m.formatear(m.limiteMedio)
-                            + " a " + m.formatear(m.limiteAlto) + "\nAlto: " + m.formatear(m.limiteAlto) + " o más", null);
+            LinearLayout card = Bloques.tarjetaConCabecera(c, m, m.nombre,
+                    (m == Magnitud.O3 ? m.abreviatura + " · " : "") + m.unidad, true);
+            Bloques.barraNiveles(card);
+            Nivel[] niveles = {Nivel.BAJO, Nivel.MEDIO, Nivel.ALTO};
+            for (int k = 0; k < niveles.length; k++) {
+                if (k > 0) {
+                    Bloques.separador(card);
+                }
+                Bloques.filaNivel(card, niveles[k], Salud.rango(m, niveles[k]), Salud.significado(m, niveles[k]));
+            }
+            Bloques.pequeno(card, Salud.fuenteGuia(m), 6);
         }
+
         LinearLayout est = Ui.tarjeta(c);
-        Ui.fila(est, "Antiguo", "El último dato tiene entre 1 y 24 horas. Puede no reflejar cómo está ahora.", null);
-        Ui.fila(est, "Sin datos", "Nadie con sensor ha pasado en las últimas 24 horas. No significa que el aire esté limpio.", null);
-        Ui.nota(c, "Umbrales orientativos. Ozono: 0,060 ppm ≈ 120 µg/m³ (valor objetivo UE, media de 8 h) y "
-                + "0,090 ppm ≈ 180 µg/m³ (umbral de información UE, media de 1 h). Ruido: referencia OMS de 55 dB "
-                + "para exteriores de día. Temperatura: valores de ejemplo, no son los umbrales oficiales de AEMET.");
+        int p = Ui.dp(this, 16);
+        est.setPadding(p, p, p, p);
+        TextView titulo = Ui.etiqueta(est, "Estado del dato");
+        ((LinearLayout.LayoutParams) titulo.getLayoutParams()).topMargin = 0;
+        Bloques.filaEstado(est, R.color.nivel_bajo, false, "Reciente", "Medido en la última hora.");
+        Bloques.filaEstado(est, R.color.tinta_2, false, "Antiguo", "Medido hace entre 1 y 24 horas. Se muestra con su hora.");
+        Bloques.filaEstado(est, 0, true, "Sin datos", "Nadie con sensor ha pasado en 24 horas. Trama gris: no significa «todo bien».");
+        Bloques.pequeno(est, "Parques con contorno; barrios en tono suave. Los sensores de bajo coste no sustituyen a las "
+                + "estaciones ni a los avisos oficiales.", 8);
+
+        LinearLayout ir = Ui.tarjeta(c);
+        Ui.fila(ir, "Efectos en la salud", "Qué causan cuando se superan los umbrales",
+                v -> startActivity(new Intent(this, EfectosActivity.class)));
     }
 
     private void privacidad(LinearLayout c) {

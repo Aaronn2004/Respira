@@ -17,7 +17,7 @@ Respira/
 |---|---|
 | Mapa con Google Maps (app y web) | Real (necesita clave, ver abajo) |
 | Escaneo BLE del sensor y `POST /medicion` | Real: código del Sprint 0 (`ble/`) adaptado a servicio en primer plano |
-| Zonas, valores, cuentas, préstamos, puntos, regalos y canjes | **Demostración**: datos fijos del prototipo v17/v7, guardados en el móvil (`SharedPreferences`) o en memoria (web). Falta la API del servidor |
+| Zonas, valores, cuentas, préstamos, puntos, regalos y canjes | **Demostración**: datos fijos del prototipo (app v24 / web v30), guardados en el móvil (`SharedPreferences`) o en memoria (web). Falta la API del servidor |
 | Zonas sobre Gandia | **Ficticias y aproximadas**: se reemplazarán por los polígonos que dé el servidor |
 | Alertas push | Simuladas en local (Más › Controles de la demo). Las reales irán por FCM desde el servidor |
 
@@ -38,6 +38,8 @@ Estructura del código (`app/src/main/java/com/nodia/respira/`):
 - `ble/` · Sprint 0: `ServicioEscuharBeacons`, `TramaIBeacon`, `Medicion`, `PeticionarioREST`, `LogicaFake`, `Utilidades`.
 - `datos/` · modelo y `Repositorio` (único punto de acceso a datos; al llegar la API solo cambia esta clase). `Reglas` es lógica pura (estados de zona, puntos, validaciones).
 - `ui/` · `SplashActivity` (carga ~3 s, «Developed by Nodia»), `OnboardingActivity`, `MainActivity` con 5 pestañas (Mapa · Parques · Sensor · Puntos · Más) y el resto de pantallas.
+  - `Tema` + `RespiraApp`: modo claro (por defecto) u oscuro, en Más › Modo oscuro. Colores en `values/colors.xml` y `values-night/colors.xml` (los mismos que la web). En oscuro, Google Maps usa `res/raw/mapa_oscuro.json`.
+  - `TextoActivity` (guía «Qué significan los valores») y `EfectosActivity` («Efectos en la salud»), con las piezas de `Bloques` y los textos de `datos/Salud`.
 
 ## Web (`web/`)
 
@@ -46,6 +48,8 @@ Páginas: portada (`#inicio`, con los ayuntamientos que usan Respira), mapa, com
 1. VS Code › **Open Folder** › `Respira/web` (o abre `respira.code-workspace`).
 2. Copia `web/js/config.example.js` como `web/js/config.js` y pon `MAPS_API_KEY` (clave con **Maps JavaScript API**). `MAP_ID` (opcional, mapa vectorial) activa el botón 3D: sin él, Google Maps no permite inclinar el mapa.
 3. Abre con **Live Server** (extensión recomendada) en `http://127.0.0.1:5500`, o `npm start`.
+
+Diseño: fondo blanco con botón de modo oscuro en la cabecera (se recuerda en el navegador). En la ficha de cada zona del mapa, el botón «?» de cada medición abre la guía «Qué significan los valores»; en «Cómo funciona» están también la guía y «Qué te puede pasar» (efectos en la salud).
 
 Sin `config.js`, o si la clave falla, la web usa el mapa SVG del prototipo (sin marca de Google) (y la consola muestra un 404 de `config.js`, que es esperado).
 

@@ -1,11 +1,11 @@
 /* =============================================================
    Respira Web (portada + web pública + panel municipal). JS vanilla.
-   Portado del prototipo web v9 (el que se ve en Claude).
-   - El mapa usa Google Maps JavaScript API si hay clave en js/config.js.
-     Sin clave, usa el mapa SVG del prototipo (sin marca de Google).
-   - La miniatura de la portada es SVG estático: no carga Google Maps.
-   - Datos: de DEMOSTRACIÓN (constantes de abajo). Al conectar la API
-     real, se sustituyen por fetch() al servidor.
+   Generado desde el prototipo web v30 que se ve en Claude (diseño de la versión B).
+   - Fondo blanco con botón de modo oscuro (data-tema en <html>, localStorage «respira-tema»).
+   - El mapa usa Google Maps JavaScript API si hay clave en js/config.js (js/mapa-google.js).
+     Sin clave, usa el mapa SVG de demostración.
+   - Datos: de DEMOSTRACIÓN (constantes de abajo). Al conectar la API real,
+     se sustituyen por fetch() al servidor.
    ============================================================= */
 (function(){
 "use strict";
@@ -41,6 +41,57 @@ I.list=sv('<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',18);
 const TODAY='2026-11-02';
 const MAG={o3:{n:'Ozono',ab:'O₃',u:'ppm'},temp:{n:'Temperatura',ab:'T',u:'°C'},ruido:{n:'Ruido',ab:'dB',u:'dB'}};
 const LIM={o3:[0.060,0.090],temp:[25,32],ruido:[55,65]};
+/* ---------- efectos en la salud (mismo texto en web y app) ---------- */
+const EF_ICO={o3:'<path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h7"/>',temp:'<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 10v7"/>',ruido:'<path d="M4 9.5h3.5L12 5v14l-4.5-4.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.5 6.5a7.5 7.5 0 0 1 0 11"/>'};
+
+/* versión B: escalera de efectos (compacta) */
+const EF_B=[
+ {k:'o3',n:'Ozono',lema:'Irrita los pulmones las tardes de sol',pasos:[
+   ['medio','0,060 ppm','8 h','Te ahogas antes si haces deporte'],
+   ['alto','0,090 ppm','1 h','Ojos y garganta irritados, tos, duele respirar hondo'],
+   ['grave','0,120 ppm','1 h','Crisis de asma o EPOC; los pulmones rinden menos, también en sanos']],
+  peor:['Niños','Mayores','Asma o EPOC','Deportistas'],hacer:'Nada de deporte fuera de 12 a 20 h',
+  fuente:'UE (RD 102/2011) · OMS 2021'},
+ {k:'temp',n:'Calor',lema:'El cuerpo deja de poder enfriarse',pasos:[
+   ['medio','28–30 °C','máxima','Deshidratación, calambres y dolor de cabeza en personas sensibles'],
+   ['alto','> 20 °C','de noche','No descansas: el cuerpo no se recupera y el corazón se fuerza'],
+   ['grave','> 40 °C','en el cuerpo','Golpe de calor: confusión y piel seca y ardiendo. Llama al 112']],
+  peor:['Mayores de 65','Bebés','Embarazadas','Enfermos crónicos'],hacer:'Sombra, agua sin esperar a tener sed y evita las horas centrales',
+  fuente:'Ministerio de Sanidad, plan de calor 2026'},
+ {k:'ruido',n:'Ruido',lema:'Te daña aunque te acostumbres',pasos:[
+   ['medio','45 dB','noche','Duermes peor aunque no llegues a despertarte'],
+   ['alto','53–65 dB','día','Estrés, tensión alta y más riesgo de infarto con los años'],
+   ['grave','85 dB','horas','Pitidos y sordera que no tienen vuelta atrás']],
+  peor:['Niños','Mayores','Tensión alta o corazón'],hacer:'Duerme en el cuarto más tranquilo y pasea por calles sin tráfico',
+  fuente:'OMS Europa 2018 · RD 286/2006'}];
+const EF_NV={medio:'Molesta',alto:'Daña',grave:'Peligro'};
+const EF_ICO_B={hacer:'<path d="M20 6L9 17l-5-5"/>',peor:'<circle cx="9" cy="7" r="3"/><path d="M3 21v-1a6 6 0 0 1 12 0v1"/><path d="M16 3.5a3 3 0 0 1 0 6"/><path d="M21 21v-1a6 6 0 0 0-4-5.6"/>'};
+const efectosB=()=>`<div class="efb-grid">${EF_B.map(e=>`<article class="efb">
+ <header class="efb-top"><span class="efb-ico efb-${e.k}">${sv(EF_ICO[e.k],24,1.9)}</span><div><h3>${e.n}</h3><p>${e.lema}</p></div></header>
+ <ol class="efb-pasos">${e.pasos.map(([nv,v,t,txt])=>`<li class="efb-p efb-${nv}"><span class="efb-v"><b>${v}</b>${t?`<small>${t}</small>`:''}</span><span class="efb-txt"><em>${EF_NV[nv]}</em>${txt}</span></li>`).join('')}</ol>
+ <div class="efb-pie"><div class="efb-fila">${sv(EF_ICO_B.peor,16,2)}<span class="efb-chips">${e.peor.map(p=>`<span>${p}</span>`).join('')}</span></div>
+ <div class="efb-fila efb-hacer">${sv(EF_ICO_B.hacer,16,2.4)}<b>${e.hacer}</b></div></div>
+ <span class="efb-fuente">${e.fuente}</span></article>`).join('')}</div>`;
+
+/* versión B: guía de valores (equivale a «Qué significan los valores» de la app) */
+const GUIA_TXT={
+ o3:{bajo:'Aire sin problemas para nadie.',medio:'Quien hace deporte intenso puede notarlo.',alto:'Supera el umbral de información de la UE: evita el esfuerzo al aire libre.',fuente:'Referencia europea de 120 y 180 µg/m³ (≈ 0,060 y 0,090 ppm)'},
+ temp:{bajo:'Temperatura agradable.',medio:'Calor: busca sombra y bebe agua.',alto:'Riesgo para mayores, niños y enfermos crónicos.',fuente:'Valores de ejemplo del prototipo, pendientes de fuente oficial'},
+ ruido:{bajo:'Ambiente tranquilo.',medio:'Ruido de tráfico habitual: molesta y cansa.',alto:'Si es habitual, daña la salud (sueño, tensión, corazón).',fuente:'Valores de ejemplo del prototipo, pendientes de fuente oficial'}};
+const guiaRango=(k,i)=>{const l=LIM[k];return i===0?'&lt; '+fmt(l[0],k):i===1?fmt(l[0],k)+' – '+fmt(l[1],k):'≥ '+fmt(l[1],k)};
+const guiaHTML=()=>`<div class="gv-grid">${Object.keys(MAG).map(k=>`<article class="gv" data-k="${k}">
+ <header class="gv-top"><span class="efb-ico efb-${k}">${sv(EF_ICO[k],22,1.9)}</span><div><h3>${MAG[k].n}</h3><span class="gv-u">${k==='o3'?MAG[k].ab+' · ':''}${MAG[k].u}</span></div></header>
+ <div class="gv-barra" aria-hidden="true"><i class="lv-b"></i><i class="lv-m"></i><i class="lv-a"></i></div>
+ <ul class="gv-niv">${['bajo','medio','alto'].map((n,i)=>`<li><span class="badge b-${n}">${NIV[n]}</span><b class="gv-r">${guiaRango(k,i)}</b><span class="gv-t">${GUIA_TXT[k][n]}</span></li>`).join('')}</ul>
+ <span class="gv-fuente">${GUIA_TXT[k].fuente}</span></article>`).join('')}</div>
+ <div class="gv-estado"><b class="ef-t">Estado del dato</b><div class="gv-est">${[
+  ['real','Reciente','Medido en la última hora.'],
+  ['ant','Antiguo','Medido hace entre 1 y 24 horas. Se muestra con su hora.'],
+  ['sin','Sin datos','Nadie con sensor ha pasado en 24 horas. Trama gris: no significa «todo bien».']].map(([c,t,d])=>`<div><i class="gv-sw gv-${c}"></i><span><b>${t}</b>${d}</span></div>`).join('')}</div>
+ <p class="gv-nota">Cada zona muestra la media de la última hora. Parques con contorno; barrios en tono suave. Los sensores de bajo coste no sustituyen a las estaciones ni a los avisos oficiales.</p></div>`;
+const EF_AVISO_B='Orientativo: no sustituye al médico. El mapa da medias de la última hora. Si hay síntomas graves, llama al 112.';
+const efectosHTML=efectosB;
+
 const NIV={bajo:'Bajo',medio:'Medio',alto:'Alto'};
 const PERC={ruido:{n:'Ruido',lv:['Bajo','Medio','Alto']},temp:{n:'Temperatura',lv:['Agradable','Calor','Mucho calor']},aire:{n:'Aire',lv:['Limpio','Regular','Malo']}};
 const avOk=a=>(!S.avf||a.niv===S.avf)&&(S.avt==='todos'||a.tipo===S.avt);
@@ -174,10 +225,16 @@ const statsOf=d=>{const v=d.filter(x=>x!=null);return v.length?[Math.min(...v),v
 
 /* ---------- web pública ---------- */
 function header(cur){
- const L=[['inicio','Inicio'],['mapa','Mapa'],['como-funciona','Cómo funciona y voluntariado'],['privacidad','Privacidad']];
- return `<header class="top wrap"><div class="inner"><a class="logo" href="#inicio" aria-label="Respira, inicio">${LOGO(30)}</a><nav class="mainnav" aria-label="Principal">${L.map(([h,n])=>`<a href="#${h}" ${cur===h||(h==='mapa'&&['comunidad','historial','comparar'].includes(cur))?'aria-current="page"':''}>${n}</a>`).join('')}</nav>
- <div class="acts"><a class="btn sm ghost hide-m" href="#como-funciona" data-act="toApp">Descarga la app</a><a class="btn sm sec hide-m" href="#acceso">Acceso ayuntamiento</a><button class="ib burger" data-act="menu" aria-label="Abrir menú" aria-expanded="${S.menu}">${I.menu}</button></div></div></header>
- ${S.menu?`<div class="mmenu" data-act="menuBackdrop"><nav aria-label="Menú"><div style="display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px"><b style="font-family:var(--f-display);font-size:20px">Menú</b><button class="ib" data-act="menuClose" aria-label="Cerrar menú">${I.x}</button></div>${[...L,['como-funciona','Descarga la app'],['acceso','Acceso ayuntamiento']].map(([h,n])=>`<a href="#${h}">${n}</a>`).join('')}</nav></div>`:''}`}
+ /* Misma barra que la portada: marca, píldora de enlaces, botones y menú móvil */
+ const com=S.layer==='comunidad';
+ const activo=h=>h==='comunidad'?cur==='mapa'&&com:h==='mapa'?(cur==='mapa'&&!com)||['historial','comparar'].includes(cur):cur===h;
+ const links=TV_LINKS.map(([h,n])=>`<a class="tv-link" href="#${h}"${activo(h)?' aria-current="page"':''}>${n}</a>`).join('');
+ return `<header class="tv tvh"><nav class="tv-nav" aria-label="Principal">
+  <a class="tv-marca" href="#inicio" aria-label="Respira, inicio"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">${SYM()}</svg>Respira</a>
+  <div class="tv-pill" data-tv-desktop>${links}</div>
+  <button type="button" class="tv-burger" data-tv-mobile data-act="${S.menu?'menuClose':'menu'}" aria-controls="tvh-menu" aria-expanded="${!!S.menu}" aria-label="${S.menu?'Cerrar menú':'Abrir menú'}">${TV_BURGER(!!S.menu)}</button>
+  ${botonTema(true)}<div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm ghost tv-app" href="#como-funciona" data-act="toApp">Descarga la app</a><a class="btn sm sec" href="#acceso">Acceso ayuntamiento</a></div>
+ </nav>${S.menu?`<div id="tvh-menu" class="tv-panel" data-tv-mobile>${links}<div class="tv-panel-pie"><a class="btn sm ghost" href="#como-funciona">Descarga la app</a><a class="btn sm sec" href="#acceso">Ayuntamiento</a></div></div>`:''}</header>`}
 const footer=()=>`<footer class="wrap"><div class="inner"><span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap">${LOGO(20)}<span>· un servicio de</span>${NODIA(15,'var(--ink)')}<b style="letter-spacing:.08em;color:var(--ink)">NODIA</b></span><span>Proyecto de Biometría · GTI · UPV · <a href="#privacidad">Privacidad</a></span></div></footer>`;
 const zonaOpts=(sel,ex)=>['parque','barrio'].map(t=>`<optgroup label="${t==='parque'?'Parques':'Barrios'}">${ZONAS.filter(z=>z.tipo===t&&est(z)!=='none').map(z=>`<option value="${z.id}" ${z.id===sel?'selected':''}>${esc(z.n)}</option>`).join('')}</optgroup>`).join('');
 
@@ -198,10 +255,10 @@ function vMapa(){const zon=S.layer==='zonas';
  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:6px;border-style:dashed"><b>¿Quieres compartir lo que notas?</b><span class="muted" style="font-size:14px">Las percepciones se publican desde la app Android con una cuenta gratuita.</span><a href="#como-funciona" data-act="toApp" class="link" style="align-self:flex-start">Descargar la app</a></div>`;
  const z=S.sel&&byZ(S.sel);const e=z&&est(z);
  const pop=z&&zon?`<div class="popup" role="dialog" aria-label="${esc(z.n)}"><div style="display:flex;gap:10px"><div style="flex:1"><span class="hint">${z.tipo==='parque'?'Parque':'Barrio'} · ${z.nm} mediciones en la última hora</span><h2 style="font-size:20px">${esc(z.n)}</h2></div><button class="ib" data-act="sel" data-arg="" aria-label="Cerrar">${I.x}</button></div>
- ${e==='none'?`<div class="alert warn">${I.info}<span>Nadie con sensor ha pasado por aquí en las últimas 24 h. No significa que el aire esté limpio.</span></div>`:`<div>${Object.keys(MAG).map(k=>`<div class="vrow"><span style="flex:1">${MAG[k].n}</span><span class="v">${fmt(z[k],k)}</span><span class="hint" style="width:28px">${z[k]==null?'':MAG[k].u}</span>${e==='old'?'<span class="badge b-none">Antiguo</span>':badge(k,z[k])}</div>`).join('')}</div><span class="hint">Última medición: ${hace(z.hace)}${e==='old'?' · <b style="color:var(--lv-medio)">dato antiguo</b>':''}. Media de la zona; no se muestran recorridos.</span>`}
+ ${e==='none'?`<div class="alert warn">${I.info}<span>Nadie con sensor ha pasado por aquí en las últimas 24 h. No significa que el aire esté limpio.</span></div>`:`<div>${Object.keys(MAG).map(k=>`<div class="vrow"><span style="flex:1">${MAG[k].n}</span><span class="v">${fmt(z[k],k)}</span><span class="hint" style="width:28px">${z[k]==null?'':MAG[k].u}</span>${e==='old'?'<span class="badge b-none">Antiguo</span>':badge(k,z[k])}${`<button type="button" class="gv-q" data-act="aValores" data-arg="${k}" aria-label="Qué significa el valor de ${MAG[k].n.toLowerCase()}" title="Qué significa">?</button>`}</div>`).join('')}</div><span class="hint">Última medición: ${hace(z.hace)}${e==='old'?' · <b style="color:var(--lv-medio)">dato antiguo</b>':''}. Media de la zona; no se muestran recorridos.</span>`}
  <div style="display:flex;gap:8px"><button class="btn sm" style="flex:1" data-act="toHist" data-arg="${z.id}" ${e==='none'?'disabled':''}>Ver historial</button><button class="btn sm sec" data-act="toCmp" data-arg="${z.id}" ${e==='none'?'disabled':''}>Comparar</button></div></div>`:'';
- const legend=zon?`<div class="legend"><b>${MAG[S.mag].ab} (${MAG[S.mag].u}) · última hora</b><span><i style="background:var(--lv-bajo)"></i>Bajo</span><span><i style="background:var(--lv-medio)"></i>Medio</span><span><i style="background:var(--lv-alto)"></i>Alto</span><span><i style="background:repeating-linear-gradient(45deg,var(--lv-none) 0 2px,transparent 2px 5px);border:1px dashed var(--lv-none)"></i>Sin datos (más de 24 h)</span><span><i style="background:var(--ink-2)"></i>Antiguo (1–24 h)</span><span class="hint">Parques con contorno · barrios en tono suave</span></div>`:`<div class="legend"><b>${S.avt==='todos'?'Percepciones · 24 h':PERC[S.avt].n+' percibido'}</b>${[1,2,3].map(k=>`<span>${barsIco(k,14)} ${S.avt==='todos'?['Bajo','Medio','Alto'][k-1]:PERC[S.avt].lv[k-1]}</span>`).join('')}<span class="hint">No son mediciones</span></div>`;
- return header('mapa')+`<main class="mapview"><aside class="side" aria-label="Filtros y lista">${side}</aside><div class="mapwrap${S.tilt&&!GMAP()?' tilt':''}">${GMAP()?GMAP().slotHTML()+pop+GMAP().controlesHTML()+legend:`<svg class="map" viewBox="${vb()}" preserveAspectRatio="xMidYMid slice">${mapBase()}${zon?ZONAS.filter(z=>z.tipo==='barrio').map(barrioSVG).join('')+ZONAS.filter(z=>z.tipo==='parque').map(parqueSVG).join(''):AVISOS.map(avisoSVG).join('')}</svg>${pop}<div class="mapctl"><button aria-label="Vista inicial" data-act="zoom" data-arg="reset">⟲</button><button class="t3" aria-label="Vista en perspectiva" aria-pressed="${S.tilt}" data-act="tilt">3D</button></div><div class="gzoom"><button aria-label="Acercar" data-act="zoom" data-arg="in">+</button><button aria-label="Alejar" data-act="zoom" data-arg="out">−</button></div>${legend}`}</div></main>`}
+ const legend=zon?`<div class="legend"><b>${MAG[S.mag].ab} (${MAG[S.mag].u}) · última hora</b><span><i style="background:var(--lv-bajo)"></i>Bajo</span><span><i style="background:var(--lv-medio)"></i>Medio</span><span><i style="background:var(--lv-alto)"></i>Alto</span><span><i style="background:repeating-linear-gradient(45deg,var(--lv-none) 0 2px,transparent 2px 5px);border:1px dashed var(--lv-none)"></i>Sin datos (más de 24 h)</span><span><i style="background:var(--ink-2)"></i>Antiguo (1–24 h)</span>${'<button type="button" class="gv-abrir" data-act="guia">'+sv('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17v.01"/>',15,2)+'Qué significan</button>'}<span class="hint">Parques con contorno · barrios en tono suave</span></div>`:`<div class="legend"><b>${S.avt==='todos'?'Percepciones · 24 h':PERC[S.avt].n+' percibido'}</b>${[1,2,3].map(k=>`<span>${barsIco(k,14)} ${S.avt==='todos'?['Bajo','Medio','Alto'][k-1]:PERC[S.avt].lv[k-1]}</span>`).join('')}<span class="hint">No son mediciones</span></div>`;
+ return header('mapa')+`<main class="mapview"><aside class="side" aria-label="Filtros y lista">${side}</aside><div class="mapwrap${S.tilt&&!GMAP()?' tilt':''}">${GMAP()?GMAP().slotHTML()+pop+GMAP().controlesHTML()+legend:`<svg class="map" viewBox="${vb()}" preserveAspectRatio="xMidYMid slice">${mapBase()}${zon?ZONAS.filter(z=>z.tipo==='barrio').map(barrioSVG).join('')+ZONAS.filter(z=>z.tipo==='parque').map(parqueSVG).join(''):AVISOS.map(avisoSVG).join('')}</svg>${pop}<div class="mapctl"><button aria-label="Vista inicial" data-act="zoom" data-arg="reset">⟲</button><button class="t3" aria-label="Vista en perspectiva" aria-pressed="${S.tilt}" data-act="tilt">3D</button></div><div class="gtipo" role="group" aria-label="Tipo de mapa"><button aria-pressed="true">Mapa</button><button aria-pressed="false" data-act="toastMsg" data-arg="La vista Satélite la da Google Maps en la web real">Satélite</button></div><button class="gfull" aria-label="Pantalla completa" data-act="toastMsg" data-arg="Pantalla completa: control de Google Maps en la web real">⛶</button><div class="gzoom"><button aria-label="Acercar" data-act="zoom" data-arg="in">+</button><button aria-label="Alejar" data-act="zoom" data-arg="out">−</button></div><span class="glogo" aria-hidden="true">Google</span><span class="gcred" aria-hidden="true">Datos del mapa ©2026 Google · Imitación para el prototipo</span>${legend}`}</div></main>`}
 
 function vHist(){const h=S.hist,z=byZ(h.id);const per=h.per==='custom'?'30d':h.per;const d=serie(h.id,h.mag,per);const st=statsOf(d);
  return header('historial')+`<main class="page wrap"><div class="inner"><nav class="crumb" aria-label="Ruta"><a href="#mapa">Mapa</a> › Historial</nav>
@@ -224,69 +281,296 @@ function vCmp(){const c=S.cmp;const A=byZ(c.a),B=byZ(c.b);const same=c.a===c.b;
  <div class="field" style="width:170px"><label for="c-m">Magnitud</label><select class="input" id="c-m" data-bind="cmp.mag" data-rr="1">${Object.keys(MAG).map(k=>`<option value="${k}" ${c.mag===k?'selected':''}>${MAG[k].n}</option>`).join('')}</select></div><div class="field" style="width:150px"><label for="c-p">Periodo</label><select class="input" id="c-p" data-bind="cmp.per" data-rr="1">${[['24h','24 h'],['7d','7 días'],['30d','30 días']].map(p=>`<option value="${p[0]}" ${c.per===p[0]?'selected':''}>${p[1]}</option>`).join('')}</select></div>
  <button class="btn ghost" data-act="swap" style="margin-bottom:1px">${I.swap} Intercambiar</button></div>${body}</div></main>`+footer()}
 
-/* ---------- portada / introducción ---------- */
-const AYTOS=[{id:'gandia',n:'Gandia',zona:'La Safor · Comunitat Valenciana',desde:'junio de 2026',activo:true}];
-const IC_O3=sv('<path d="M3 12h4M17 12h4M12 3v4M12 17v4"/><circle cx="12" cy="12" r="4"/>',22),IC_T=sv('<path d="M10 14V5a2 2 0 0 1 4 0v9"/><circle cx="12" cy="17" r="4"/>',22),IC_R=sv('<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',22);
+/* ---------- portada (v10): la Tierra a pantalla completa ----------
+   Paleta «atmósfera»: noche orbital + el azul de la capa de aire que se
+   ve en el borde del planeta. Esquinas rectas en toda la portada. */
+const AYTOS=[{id:'gandia',n:'Gandia',zona:'La Safor · Comunitat Valenciana',desde:'junio 2026',activo:true}];
+const TV_LINKS=[['mapa','Mapa'],['comunidad','Comunidad'],['como-funciona','Cómo funciona'],['privacidad','Privacidad']];
 function mediaCiudad(m){const v=ZONAS.filter(z=>est(z)!=='none'&&z[m]!=null).map(z=>z[m]);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null}
+const TV_BURGER=open=>`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="${open?'M18 6 6 18M6 6l12 12':'M3 6h18M3 12h18M3 18h18'}" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"/></svg>`;
 function vInicio(){
  const activos=SENS.filter(x=>x.est==='activo'||x.est==='prestado').length;
  const parques=ZONAS.filter(z=>z.tipo==='parque').length,barrios=ZONAS.filter(z=>z.tipo==='barrio').length;
- const altos=ZONAS.filter(z=>est(z)==='ok'&&Object.keys(MAG).some(k=>nivel(k,z[k])==='alto'));
- const mini=`<svg class="ini-mini" viewBox="30 -20 860 560" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${mapBase()}${ZONAS.filter(z=>z.tipo==='barrio').map(barrioSVG).join('')+ZONAS.filter(z=>z.tipo==='parque').map(parqueSVG).join('')}</svg>`;
- const MED=[['o3',IC_O3,'Ozono','Gas que se forma con el sol y el tráfico. Irrita ojos y vías respiratorias, sobre todo en verano y por la tarde.'],['temp',IC_T,'Temperatura','Las calles sin sombra acumulan calor. Medirla por zonas muestra dónde hacen falta árboles y refugios climáticos.'],['ruido',IC_R,'Ruido','El ruido del tráfico y del ocio afecta al descanso y a la salud. Se mide en decibelios (dB).']];
- const PORT=[[I.broom,'Personal municipal','Brigadas de limpieza y de jardines llevan un sensor en su ruta de trabajo.'],[I.bike,'Bicis y motos compartidas','El vehículo lleva el sensor y envía datos mientras circula.'],[I.bus,'Autobuses urbanos','Cubren las avenidas principales durante todo el día.'],[I.walk,'Vecinos voluntarios','Recogen un sensor en un punto de reparto, pasean y ganan puntos canjeables.']];
- const WEB=[['mapa',I.mapi,'Mapa por zonas','Ozono, temperatura y ruido de cada parque y barrio en la última hora.'],['comunidad',I.users,'Comunidad','Lo que notan los vecinos: ruido, calor o aire cargado. Son percepciones, no mediciones.'],['historial',I.list,'Historial','Cómo ha cambiado una zona en las últimas 24 horas, 7 días o un mes.'],['comparar',I.swap,'Comparar','Dos zonas en la misma gráfica para ver cuál está mejor y cuándo.'],['como-funciona',I.walk,'Voluntariado','Cómo llevar un sensor, dónde recogerlo y qué regalos puedes conseguir.'],['privacidad',I.shield,'Privacidad','Qué datos se guardan y por qué nunca se publica el recorrido de nadie.']];
- return header('inicio')+`<main>
- <section class="ini-hero wrap"><div class="inner ini-hero-in">
-  <div class="ini-hero-txt"><span class="lbl">Calidad ambiental urbana</span>
-   <h1>El aire de tu ciudad, medido por quien la recorre</h1>
-   <p class="ini-lead">Respira muestra el ozono, la temperatura y el ruido de cada parque y barrio. Los datos los recogen sensores que se mueven por la ciudad con el personal municipal, los vehículos compartidos, los autobuses y los vecinos voluntarios.</p>
-   <div class="ini-ctas"><a class="btn" href="#mapa">${I.mapi} Ver el mapa de Gandia</a><a class="btn sec" href="#como-funciona">Hazte voluntario</a></div>
-   <ul class="ini-cifras" aria-label="Respira en Gandia"><li><b>${activos}</b><span>sensores en la calle</span></li><li><b>${parques}</b><span>parques medidos</span></li><li><b>${barrios}</b><span>barrios</span></li><li><b>3</b><span>magnitudes</span></li></ul>
+ const MED=[['o3','Ozono','Se forma con el sol y el tráfico. Irrita ojos y vías respiratorias, sobre todo las tardes de verano.'],['temp','Temperatura','Las calles sin sombra acumulan calor. Medirla por zonas muestra dónde faltan árboles y refugios climáticos.'],['ruido','Ruido','El tráfico y el ocio nocturno afectan al descanso y a la salud. Se mide en decibelios.']];
+ const PORT=[[I.broom,'Personal municipal','Las brigadas de limpieza y de jardines lo llevan en su ruta de trabajo.'],[I.bike,'Bicis y motos compartidas','El vehículo envía datos mientras circula.'],[I.bus,'Autobuses urbanos','Cubren las avenidas principales todo el día.'],[I.walk,'Vecinos voluntarios','Recogen un sensor en un punto de reparto, pasean y ganan puntos.']];
+ const WEB=[['mapa','Mapa por zonas','Ozono, temperatura y ruido de cada parque y barrio en la última hora.'],['comunidad','Comunidad','Lo que notan los vecinos: ruido, calor o aire cargado.'],['historial','Historial','Cómo ha cambiado una zona en 24 horas, 7 días o un mes.'],['comparar','Comparar','Dos zonas en la misma gráfica.'],['como-funciona','Voluntariado','Cómo llevar un sensor y qué regalos puedes conseguir.'],['privacidad','Privacidad','Qué se guarda y por qué nunca se publica el recorrido de nadie.']];
+ const links=TV_LINKS.map(([h,n])=>`<a class="tv-link" href="#${h}">${n}</a>`).join('');
+ return `<div class="tv">
+ <section class="tv-hero" id="tv-root" aria-label="Respira">
+  <div class="tv-parallax" id="tv-parallax">
+   <canvas class="tv-media" id="tv-parque" data-tv-anim aria-hidden="true"></canvas>
   </div>
-  <a class="ini-ahora card" href="#mapa" aria-label="Abrir el mapa de Gandia">
-   <div class="ini-mapa">${mini}<span class="ini-live"><i></i>Gandia · última hora</span></div>
-   <div class="ini-medias">${Object.keys(MAG).map(k=>{const v=mediaCiudad(k),l=nivel(k,v);return `<div><span class="hint">${k==='temp'?'Temperatura media':MAG[k].n+' medio'}</span><b class="mono">${fmt(v,k)} <small>${MAG[k].u}</small></b>${l==='none'?'':`<span class="badge b-${l}">${NIV[l]}</span>`}</div>`}).join('')}</div>
-   ${altos.length?`<p class="ini-aviso">${I.alert}<span>Nivel alto ahora en <b>${altos.map(z=>esc(z.n)).join(', ')}</b></span></p>`:''}
-  </a>
- </div></section>
+  <div class="tv-scrim" data-tv-anim></div>
+  <div class="tv-col">
+   <nav class="tv-nav" data-tv-anim aria-label="Principal">
+    <a class="tv-marca" href="#inicio" aria-label="Respira, inicio"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">${SYM()}</svg>Respira</a>
+    <div class="tv-pill" data-tv-desktop>${links}</div>
+    <button type="button" class="tv-burger" id="tv-burger" data-tv-mobile aria-controls="tv-mobile-menu" aria-expanded="false" aria-label="Abrir menú">${TV_BURGER(false)}</button>
+    ${botonTema(true)}<div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm ghost tv-app" href="#como-funciona" data-act="toApp">Descarga la app</a><a class="btn sm sec" href="#acceso">Acceso ayuntamiento</a></div>
+   </nav>
+   <div id="tv-mobile-menu" class="tv-panel" data-tv-mobile hidden>${links}<div class="tv-panel-pie"><a class="btn sm ghost" href="#como-funciona">Descarga la app</a><a class="btn sm sec" href="#acceso">Ayuntamiento</a></div></div>
+   <main class="tv-main">
+    <h1 class="tv-h1" data-tv-anim>El aire de tu ciudad, medido calle a calle</h1>
+    <p class="tv-p" data-tv-anim>Ozono, temperatura y ruido de cada parque y barrio de Gandia, medidos por sensores que viajan con quienes recorren la ciudad.</p>
+    <div class="tv-ctas" data-tv-anim><a class="btn tv-cta" href="#mapa">${I.mapi} Ver el mapa de Gandia</a><a class="btn sec tv-cta tv-blur" href="#como-funciona">Hazte voluntario</a></div>
+   </main>
+  </div>
+ </section>
 
- <section class="ini-sec wrap" id="ayuntamientos"><div class="inner">
-  <div class="ini-head"><span class="lbl">Dónde está Respira</span><h2>Ayuntamientos con Respira</h2><p class="muted">Cada municipio tiene su propio mapa, sus puntos de reparto y su panel de gestión. Elige tu ciudad.</p></div>
-  <div class="ini-aytos">${AYTOS.map(a=>`<article class="card ini-ayto"><div class="ini-ayto-top"><span class="ini-escudo" aria-hidden="true">${esc(a.n[0])}</span><div style="flex:1;min-width:0"><h3>${esc(a.n)}</h3><span class="hint">${esc(a.zona)}</span></div><span class="badge b-bajo"><i class="dotlive"></i>Activo</span></div>
-   <dl class="ini-dl"><div><dt>Sensores en la calle</dt><dd class="mono">${activos}</dd></div><div><dt>Zonas medidas</dt><dd class="mono">${parques+barrios}</dd></div><div><dt>Puntos de reparto</dt><dd class="mono">${PUNTOS_REPARTO.length}</dd></div><div><dt>Datos desde</dt><dd>${a.desde.replace(' de ',' ')}</dd></div></dl>
-   <div class="ini-ctas"><a class="btn" href="#mapa">Abrir el mapa</a><a class="btn ghost" href="#como-funciona">Puntos de reparto</a></div></article>`).join('')}
-   <article class="ini-ayto ini-nuevo"><h3>¿Tu ayuntamiento?</h3><p class="muted">Respira se pone en marcha en un municipio con sensores, puntos de reparto, la app para los vecinos y un panel para el personal municipal.</p><a class="btn sec" href="#para-ayuntamientos">Qué incluye</a></article>
+ <section class="tv-sec" id="ayuntamientos"><div class="tv-in">
+  <div class="tv-head"><span class="tv-eyebrow">Dónde está Respira</span><h2>Ayuntamientos con Respira</h2><p>Cada municipio tiene su propio mapa, sus puntos de reparto y su panel de gestión.</p></div>
+  <div class="tv-aytos">${AYTOS.map(a=>`<article class="tv-ayto">
+   <div class="tv-ayto-top"><div><h3>${esc(a.n)}</h3><span class="tv-mut">${esc(a.zona)}</span></div><span class="tv-estado"><i></i>Activo</span></div>
+   <dl class="tv-dl"><div><dt>Sensores en la calle</dt><dd>${activos}</dd></div><div><dt>Zonas medidas</dt><dd>${parques+barrios}</dd></div><div><dt>Puntos de reparto</dt><dd>${PUNTOS_REPARTO.length}</dd></div><div><dt>Datos desde</dt><dd>${a.desde}</dd></div></dl>
+   <div class="tv-medias">${Object.keys(MAG).map(k=>{const v=mediaCiudad(k),l=nivel(k,v);return `<div><span>${k==='temp'?'Temperatura media':MAG[k].n+' medio'}</span><b>${fmt(v,k)} <small>${MAG[k].u}</small></b>${l==='none'?'':`<em class="tv-nv tv-${l}">${NIV[l]}</em>`}</div>`}).join('')}</div>
+   <div class="tv-fila"><a class="btn" href="#mapa">Abrir el mapa</a><a class="btn sec" href="#como-funciona">Puntos de reparto</a></div></article>`).join('')}
+   <article class="tv-ayto tv-nuevo"><h3>¿Tu ayuntamiento?</h3><p class="tv-mut">Respira se pone en marcha con sensores, puntos de reparto, la app para los vecinos y un panel para el personal municipal.</p><a class="btn sec" href="#para-ayuntamientos">Qué incluye</a></article>
   </div>
  </div></section>
 
- <section class="ini-sec ini-banda wrap"><div class="inner">
-  <div class="ini-head"><span class="lbl">Qué medimos</span><h2>Tres magnitudes que se notan en la calle</h2></div>
-  <div class="ini-tres">${MED.map(([k,ic,n,d])=>`<article class="card ini-mag"><span class="stepico">${ic}</span><h3>${n} <span class="hint mono">${MAG[k].u}</span></h3><p class="muted">${d}</p>
-   <div class="ini-escala" aria-label="Escala de ${n}"><span class="b-bajo">Bajo &lt; ${fmt(LIM[k][0],k)}</span><span class="b-medio">Medio</span><span class="b-alto">Alto ≥ ${fmt(LIM[k][1],k)}</span></div></article>`).join('')}</div>
-  <p class="hint" style="margin-top:12px">Umbrales orientativos. En el mapa se muestra la media de la última hora en cada zona; «Sin datos» significa que no ha pasado ningún sensor, no que el aire esté limpio.</p>
+ <section class="tv-sec tv-alt"><div class="tv-in">
+  <div class="tv-head"><span class="tv-eyebrow">Qué medimos</span><h2>Tres magnitudes que se notan en la calle</h2></div>
+  <div class="tv-tres">${MED.map(([k,n,d])=>`<article class="tv-mag"><h3>${n} <span>${MAG[k].u}</span></h3><p class="tv-mut">${d}</p><div class="tv-escala"><span class="tv-bajo">Bajo &lt; ${fmt(LIM[k][0],k)}</span><span class="tv-medio">Medio</span><span class="tv-alto">Alto ≥ ${fmt(LIM[k][1],k)}</span></div></article>`).join('')}</div>
+  <p class="tv-nota">Umbrales orientativos. El mapa muestra la media de la última hora en cada zona; «Sin datos» significa que no ha pasado ningún sensor, no que el aire esté limpio.</p>
+  <div class="tv-head ef-head" id="efectos"><span class="tv-eyebrow">Efectos en la salud</span><h2>Qué te puede pasar</h2><p>Cuanto más sube, más daño. Así afecta cada nivel.</p></div>
+  ${efectosHTML()}
+  <p class="tv-nota">${EF_AVISO_B}</p>
  </div></section>
 
- <section class="ini-sec wrap"><div class="inner ini-dos">
-  <div class="ini-head"><span class="lbl">De dónde salen los datos</span><h2>Sensores que se mueven con la ciudad</h2><p class="muted">En lugar de pocas estaciones fijas, muchos sensores pequeños recorren las calles. Cada medición llega con su hora y su ubicación, y el servidor calcula la media de cada zona.</p>
-   <p class="ini-priv">${I.shield}<span><b>Nunca se publica el recorrido de nadie.</b> En el mapa solo hay medias por parque y barrio.</span></p></div>
-  <div class="ini-port">${PORT.map(p=>`<div class="ini-p"><span class="stepico">${p[0]}</span><div><h3>${p[1]}</h3><p class="muted">${p[2]}</p></div></div>`).join('')}</div>
+ <section class="tv-sec"><div class="tv-in tv-dos">
+  <div class="tv-head"><span class="tv-eyebrow">De dónde salen los datos</span><h2>Sensores que se mueven con la ciudad</h2><p>En lugar de pocas estaciones fijas, muchos sensores pequeños recorren las calles. Cada medición llega con su hora y su ubicación, y el servidor calcula la media de cada zona.</p>
+   <p class="tv-priv"><b>Nunca se publica el recorrido de nadie.</b> En el mapa solo hay medias por parque y barrio.</p></div>
+  <div class="tv-port">${PORT.map(p=>`<div class="tv-p4"><span class="tv-ico">${p[0]}</span><div><h3>${p[1]}</h3><p class="tv-mut">${p[2]}</p></div></div>`).join('')}</div>
  </div></section>
 
- <section class="ini-sec ini-banda wrap"><div class="inner">
-  <div class="ini-head"><span class="lbl">En esta web</span><h2>Qué puedes hacer aquí</h2></div>
-  <div class="ini-web">${WEB.map(w=>`<a class="card ini-w" href="#${w[0]}"><span class="stepico">${w[1]}</span><span><b>${w[2]}</b><span class="muted">${w[3]}</span></span><span class="ini-flecha" aria-hidden="true">→</span></a>`).join('')}</div>
+ <section class="tv-sec tv-alt"><div class="tv-in">
+  <div class="tv-head"><span class="tv-eyebrow">En esta web</span><h2>Qué puedes hacer aquí</h2></div>
+  <div class="tv-web">${WEB.map(w=>`<a class="tv-w" href="#${w[0]}"><b>${w[1]}</b><span class="tv-mut">${w[2]}</span><i aria-hidden="true">→</i></a>`).join('')}</div>
  </div></section>
 
- <section class="ini-sec wrap" id="para-ayuntamientos"><div class="inner ini-ayu card">
-  <div><span class="lbl">Para ayuntamientos</span><h2>Un panel para gestionar todo el servicio</h2><p class="muted">El personal municipal entra con su cuenta y ve solo lo que le corresponde según su rol: administración, técnico o punto de reparto.</p>
-   <div class="ini-ctas"><a class="btn" href="#acceso">Acceso ayuntamiento</a></div></div>
-  <ul class="ini-lista">${[[I.sensor,'Flota de sensores','Estado, batería y último dato de cada sensor.'],[I.box,'Préstamos','Prestar y recoger sensores en los puntos de reparto.'],[I.coin,'Puntos','Reglas de cálculo y revisión de días sospechosos.'],[I.gift,'Regalos y canjes','Catálogo, stock y entrega con código CJ-XXXX.']].map(x=>`<li><span class="stepico">${x[0]}</span><span><b>${x[1]}</b><span class="muted">${x[2]}</span></span></li>`).join('')}</ul>
+ <section class="tv-sec" id="para-ayuntamientos"><div class="tv-in tv-ayu">
+  <div><span class="tv-eyebrow">Para ayuntamientos</span><h2>Un panel para gestionar todo el servicio</h2><p class="tv-mut">El personal municipal entra con su cuenta y ve solo lo que le corresponde según su rol: administración, técnico o punto de reparto.</p><div class="tv-fila"><a class="btn" href="#acceso">Acceso ayuntamiento</a></div></div>
+  <ul class="tv-lista">${[['Flota de sensores','Estado, batería y último dato de cada sensor.'],['Préstamos','Prestar y recoger sensores en los puntos de reparto.'],['Puntos','Reglas de cálculo y revisión de días sospechosos.'],['Regalos y canjes','Catálogo, stock y entrega con código CJ-XXXX.']].map(x=>`<li><b>${x[0]}</b><span class="tv-mut">${x[1]}</span></li>`).join('')}</ul>
  </div></section>
- </main>`+footer()}
+
+ <footer class="tv-pie"><div class="tv-in"><span>Respira · un servicio de <b>NODIA</b></span><span>Proyecto de Biometría · GTI · UPV · <a href="#privacidad">Privacidad</a></span></div></footer>
+</div>`}
+
+/* ---------- comportamiento de la portada ---------- */
+/* ---------- tema: fondo blanco o modo oscuro (recordado en este navegador) ---------- */
+let TEMA='claro';try{const g=localStorage.getItem('respira-tema');if(g==='claro'||g==='oscuro')TEMA=g}catch(_){}
+const IC_LUNA='<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
+const IC_SOL='<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>';
+const botonTema=movil=>`<button type="button" class="tv-tema${movil?' movil':''}" ${movil?'data-tv-mobile':''} data-act="tema" aria-pressed="${TEMA==='oscuro'}" aria-label="${TEMA==='oscuro'?'Cambiar a fondo blanco':'Cambiar a modo oscuro'}" title="${TEMA==='oscuro'?'Fondo blanco':'Modo oscuro'}">${TEMA==='oscuro'?IC_SOL:IC_LUNA}</button>`;
+function aplicarTema(){document.documentElement.setAttribute('data-tema',TEMA)}
+const TV={raf:null,target:{x:0,y:0},cur:{x:0,y:0},globo:null,limpiar:null};
+function montarInicio(){
+ if(TV.limpiar)TV.limpiar();
+ const root=document.getElementById('tv-root'),par=document.getElementById('tv-parallax'),
+   burger=document.getElementById('tv-burger'),panel=document.getElementById('tv-mobile-menu');
+ if(!root)return;
+ const off=[];const on=(el,ev,fn,o)=>{el.addEventListener(ev,fn,o);off.push(()=>el.removeEventListener(ev,fn,o))};
+ // menú móvil
+ const setMenu=open=>{panel.hidden=!open;burger.setAttribute('aria-expanded',open);burger.setAttribute('aria-label',open?'Cerrar menú':'Abrir menú');burger.innerHTML=TV_BURGER(open)};
+ on(burger,'click',()=>setMenu(panel.hidden));
+ panel.querySelectorAll('a').forEach(a=>on(a,'click',()=>setMenu(false)));
+ on(window,'keydown',e=>{if(e.key==='Escape'&&!panel.hidden){setMenu(false);burger.focus()}});
+ const mq=matchMedia('(min-width: 768px)');const alCambiar=()=>{if(mq.matches)setMenu(false)};on(mq,'change',alCambiar);
+ let ro=null;if(window.ResizeObserver){ro=new ResizeObserver(es=>{for(const e of es)if(e.contentRect.width>=768)setMenu(false)});ro.observe(root)}
+ // barra fija: al bajar, gana fondo para que se lea sobre el contenido
+ const navFija=root.querySelector('.tv-nav');const alScroll=()=>navFija.classList.toggle('con-fondo',window.scrollY>8);
+ on(window,'scroll',alScroll,{passive:true});alScroll();
+ // paralaje con el puntero (se para solo)
+ if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+  const tick=()=>{const c=TV.cur,t=TV.target;c.x+=(t.x-c.x)*0.08;c.y+=(t.y-c.y)*0.08;par.style.transform='translate3d('+c.x.toFixed(2)+'px,'+c.y.toFixed(2)+'px,0)';
+   TV.raf=(Math.abs(t.x-c.x)>0.05||Math.abs(t.y-c.y)>0.05)?requestAnimationFrame(tick):null};
+  on(window,'pointermove',e=>{TV.target.x=(e.clientX/innerWidth-0.5)*28;TV.target.y=(e.clientY/innerHeight-0.5)*18;if(!TV.raf)TV.raf=requestAnimationFrame(tick)},{passive:true});
+ }
+ // parque animado (canvas)
+ const claro=luminoso(getComputedStyle(document.body).backgroundColor);
+ TV.globo=parqueEscena(document.getElementById('tv-parque'),claro);
+ TV.limpiar=()=>{off.forEach(f=>f());ro&&ro.disconnect();if(TV.raf)cancelAnimationFrame(TV.raf);TV.raf=null;TV.globo&&TV.globo.parar();TV.globo=null;TV.limpiar=null;document.body.style.backgroundColor=''};
+}
+
+/* Un parque de Gandia a la hora dorada (o de día con el diseño claro).
+   Canvas 2D, sin imágenes externas. Para que vaya fluido, el cielo, el
+   suelo y cada árbol se dibujan UNA vez en lienzos aparte (sprites) y en
+   cada fotograma solo se mueven: los árboles se mecen, el lago ondula y
+   refleja el cielo y los árboles, nadan dos patos, pasan pájaros, el
+   voluntario pasea con su sensor y un corredor da la vuelta al lago. */
+function luminoso(c){const m=String(c).match(/\d+(\.\d+)?/g);if(!m)return true;const [r,g,b]=m.map(Number);return (0.299*r+0.587*g+0.114*b)>140}
+const PARQUE_PAL={
+ tarde:{cielo:['#0b1631','#22325a','#5f5677','#d8876a','#f6c27e'],sol:[.8,-.035],solCol:'255,214,150',solDisco:true,nubes:['#f3b88a','#7d6a86'],monte:'#4b4b6b',monte2:'#5f5a78',ciudad:'#3b3753',ventanas:true,
+  lejos:['#46584f','#55665a'],hoja:['#2e5a2c','#3b6a32','#4a7a39','#5b8a40','#6d9a46'],brillo:'#e7c46a',sombraHoja:'#16301c',tronco:'#3a2b22',cesped:['#7a8e45','#4f7232','#2d4a22'],hierba:['#557a32','#6f9440','#3d6228','#8aa74c'],
+  camino:['#e3c19a','#b99777','#8f765f'],agua:['#f2c48c','#d99d82','#3f8197','#1d5c74'],aguaClara:'110,214,204',orilla:'#c9b38d',flores:['#ffd34d','#ff7aa8','#ffffff','#b48cff','#ff8f4d'],farola:true,persona:'#1d2328',bruma:'246,194,126',polen:'255,226,160'},
+ dia:{cielo:['#2f7fc4','#5aa3dc','#93c8ea','#cfe7f2','#eef6f1'],sol:[.82,-.55],solCol:'255,250,228',solDisco:false,nubes:['#ffffff','#c9d9e6'],monte:'#8aa2b6',monte2:'#9fb4c4',ciudad:'#a8bccb',ventanas:false,
+  lejos:['#7fa48a','#93b49b'],hoja:['#3e7a37','#4b8a40','#5a9a49','#6ca853','#80b85e'],brillo:'#d9ef9a',sombraHoja:'#244a22',tronco:'#5a4432',cesped:['#9ccc6e','#6fa850','#4f8a3c'],hierba:['#6aa84a','#86bf5c','#4f8f3a','#9fd06f'],
+  camino:['#efe5d3','#ddcfb8','#c3b297'],agua:['#cfe9f3','#9fd3ea','#4aa3c8','#2f7ea6'],aguaClara:'120,225,215',orilla:'#e3d3b2',flores:['#ffd34d','#ff6f9c','#ffffff','#9b7bff','#ff8f4d'],farola:false,persona:'#283844',bruma:'238,246,241',polen:'255,255,255'}};
+function parqueEscena(cv,dia){
+ const P=dia?PARQUE_PAL.dia:PARQUE_PAL.tarde;
+ const ctx=cv.getContext('2d');if(!ctx)return {parar(){}};
+ const quieto=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ let sem=7;const rnd=()=>{sem=(sem*16807)%2147483647;return (sem-1)/2147483646};const entre=(a,b)=>a+rnd()*(b-a);const elige=a=>a[Math.floor(rnd()*a.length)];
+ let w=0,h=0,dpr=1,E=null,id=null,vivo=true;const t0=performance.now();
+ const lienzo=(cw,ch)=>{const c=document.createElement('canvas');c.width=Math.max(1,Math.ceil(cw*dpr));c.height=Math.max(1,Math.ceil(ch*dpr));const x=c.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);return [c,x]};
+ const mezcla=(a,b,k)=>{const p=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));const A=p(a),B=p(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*k)).join(',')+')'};
+
+ // ---------- árboles (sprites) ----------
+ function arbolRedondo(alto,bruma){
+  const R=alto*.34,cw=R*2.6,ch=alto*1.05;const [c,x]=lienzo(cw,ch);const bx=cw/2,by=ch-2,cy=by-alto+R*1.05;
+  const tr=bruma?mezcla(P.tronco,P.lejos[0],bruma):P.tronco;
+  x.strokeStyle=tr;x.lineCap='round';x.lineWidth=Math.max(1.5,alto*.045);x.beginPath();x.moveTo(bx,by);x.quadraticCurveTo(bx-alto*.02,by-alto*.3,bx+alto*.01,cy+R*.2);x.stroke();
+  x.lineWidth=Math.max(1,alto*.02);[[-.5,-.4],[.45,-.5],[-.2,-.75]].forEach(([dx,dy])=>{x.beginPath();x.moveTo(bx,cy+R*.5);x.quadraticCurveTo(bx+dx*R*.3,cy+R*.2,bx+dx*R*.8,cy+dy*R*.6);x.stroke()});
+  const lx=.62,ly=-.55;const n=Math.round(70+alto*.4);
+  for(let i=0;i<n;i++){const a=rnd()*Math.PI*2,d=Math.sqrt(rnd())*.92;const px=Math.cos(a)*d,py=Math.sin(a)*d*.86;const lado=(px*lx+py*ly);
+   let col=elige(P.hoja);if(lado>.25)col=mezcla(col,P.brillo,Math.min(.55,(lado-.25)*.8));if(lado<-.3)col=mezcla(col,P.sombraHoja,Math.min(.6,(-lado-.3)));
+   if(bruma)col=mezcla('#4a6a4a',P.lejos[1],bruma*.9);
+   x.fillStyle=col;x.beginPath();x.arc(bx+px*R,cy+py*R,R*entre(.13,.26),0,7);x.fill()}
+  if(!bruma){for(let i=0;i<Math.round(alto*2);i++){const a=rnd()*Math.PI*2,d=Math.sqrt(rnd());const px=Math.cos(a)*d,py=Math.sin(a)*d*.86;if(px*lx+py*ly<.2)continue;x.fillStyle='rgba(255,240,190,'+entre(.15,.4)+')';x.fillRect(bx+px*R*.95,cy+py*R*.95,1.4,1.4)}}
+  return {c,cw,ch,ox:bx,oy:by};
+ }
+ function arbolCipres(alto,bruma){
+  const W=alto*.2,cw=W*1.6,ch=alto*1.04;const [c,x]=lienzo(cw,ch);const bx=cw/2,by=ch-2;
+  x.fillStyle=P.tronco;x.fillRect(bx-alto*.012,by-alto*.08,alto*.024,alto*.08);
+  for(let i=0;i<Math.round(60+alto*.5);i++){const t=rnd();const y=by-alto*.06-t*alto*.92;const half=W*.5*Math.sin(Math.min(1,(1-t))*Math.PI*.62)*(t<.08?t/.08:1);const xx=bx+(rnd()*2-1)*half;
+   const base=elige(P.hoja);let col=xx>bx+half*.3?mezcla(base,P.brillo,.3):mezcla(base,P.sombraHoja,.35);if(bruma)col=mezcla(base,P.lejos[1],bruma);
+   x.fillStyle=col;x.beginPath();x.ellipse(xx,y,W*.16,W*.24,0,0,7);x.fill()}
+  return {c,cw,ch,ox:bx,oy:by};
+ }
+ function palmera(alto,bruma){
+  const cw=alto*1.05,ch=alto*1.06;const [c,x]=lienzo(cw,ch);const bx=cw*.5,by=ch-2;const curva=entre(-.12,.12)*alto;const tx=bx+curva,ty=by-alto*.86;
+  x.lineCap='round';
+  for(let i=0;i<24;i++){const k=i/24,k2=(i+1)/24;const ax=bx+curva*k*k,ay=by-(by-ty)*k,bx2=bx+curva*k2*k2,by2=by-(by-ty)*k2;x.strokeStyle=i%2?mezcla(P.tronco,'#9a8060',.35):mezcla(P.tronco,'#7a6048',.2);x.lineWidth=alto*(.045-.015*k);x.beginPath();x.moveTo(ax,ay);x.lineTo(bx2,by2);x.stroke()}
+  const hojas=11;for(let i=0;i<hojas;i++){const ang=-Math.PI/2+(i/(hojas-1)-.5)*Math.PI*1.55+entre(-.08,.08);const L=alto*entre(.36,.46);
+   const ex=tx+Math.cos(ang)*L,ey=ty+Math.sin(ang)*L*.55+L*.38*Math.abs(Math.cos(ang));const mx=tx+Math.cos(ang)*L*.55,my=ty+Math.sin(ang)*L*.5-L*.08;
+   const col=mezcla(elige(P.hoja),P.brillo,Math.cos(ang)>0?.3:0);
+   for(let s=0;s<=26;s++){const u=s/26;const qx=(1-u)*(1-u)*tx+2*(1-u)*u*mx+u*u*ex,qy=(1-u)*(1-u)*ty+2*(1-u)*u*my+u*u*ey;const dx=2*(1-u)*(mx-tx)+2*u*(ex-mx),dy=2*(1-u)*(my-ty)+2*u*(ey-my),l=Math.hypot(dx,dy)||1;const nx=-dy/l,ny=dx/l;const len=L*.16*Math.sin(u*Math.PI)+1;
+    x.strokeStyle=bruma?mezcla(col.startsWith('rgb')?'#4a7a3a':col,P.lejos[1],bruma):col;x.lineWidth=Math.max(.8,alto*.008);x.beginPath();x.moveTo(qx,qy);x.lineTo(qx+nx*len+dx/l*len*.4,qy+ny*len+dy/l*len*.4+len*.3);x.moveTo(qx,qy);x.lineTo(qx-nx*len+dx/l*len*.4,qy-ny*len+dy/l*len*.4+len*.3);x.stroke()}}
+  x.fillStyle='#6b4e2e';x.beginPath();x.arc(tx,ty+alto*.02,alto*.03,0,7);x.fill();
+  return {c,cw,ch,ox:bx,oy:by};
+ }
+ const nuevoArbol=(tipo,alto,bruma)=>tipo==='palmera'?palmera(alto,bruma):tipo==='cipres'?arbolCipres(alto,bruma):arbolRedondo(alto,bruma);
+
+ // ---------- preparar la escena (en cada cambio de tamaño) ----------
+ function preparar(){
+  dpr=Math.min(2,devicePixelRatio||1);w=cv.clientWidth;h=cv.clientHeight;if(!w||!h)return false;cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);sem=11;
+  const hz=h*.6,ancho=w<700;
+  // lago (forma orgánica), a la derecha para dejar libre el texto
+  const L={cx:w*(ancho?.6:.7),cy:hz+h*(ancho?.17:.14),rx:w*(ancho?.34:.17),ry:h*(ancho?.06:.062)};L.top=L.cy-L.ry;
+  const lagoPath=new Path2D();for(let i=0;i<=48;i++){const a=i/48*Math.PI*2;const r=1+.08*Math.sin(a*3+1)+.05*Math.cos(a*5);const px=L.cx+Math.cos(a)*L.rx*r,py=L.cy+Math.sin(a)*L.ry*r*(Math.sin(a)<0?.85:1);i?lagoPath.lineTo(px,py):lagoPath.moveTo(px,py)}lagoPath.closePath();
+  // camino: de abajo a la izquierda hacia el horizonte, rodeando el lago
+  const camino=u=>{const x0=w*(ancho?.18:.3),x1=w*(ancho?.34:.5),y0=h+12,y1=hz+h*.012;const x=x0+(x1-x0)*(1-Math.pow(1-u,1.7))-Math.sin(u*Math.PI)*w*.04;return {x,y:y0+(y1-y0)*u,ancho:(1-u)*w*(ancho?.2:.12)+w*.005}};
+  // ---- cielo, sol, nubes lejanas, monte (Mondúver), ciudad y bruma ----
+  const [cielo,cx]=lienzo(w,hz+4);
+  const g=cx.createLinearGradient(0,0,0,hz);[0,.4,.72,.9,1].forEach((k,i)=>g.addColorStop(k,P.cielo[i]));cx.fillStyle=g;cx.fillRect(0,0,w,hz+4);
+  const sx=w*P.sol[0],sy=hz+h*P.sol[1];const sg=cx.createRadialGradient(sx,sy,0,sx,sy,Math.max(w,h)*.55);sg.addColorStop(0,`rgba(${P.solCol},.75)`);sg.addColorStop(.12,`rgba(${P.solCol},.35)`);sg.addColorStop(1,`rgba(${P.solCol},0)`);cx.fillStyle=sg;cx.fillRect(0,0,w,hz+4);
+  if(P.solDisco){cx.fillStyle='rgba(255,236,190,.95)';cx.beginPath();cx.arc(sx,sy,h*.032,0,7);cx.fill()}
+  const monte=(base,amp,col,fase)=>{cx.fillStyle=col;cx.beginPath();cx.moveTo(0,hz);for(let x=0;x<=w;x+=8){const k=x/w;const y=base-amp*(Math.exp(-Math.pow((k-.22-fase)/.16,2))*1+.35*Math.exp(-Math.pow((k-.5)/.25,2))+.25*Math.sin(k*9+fase*20)*.3);cx.lineTo(x,y)}cx.lineTo(w,hz);cx.closePath();cx.fill()};
+  monte(hz-h*.01,h*.12,P.monte2,0);monte(hz,h*.07,P.monte,.15);
+  cx.fillStyle=P.ciudad;for(let x=-10;x<w+10;){const bw=entre(10,30),bh=h*entre(.012,.05);cx.fillRect(x,hz-bh,bw,bh+3);if(P.ventanas)for(let k=0;k<3;k++)if(rnd()<.4){cx.fillStyle='rgba(255,210,150,.85)';cx.fillRect(x+entre(2,bw-4),hz-bh+entre(2,bh-4),2,2.5);cx.fillStyle=P.ciudad}x+=bw+entre(0,4)}
+  const tx=w*.58,th=h*.13;cx.fillRect(tx,hz-th,w*.018,th);cx.beginPath();cx.moveTo(tx-2,hz-th);cx.lineTo(tx+w*.009,hz-th-h*.04);cx.lineTo(tx+w*.018+2,hz-th);cx.fill();
+  const bg=cx.createLinearGradient(0,hz-h*.12,0,hz+2);bg.addColorStop(0,`rgba(${P.bruma},0)`);bg.addColorStop(1,`rgba(${P.bruma},.55)`);cx.fillStyle=bg;cx.fillRect(0,hz-h*.12,w,h*.12+4);
+  // ---- nubes (sprites que se desplazan) ----
+  const nubes=[];for(let i=0;i<(ancho?3:5);i++){const nw=w*entre(.12,.24),nh=nw*.28;const [nc,nx]=lienzo(nw,nh);for(let k=0;k<14;k++){const ex=entre(.15,.85)*nw,ey=nh*entre(.45,.75),rx=nw*entre(.08,.18),ry=nh*entre(.25,.45);const gg=nx.createLinearGradient(0,ey-ry,0,ey+ry);gg.addColorStop(0,P.nubes[0]);gg.addColorStop(1,P.nubes[1]);nx.globalAlpha=.55;nx.fillStyle=gg;nx.beginPath();nx.ellipse(ex,ey,rx,ry,0,0,7);nx.fill()}
+   nubes.push({c:nc,w:nw,h:nh,x:entre(-.1,1)*w,y:hz*entre(.12,.62),v:entre(3,7)})}
+  // ---- árboles ----
+  const fila=[];// lejanos: línea continua de copas
+  const [lejosC,lx]=lienzo(w,h*.12+20);const lb=h*.12;for(let x=-20;x<w+20;x+=entre(8,16)){lx.fillStyle=rnd()<.5?P.lejos[0]:P.lejos[1];lx.beginPath();lx.arc(x,lb-entre(0,h*.02),entre(h*.012,h*.026),0,7);lx.fill()}lx.fillRect(-20,lb-4,w+40,24);
+  for(let i=0;i<(ancho?10:22);i++){const tipo=rnd()<.18?'palmera':rnd()<.25?'cipres':'redondo';const alto=h*entre(.07,.12);const s=nuevoArbol(tipo,alto,.45);fila.push({s,x:entre(-.02,1.02)*w,y:hz+h*entre(.005,.025),f:rnd()*6,amp:.006,prof:.25})}
+  const medios=[];const xs=ancho?[.08,.28,.5,.72,.92,1.02]:[.53,.6,.79,.86,.93,1.0,1.06];
+  xs.forEach(fx=>{const tipo=rnd()<.22?'palmera':rnd()<.2?'cipres':'redondo';const alto=h*(fx<.3&&!ancho?entre(.12,.16):entre(.17,.26));const s=nuevoArbol(tipo,alto,0);let y=hz+h*entre(.035,.07);if(Math.abs(fx*w-L.cx)<L.rx*1.05&&y>L.top-4)y=L.top-h*.004;medios.push({s,x:fx*w,y,f:rnd()*6,amp:tipo==='palmera'?.02:.012,prof:.6})});
+  medios.sort((a,b)=>a.y-b.y);
+  const cerca={s:nuevoArbol('redondo',h*(ancho?.5:.66),0),x:w*(ancho?1.02:.985),y:h*1.0,f:1,amp:.008,prof:1};
+  const palmCerca=ancho?null:{s:palmera(h*.62,0),x:w*1.07,y:h*1.02,f:2.5,amp:.018,prof:1};
+  // ---- suelo (estático): césped con textura, sombras, camino, orilla, flores ----
+  const [suelo,gx]=lienzo(w,h-hz+4);gx.translate(0,-hz);
+  const cg=gx.createLinearGradient(0,hz,0,h);cg.addColorStop(0,P.cesped[0]);cg.addColorStop(.35,P.cesped[1]);cg.addColorStop(1,P.cesped[2]);gx.fillStyle=cg;gx.fillRect(0,hz,w,h-hz+4);
+  const luzG=gx.createRadialGradient(sx,hz,0,sx,hz,w*.7);luzG.addColorStop(0,`rgba(${P.solCol},.28)`);luzG.addColorStop(1,`rgba(${P.solCol},0)`);gx.fillStyle=luzG;gx.fillRect(0,hz,w,h-hz);
+  for(let i=0;i<Math.round(w*h/260);i++){const y=hz+Math.pow(rnd(),1.4)*(h-hz),x=rnd()*w,k=(y-hz)/(h-hz);gx.strokeStyle=elige(P.hierba);gx.globalAlpha=.35+.4*k;gx.lineWidth=.6+k*1.2;const l=1.5+k*7;gx.beginPath();gx.moveTo(x,y);gx.lineTo(x+entre(-1.5,1.5),y-l);gx.stroke()}gx.globalAlpha=1;
+  medios.concat([cerca]).forEach(t=>{const sw=t.s.cw*.5,shx=(t.x-sx)*.25;gx.fillStyle='rgba(20,30,15,.28)';gx.beginPath();gx.ellipse(t.x+shx*.3+sw*.15,t.y+2,sw*.9,Math.max(3,sw*.12),0,0,7);gx.fill()});
+  // camino de grava
+  const cp=new Path2D();const N=50;for(let i=0;i<=N;i++){const c=camino(i/N);i?cp.lineTo(c.x-c.ancho,c.y):cp.moveTo(c.x-c.ancho,c.y)}for(let i=N;i>=0;i--){const c=camino(i/N);cp.lineTo(c.x+c.ancho,c.y)}cp.closePath();
+  const pg=gx.createLinearGradient(0,hz,0,h);pg.addColorStop(0,P.camino[0]);pg.addColorStop(.4,P.camino[1]);pg.addColorStop(1,P.camino[2]);gx.fillStyle=pg;gx.fill(cp);
+  gx.save();gx.clip(cp);for(let i=0;i<Math.round(w*h/900);i++){const y=hz+rnd()*(h-hz),x=rnd()*w;gx.fillStyle=rnd()<.5?'rgba(255,255,255,.18)':'rgba(60,40,30,.18)';const s=.6+(y-hz)/(h-hz)*2;gx.fillRect(x,y,s,s)}gx.restore();
+  gx.strokeStyle='rgba(60,80,40,.35)';gx.lineWidth=2;gx.stroke(cp);
+  // orilla del lago
+  gx.save();gx.lineWidth=h*.014;gx.strokeStyle=P.orilla;gx.stroke(lagoPath);gx.lineWidth=h*.005;gx.strokeStyle='rgba(60,50,40,.35)';gx.stroke(lagoPath);gx.restore();
+  for(let i=0;i<40;i++){const a=rnd()*Math.PI*2;const px=L.cx+Math.cos(a)*L.rx*1.04,py=L.cy+Math.sin(a)*L.ry*1.08;gx.fillStyle=rnd()<.5?'#9c917f':'#bdb3a0';gx.beginPath();gx.ellipse(px,py,entre(1.5,3.5),entre(1,2),0,0,7);gx.fill()}
+  // flores en primer plano
+  for(let i=0;i<(ancho?140:320);i++){const y=hz+h*.12+Math.pow(rnd(),.7)*(h-hz-h*.12),x=rnd()*w;if(gx.isPointInPath(cp,x*dpr,(y-hz)*dpr))continue;const k=(y-hz)/(h-hz);gx.fillStyle=elige(P.flores);gx.globalAlpha=.85;gx.beginPath();gx.arc(x,y,.8+k*2.4,0,7);gx.fill()}gx.globalAlpha=1;
+  // ---- reflejo del lago (estático; se ondula al pintarlo) ----
+  const [refl,rx]=lienzo(w,h);rx.save();rx.clip(lagoPath);
+  const ag=rx.createLinearGradient(0,L.top,0,L.cy+L.ry);ag.addColorStop(0,P.agua[0]);ag.addColorStop(.3,P.agua[1]);ag.addColorStop(.75,P.agua[2]);ag.addColorStop(1,P.agua[3]);rx.fillStyle=ag;rx.fillRect(0,L.top-4,w,L.ry*2.4);
+  rx.globalAlpha=.42;try{rx.filter='blur(1.2px)'}catch(_){}
+  medios.forEach(t=>{if(Math.abs(t.x-L.cx)>L.rx*1.3)return;rx.save();rx.translate(t.x,2*L.top-t.y+4);rx.scale(1,-1);rx.drawImage(t.s.c,-t.s.ox,-t.s.oy,t.s.cw,t.s.ch);rx.restore()});
+  rx.filter='none';rx.globalAlpha=1;
+  // agua cristalina: borde turquesa poco profundo, fondo de piedras que se transparenta
+  rx.lineWidth=h*.035;rx.strokeStyle=`rgba(${P.aguaClara},.42)`;rx.stroke(lagoPath);rx.lineWidth=h*.012;rx.strokeStyle=`rgba(${P.aguaClara},.5)`;rx.stroke(lagoPath);
+  for(let i=0;i<70;i++){const a=rnd()*Math.PI*2,d=entre(.78,.96);rx.fillStyle=`rgba(90,120,110,${entre(.12,.25)})`;rx.beginPath();rx.ellipse(L.cx+Math.cos(a)*L.rx*d,L.cy+Math.sin(a)*L.ry*d,entre(1.5,3.5),entre(1,2),0,0,7);rx.fill()}
+  rx.restore();
+  // juncos en las orillas
+  const juncos=[];for(let i=0;i<34;i++){const lado=rnd()<.5?-1:1;const a=(lado<0?Math.PI:0)+entre(-.5,.5);juncos.push({x:L.cx+Math.cos(a)*L.rx*entre(.95,1.06),y:L.cy+Math.sin(a)*L.ry*entre(.9,1.05),l:h*entre(.02,.045),f:rnd()*6})}
+  // personas, patos, pájaros, motas
+  const motas=Array.from({length:ancho?40:80},()=>({x:rnd()*w,y:rnd()*h,r:entre(.6,1.8),v:entre(.1,.3),f:rnd()*6}));
+  E={hz,L,lagoPath,camino,cielo,nubes,lejosC,lb,fila,medios,cerca,palmCerca,suelo,refl,juncos,motas,sx,sy,ancho};
+  return true;
+ }
+
+ function sprite(t,tt,px){const s=t.s;const sw=quieto?0:Math.sin(tt*.7+t.f)*t.amp+Math.sin(tt*1.9+t.f*2)*t.amp*.3;ctx.save();ctx.translate(t.x+px*t.prof,t.y);ctx.transform(1,0,sw,1,0,0);ctx.drawImage(s.c,-s.ox,-s.oy,s.cw,s.ch);ctx.restore()}
+ function persona(x,y,alto,tt,corre,sensor){const p=quieto?0:Math.sin(tt*(corre?9:5));ctx.fillStyle=P.persona;ctx.strokeStyle=P.persona;ctx.lineCap='round';
+  ctx.beginPath();ctx.arc(x,y-alto*.9,alto*.11,0,7);ctx.fill();ctx.lineWidth=alto*.2;ctx.beginPath();ctx.moveTo(x,y-alto*.75);ctx.lineTo(x+(corre?alto*.06:0),y-alto*.42);ctx.stroke();
+  ctx.lineWidth=alto*.09;ctx.beginPath();ctx.moveTo(x,y-alto*.42);ctx.lineTo(x+p*alto*(corre?.22:.12),y);ctx.moveTo(x,y-alto*.42);ctx.lineTo(x-p*alto*(corre?.22:.12),y);ctx.stroke();
+  ctx.lineWidth=alto*.07;ctx.beginPath();ctx.moveTo(x,y-alto*.7);ctx.lineTo(x-p*alto*.14,y-alto*.48);ctx.moveTo(x,y-alto*.7);ctx.lineTo(x+p*alto*.14,y-alto*.48);ctx.stroke();
+  if(sensor){const pul=quieto?.6:.5+.5*Math.sin(tt*3);const ex=x+alto*.13,ey=y-alto*.6;const ha=ctx.createRadialGradient(ex,ey,0,ex,ey,alto*.6);ha.addColorStop(0,`rgba(95,196,192,${.6*pul})`);ha.addColorStop(1,'rgba(95,196,192,0)');ctx.fillStyle=ha;ctx.fillRect(ex-alto*.6,ey-alto*.6,alto*1.2,alto*1.2);ctx.fillStyle='#8af0e6';ctx.beginPath();ctx.arc(ex,ey,Math.max(1.6,alto*.05),0,7);ctx.fill()}}
+
+ function dibujar(){
+  if(!E){if(!preparar()){id=requestAnimationFrame(dibujar);return}}
+  const tt=(performance.now()-t0)/1000,px=(TV.cur?TV.cur.x:0)*.5,{hz,L}=E;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.drawImage(E.cielo,0,0,w,hz+4);
+  E.nubes.forEach(n=>{let x=n.x+(quieto?0:tt*n.v);x=((x+n.w)%(w+2*n.w))-n.w;ctx.drawImage(n.c,x+px*.1,n.y,n.w,n.h)});
+  // pájaros (una bandada cruza de vez en cuando)
+  if(!quieto){const ciclo=(tt%34)/34;if(ciclo<.6){const bx=-80+ciclo/.6*(w+160),by=hz*.3+Math.sin(ciclo*6)*20;ctx.strokeStyle='rgba(30,30,40,.7)';ctx.lineWidth=1.3;for(let k=0;k<7;k++){const ox=bx-Math.abs(k-3)*16,oy=by+Math.abs(k-3)*7+(k-3)*2,a=Math.sin(tt*9+k)*4;ctx.beginPath();ctx.moveTo(ox-6,oy-a);ctx.quadraticCurveTo(ox-3,oy-1,ox,oy);ctx.quadraticCurveTo(ox+3,oy-1,ox+6,oy-a);ctx.stroke()}}}
+  ctx.drawImage(E.lejosC,px*.15,hz-E.lb,w,E.lejosC.height/dpr);
+  E.fila.forEach(t=>sprite(t,tt,px));
+  ctx.drawImage(E.suelo,px*.4,hz,w,E.suelo.height/dpr);
+  // lago: reflejo ondulado en franjas
+  ctx.save();ctx.translate(px*.4,0);ctx.clip(E.lagoPath);
+  const top=Math.floor(L.top-2),bot=Math.ceil(L.cy+L.ry*1.1);for(let y=top;y<bot;y+=3){const off=quieto?0:Math.sin(tt*1.6+y*.35)*(1+(y-top)/(bot-top)*1.6);ctx.drawImage(E.refl,0,y*dpr,E.refl.width,3*dpr,off,y,w,3)}
+  // brillos del sol y ondas
+  for(let i=0;i<26;i++){const k=i/26;const y=L.top+L.ry*.2+k*L.ry*1.6;const x=E.sx+Math.sin(i*2.3)*L.rx*.25*k+ (quieto?0:Math.sin(tt*2+i)*6);const a=quieto?.35:.2+.3*Math.max(0,Math.sin(tt*3+i*1.7));ctx.fillStyle=`rgba(${P.solCol},${a})`;ctx.fillRect(x,y,4+k*10,1.2)}
+  for(let i=0;i<9;i++){const fase=quieto?.5:((tt*.15+i/9)%1);const yy=L.top+L.ry*.3+i*(L.ry*1.4/9),ww=L.rx*(.2+.15*Math.abs(Math.sin(i)))*(.6+fase);ctx.strokeStyle=`rgba(255,255,255,${.22*(1-fase)})`;ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(L.cx+Math.sin(i*1.7)*L.rx*.4,yy,ww,1.5,0,0,7);ctx.stroke()}
+  // patos
+  [[0,1],[.5,-1]].forEach(([desf,dir],k)=>{const u=quieto?.3+desf:((tt/40+desf)%1);const ang=u*Math.PI*2*dir;const x=L.cx+Math.cos(ang)*L.rx*.5,y=L.cy+Math.sin(ang)*L.ry*.45;const s=h*.012*(1+k*.15);const haciaDcha=Math.sin(ang)*dir<0;
+   ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x+(haciaDcha?-s*1.2:s*1.2),y+s*.4);ctx.lineTo(x+(haciaDcha?-s*4:s*4),y-s*.4);ctx.moveTo(x+(haciaDcha?-s*1.2:s*1.2),y+s*.6);ctx.lineTo(x+(haciaDcha?-s*4:s*4),y+s*1.4);ctx.stroke();
+   ctx.fillStyle=k?'#efe9dc':'#5b4a3a';ctx.beginPath();ctx.ellipse(x,y,s*1.4,s*.65,0,0,7);ctx.fill();ctx.fillStyle=k?'#efe9dc':'#2f5a3a';ctx.beginPath();ctx.arc(x+(haciaDcha?s*1.1:-s*1.1),y-s*.8,s*.45,0,7);ctx.fill();ctx.fillStyle='#e8a33a';ctx.fillRect(x+(haciaDcha?s*1.45:-s*1.75),y-s*.85,s*.35,s*.2)});
+  ctx.restore();
+  // juncos
+  ctx.strokeStyle=dia?'#4f7a33':'#3c5a2a';ctx.lineWidth=1.2;ctx.beginPath();E.juncos.forEach(j=>{const sw=quieto?0:Math.sin(tt*1.3+j.f)*2;ctx.moveTo(j.x+px*.4,j.y);ctx.quadraticCurveTo(j.x+px*.4+sw*.4,j.y-j.l*.6,j.x+px*.4+sw,j.y-j.l)});ctx.stroke();
+  // farolas junto al camino
+  [.22,.46,.7].forEach(u=>{const c=E.camino(u);const lx=c.x+c.ancho*1.4+px*.4,esc=1-u*.75,alto=h*.2*esc;
+   if(P.farola){const luz=ctx.createRadialGradient(lx,c.y-alto,0,lx,c.y-alto,alto*.45);luz.addColorStop(0,'rgba(255,214,150,.45)');luz.addColorStop(1,'rgba(255,214,150,0)');ctx.fillStyle=luz;ctx.fillRect(lx-alto*.5,c.y-alto*1.5,alto,alto)}
+   ctx.fillStyle='#22282a';ctx.fillRect(lx-1.4*esc,c.y-alto,2.8*esc,alto);ctx.beginPath();ctx.arc(lx,c.y-alto,3.6*esc,0,7);ctx.fillStyle=P.farola?'#ffe0aa':'#d8d2c2';ctx.fill()});
+  // árboles medios (por profundidad) y personas en el camino
+  const vol=(()=>{const c=quieto?.35:((tt/40)%1);const u=c<.5?.06+c*1.4:.06+(1-c)*1.4;const k=Math.min(.78,u);const p=E.camino(k);return {x:p.x+px*.4,y:p.y,a:h*.09*(1-k*.82)}})();
+  const cor=(()=>{const c=quieto?.7:((tt/26+.4)%1);const k=.12+c*.6;const p=E.camino(k);return {x:p.x+p.ancho*.4+px*.4,y:p.y,a:h*.085*(1-k*.82)}})();
+  const capas=E.medios.map(t=>({y:t.y,f:()=>sprite(t,tt,px)})).concat([{y:vol.y,f:()=>persona(vol.x,vol.y,vol.a,tt,false,true)},{y:cor.y,f:()=>persona(cor.x,cor.y,cor.a,tt,true,false)}]);
+  capas.sort((a,b)=>a.y-b.y).forEach(c=>c.f());
+  // primer plano
+  if(E.palmCerca)sprite(E.palmCerca,tt,px);sprite(E.cerca,tt,px);
+  E.motas.forEach(m=>{if(!quieto){m.y-=m.v*.35;m.x+=Math.sin(tt*.6+m.f)*.2;if(m.y<-4){m.y=h+4;m.x=Math.random()*w}}ctx.fillStyle=`rgba(${P.polen},${.2+.2*Math.sin(tt*1.5+m.f)})`;ctx.beginPath();ctx.arc(m.x+px*.8,m.y,m.r,0,7);ctx.fill()});
+  if(vivo&&!quieto)id=requestAnimationFrame(dibujar);
+ }
+ E=null;dibujar();
+ const ro=window.ResizeObserver?new ResizeObserver(()=>{E=null;if(quieto)dibujar()}):null;ro&&ro.observe(cv);
+ return {parar(){vivo=false;id&&cancelAnimationFrame(id);ro&&ro.disconnect()}};
+}
 
 function vComo(){return header('como-funciona')+`<main class="page wrap"><div class="inner"><div class="pagehead"><div><span class="lbl">Cómo funciona</span><h1>Sensores que se mueven por la ciudad</h1></div></div>
  <div class="steps">${[[I.walk,'Un portador lleva el sensor','Voluntarios, personal de limpieza y jardines, bicis compartidas y autobuses.'],[I.phone,'El móvil o el vehículo lo envía','Recibe cada medición por Bluetooth y la manda con la ubicación y la hora.'],[I.server,'El servidor la comprueba','Descarta lo imposible y calcula la media de cada zona.'],[I.mapi,'Mapa por zonas','Medias por parque y barrio. Nunca se publica el recorrido de nadie.']].map((s,i)=>`<div class="step"><span class="n">PASO ${i+1}</span><span class="stepico">${s[0]}</span><h3>${s[1]}</h3><p class="muted" style="margin:0;font-size:14px">${s[2]}</p></div>`).join('')}</div>
+ <section class="gv-sec" id="valores" style="display:flex;flex-direction:column;gap:14px"><div><span class="lbl">Guía de valores</span><h2 style="font-size:26px">Qué significan los valores del mapa</h2><p class="muted" style="margin:6px 0 0">Cada zona se colorea según la media de la última hora.</p></div>${guiaHTML()}</section>
+ <section class="ef-sec" style="display:flex;flex-direction:column;gap:14px"><div><span class="lbl">Efectos en la salud</span><h2 style="font-size:26px">Qué te puede pasar</h2><p class="muted" style="margin:6px 0 0">Cuanto más sube, más daño. Así afecta cada nivel.</p></div>
+ ${efectosHTML()}<p class="note">${EF_AVISO_B}</p></section>
  <section style="display:flex;flex-direction:column;gap:14px"><h2 style="font-size:26px">Hazte voluntario</h2>
  <div class="grid2"><div style="display:flex;flex-direction:column;gap:14px"><ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;color:var(--ink-2)"><li><b style="color:var(--ink)">Crea una cuenta en la app</b> y apunta tu ID de usuario (U-XXXXX).</li><li><b style="color:var(--ink)">Recoge un sensor</b> en un punto de reparto dando tu ID.</li><li><b style="color:var(--ink)">Escribe en la app el código</b> que lleva el sensor (RSP-XXXX) y pasea con el móvil.</li><li><b style="color:var(--ink)">Devuélvelo</b> en cualquier punto de reparto antes de 24 h.</li></ol>
  <div class="tw"><table><thead><tr><th scope="col">Punto de reparto</th><th scope="col">Dirección</th><th scope="col">Horario</th></tr></thead><tbody>${PUNTOS_REPARTO.map(p=>`<tr><td><b>${p[0]}</b></td><td>${p[1]}</td><td>${p[2]}</td></tr>`).join('')}</tbody></table></div>
@@ -394,8 +678,9 @@ function modal(){const m=S.modal;if(!m)return '';let b='';
  if(m.k==='baja'){b=`<h2>¿Dar de baja ${m.id}?</h2><p class="muted" style="margin:0">Dejará de aparecer en la flota y no se podrá prestar. Sus mediciones anteriores se conservan.</p><form id="f-baja" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="b-mot">Motivo</label><select class="input" id="b-mot" data-bind="f.bmot" ${inv('bmot')}><option value="">Elige un motivo…</option>${['Perdido o no devuelto','Avería sin reparación','Sustituido por otro sensor','Otro'].map(o=>`<option ${S.f.bmot===o?'selected':''}>${o}</option>`).join('')}</select>${err('bmot')}</div><div class="field"><label for="b-conf">Para confirmar, escribe <b class="mono">${m.id}</b></label><input class="input mono" id="b-conf" data-bind="f.bconf" value="${esc(S.f.bconf||'')}" autocomplete="off" ${inv('bconf')}>${err('bconf')}</div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn danger" type="submit">Dar de baja</button></div></form>`}
  if(m.k==='anular'){b=`<h2>Anular los puntos del ${SOSP.find(d=>d.id===m.id).d}</h2><form id="f-anular" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="a-mot">Motivo (lo verá el voluntario)</label><textarea class="input" id="a-mot" data-bind="f.amot" maxlength="200" ${inv('amot')}>${esc(S.f.amot||'')}</textarea>${err('amot')}</div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn danger" type="submit">Anular puntos</button></div></form>`}
  if(m.k==='regalo'){b=`<h2>${m.id?'Editar regalo':'Nuevo regalo'}</h2><form id="f-regalo" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="g-n">Nombre</label><input class="input" id="g-n" data-bind="f.gn" value="${esc(S.f.gn||'')}" ${inv('gn')}>${err('gn')}</div><div class="formgrid"><div class="field"><label for="g-c">Coste en puntos</label><input class="input mono" id="g-c" data-bind="f.gc" value="${esc(S.f.gc||'')}" inputmode="numeric" ${inv('gc')}>${err('gc')}</div><div class="field"><label for="g-s">Existencias</label><input class="input mono" id="g-s" data-bind="f.gs" value="${esc(S.f.gs||'')}" inputmode="numeric" ${inv('gs')}>${err('gs')}</div></div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn" type="submit">Guardar</button></div></form>`}
+ if(m.k==='guia'){b=`<div class="gv-modal-top"><div><span class="lbl">Guía</span><h2>Qué significan los valores</h2></div><button type="button" class="btn ghost sm" data-act="closeModal" aria-label="Cerrar">${I.x}</button></div>${guiaHTML()}`}
  if(m.k==='confirm'){b=`<h2>${m.t}</h2><p class="muted" style="margin:0">${m.p}</p><div class="acts"><button class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn ${m.danger?'danger':''}" data-act="confirmOk">${m.ok}</button></div>`}
- return `<div class="modal" data-act="backdrop"><div class="box" role="dialog" aria-modal="true">${b}</div></div>`}
+ return `<div class="modal" data-act="backdrop"><div class="box${m.k==='guia'?' gv-box':''}" role="dialog" aria-modal="true"${m.k==='guia'?' aria-label="Qué significan los valores"':''}>${b}</div></div>`}
 
 /* ---------- render ---------- */
 const $r=document.getElementById('root');
@@ -404,8 +689,11 @@ function render(){const r=route();
  if(PAN.includes(r)&&!ACCESS[S.user.r].includes(r)){location.replace('#'+HOME[S.user.r]);toast('Tu rol no tiene acceso a esa sección');return}
  const V={inicio:vInicio,mapa:()=>{S.layer='zonas';return vMapa()},comunidad:()=>{S.layer='comunidad';return vMapa()},historial:vHist,comparar:vCmp,'como-funciona':vComo,privacidad:vPriv,acceso:()=>vAcceso(false),recuperar:()=>vAcceso(true),panel:vFlota,'panel-sensores':vSensores,'panel-editar':vEditar,'panel-prestamos':vPrestamos,'panel-puntos':vPuntos,'panel-regalos':vRegalos};
  const ae=document.activeElement;const keep=ae&&ae.id&&ae.dataset&&ae.dataset.live?[ae.id,ae.selectionStart]:null;
+ if(r!=='inicio'&&TV.limpiar)TV.limpiar();
  $r.innerHTML=V[r]()+modal();
  if(GMAP()&&(r==='mapa'||r==='comunidad'))GMAP().montar();
+ if(S.modal&&S.modal.k==='guia'&&S.modal.foco){const k=S.modal.foco;S.modal.foco=null;requestAnimationFrame(()=>{const el=document.querySelector('.gv-box .gv[data-k="'+k+'"]');if(!el)return;el.scrollIntoView({block:'nearest'});el.classList.add('gv-foco');setTimeout(()=>el.classList.remove('gv-foco'),2200)})}
+ if(r==='inicio')montarInicio();
  if(keep){const el=document.getElementById(keep[0]);if(el){el.focus();try{el.setSelectionRange(keep[1],keep[1])}catch(_){}}}
  if(S.focusErr){S.focusErr=false;const el=$r.querySelector('[aria-invalid="true"]');el&&el.focus()}
  if(r==='acceso'&&S.f.notice){S.f.notice=false;toast('Inicia sesión para entrar en el panel')}
@@ -428,6 +716,7 @@ document.addEventListener('click',e=>{if(justDragged){justDragged=false;e.stopPr
 /* ---------- acciones ---------- */
 const vEmail=v=>/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v);
 const A={
+ tema:()=>{TEMA=TEMA==='oscuro'?'claro':'oscuro';try{localStorage.setItem('respira-tema',TEMA)}catch(_){}aplicarTema();render()},
  toast:a=>toast(a), menu:()=>{S.menu=true;render()}, menuClose:()=>{S.menu=false;render()}, toApp:()=>{S.menu=false},
  layer:a=>{S.layer=a;S.sel=null;if(a==='comunidad'&&route()!=='comunidad')location.hash='comunidad';else if(a==='zonas'&&route()!=='mapa')location.hash='mapa';else render()},
  mag:a=>{S.mag=a;render()}, sel:(a,el)=>{S.sel=a||null;if(a&&el&&el.classList.contains('srow')&&S.view.w<900){const z=byZ(a);const cx=z.x||z.lx,cy=z.y||z.ly;S.view.x=cx-S.view.w/2;S.view.y=cy-S.view.h/2;clampV()}render()},
@@ -454,6 +743,8 @@ const A={
  retirarRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.modal={k:'confirm',t:`¿Retirar «${g.n}»?`,p:'Dejará de verse en la app. Los canjes pendientes de este regalo se podrán seguir entregando.',ok:'Retirar',danger:true,fn:()=>{GIFTS=GIFTS.filter(x=>x.id!==a);toast('Regalo retirado del catálogo')}};render()},
  entregar:()=>{const c=S.canje;const g=GIFTS.find(x=>x.id===c.gift);c.estado='entregado';if(g)g.stock=Math.max(0,g.stock-1);S.canje=null;S.f.ccode='';render();toast(g&&g.stock===0?`Entregado. «${g.n}» queda agotado en la app.`:'Regalo entregado')},
  closeModal:()=>{S.modal=null;S.e={};render()},
+ guia:()=>{S.modal={k:'guia'};render()},
+ aValores:k=>{S.modal={k:'guia',foco:k};render()},
  backdrop:(a,el,ev)=>{if(ev.target===el)A.closeModal()}, menuBackdrop:(a,el,ev)=>{if(ev.target===el)A.menuClose()},
  confirmOk:()=>{const f=S.modal.fn;S.modal=null;f();render()}
 };
@@ -510,5 +801,6 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
 });
 /* Lo que necesita js/mapa-google.js */
 window.Respira={S,ZONAS,AVISOS,MAG,PERC,nivel,est,fmt,hace,esc,avOk,render,byZ};
+aplicarTema();
 render();
 })();

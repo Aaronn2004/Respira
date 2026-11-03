@@ -30,7 +30,14 @@ public class MasFragment extends Pestana {
             Ui.fila(cuenta, "Crear cuenta", null, v -> abrir(RegistroActivity.class));
         }
 
-        // Mismo orden que en el visual (prototipo v18)
+        // Modo claro / oscuro (mismos colores que la web)
+        LinearLayout tema = Ui.tarjeta(c);
+        boolean oscuro = Tema.oscuro(requireContext());
+        Bloques.interruptor(tema, oscuro ? R.drawable.ic_luna : R.drawable.ic_sol, "Modo oscuro",
+                oscuro ? "Activado" : "Desactivado · modo claro", oscuro,
+                activado -> Tema.cambiar(requireContext(), activado));
+
+        // Mismo orden que en el visual (prototipo v24)
         LinearLayout lista = Ui.tarjeta(c);
         int mias = repo.misPercepciones().size(), nAlertas = repo.alertas().size();
         Ui.fila(lista, "Mis percepciones", mias + (mias == 1 ? " activa" : " activas"), v -> abrir(MisPercepcionesActivity.class));
@@ -40,6 +47,7 @@ public class MasFragment extends Pestana {
 
         LinearLayout info = Ui.tarjeta(c);
         Ui.fila(info, "Qué significan los valores", null, v -> TextoActivity.abrir(requireContext(), TextoActivity.GUIA));
+        Ui.fila(info, "Efectos en la salud", "Ozono, calor y ruido", v -> abrir(EfectosActivity.class));
         Ui.fila(info, "Ver la bienvenida otra vez", null, v -> startActivity(
                 new Intent(requireContext(), OnboardingActivity.class).putExtra(OnboardingActivity.EXTRA_REPASO, true)));
         Ui.fila(info, "Acerca de Respira", null, v -> TextoActivity.abrir(requireContext(), TextoActivity.ACERCA));
