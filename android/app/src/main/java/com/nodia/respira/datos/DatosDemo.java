@@ -78,6 +78,9 @@ public final class DatosDemo {
             lista.add(new Percepcion(i + 1, (String) a[i][0], (Integer) a[i][3], g[0], g[1],
                     ahora - (Integer) a[i][4] * 60_000L, (String) a[i][5], null));
         }
+        // Publicada por Lucía (U-48213): con su sesión se puede editar y borrar
+        double[] g = geo(205, 170);
+        lista.add(new Percepcion(a.length + 1, "ruido", 2, g[0], g[1], ahora - 40 * 60_000L, "C/ Mayor, 43", "U-48213"));
         return lista;
     }
 

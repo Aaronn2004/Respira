@@ -1,4 +1,4 @@
-/* Respira Web: estilos. Generado desde el prototipo web v30 (diseño de la versión B).
+/* Respira Web: estilos. Generado desde el prototipo web v35 (diseño de la versión B).
    Fondo blanco con modo oscuro (atributo data-tema en <html>). */
 /* Layout: web pública con cabecera + mapa a dos columnas; panel municipal con barra lateral. Una sola página con vistas por #ancla */
 :root{
@@ -416,14 +416,12 @@ button.kpi{cursor:pointer} button.kpi:hover{border-color:var(--primary)}
 .tv-lista li{display:flex;flex-direction:column;gap:2px;padding:14px 0;border-bottom:1px solid var(--tv-line)}
 .tv-pie{border-top:1px solid var(--tv-line);padding-block:22px calc(22px + env(safe-area-inset-bottom,0px));font-size:.85rem;color:var(--tv-ink3)}
 .tv-pie .tv-in{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.tv-pie b{letter-spacing:.1em;color:var(--tv-ink2)}
-/* 768–1023 px: no cabe toda la barra; «Descarga la app» sigue en el menú de la página */
-@media (min-width:768px) and (max-width:1023px){.tv-pill .tv-link{padding:6px 11px}.tv-auth .tv-app{display:none}}
+/* 768–1023 px: enlaces de la píldora más compactos */
+@media (min-width:768px) and (max-width:1023px){.tv-pill .tv-link{padding:6px 11px}}
 @media (max-width:960px){.tv-aytos,.tv-dos,.tv-ayu{grid-template-columns:minmax(0,1fr)}.tv-web,.tv-tres{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.tv-web,.tv-tres,.tv-port{grid-template-columns:minmax(0,1fr)}.tv-dl{grid-template-columns:repeat(2,minmax(0,1fr))}.tv-medias b{font-size:.95rem}}
 
-/* ====== Versión A · «Todo como la portada»: el resto de la web en noche, serif y esquinas rectas ====== */
-
-/* ====== Versión B · «Portada como la web»: mismo contenido, estilo del resto de la web ====== */
+/* ====== Portada con el mismo estilo que el resto de la web ====== */
 :root .tv{
   --tv-bg:var(--bg); --tv-ink:var(--ink); --tv-ink2:var(--ink-2); --tv-ink3:var(--ink-3); --tv-link:var(--ink);
   --tv-line:var(--line); --tv-glass:color-mix(in srgb,var(--surface) 72%,transparent); --tv-panel:var(--surface);
@@ -519,7 +517,7 @@ html,body{margin:0}
 /* Reserva siempre el hueco de la barra de desplazamiento: así la cabecera no se mueve al cambiar de página */
 html{scrollbar-gutter:stable}
 
-/* ====== Versión B: fondo blanco + modo oscuro opcional ====== */
+/* ====== Fondo blanco + modo oscuro opcional ====== */
 :root[data-tema="claro"]{
   --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#EEF4F4; --surface-3:#DCE8E8;
   --ink:#12282B; --ink-2:#4A5F62; --ink-3:#738A8D; --line:#DCE6E6;
@@ -550,7 +548,7 @@ html{scrollbar-gutter:stable}
 
 .ef-t{display:block;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
 
-/* ---------- efectos en la salud · versión B (compacta) ---------- */
+/* ---------- efectos en la salud («Qué te puede pasar») ---------- */
 .efb-grid{--efm:#E0A21B;--efa:#E5533F;--efg:#B4232A;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
 :root[data-tema="oscuro"] .efb-grid{--efm:#F0B53C;--efa:#F06B5C;--efg:#FF8A8A}
 @media (max-width:980px){.efb-grid{grid-template-columns:1fr}}
@@ -582,7 +580,7 @@ html{scrollbar-gutter:stable}
 :root[data-tema="claro"] .tv-alt .efb{background:#FFFFFF}
 @media (max-width:420px){.efb-p{grid-template-columns:84px 1fr;gap:10px}}
 
-/* ---------- guía de valores · versión B ---------- */
+/* ---------- guía de valores ---------- */
 .gv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 @media (max-width:980px){.gv-grid{grid-template-columns:1fr}}
 .gv{display:flex;flex-direction:column;gap:14px;padding:20px;border:1px solid var(--line);border-radius:18px;background:var(--surface);color:var(--ink)}
@@ -621,6 +619,13 @@ html{scrollbar-gutter:stable}
 .gv-q:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .gv{transition:box-shadow .3s,border-color .3s}
 .gv.gv-foco{border-color:var(--primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 22%,transparent)}
+.trab-form{padding:20px;display:flex;flex-direction:column;gap:14px}
+.com-info{padding:14px;display:flex;flex-direction:column;gap:10px}
+.com-info ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.com-info li{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;line-height:1.4;color:var(--ink-2)}
+.com-info li>span:first-child{flex-shrink:0;color:var(--primary);margin-top:1px}
+.com-info li>span:first-child svg{width:16px;height:16px}
+.com-info b{color:var(--ink)}
 .modal .box.gv-box{width:min(1080px,100%);gap:16px}
 .gv-modal-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .gv-box .gv{padding:16px}

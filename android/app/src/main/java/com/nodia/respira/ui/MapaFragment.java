@@ -209,7 +209,11 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
                 mostrarZona((String) tag);
                 return true;
             }
-            return false;                        // percepción: globo de información
+            if (tag instanceof Long) {          // percepción: su hoja (Editar/Borrar si es tuya)
+                mostrarPercepcion((Long) tag);
+                return true;
+            }
+            return false;
         });
         activarMiUbicacion(false);
         ajustarRelleno();
@@ -387,6 +391,42 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
                 m.setTag(p.id); // Long: no abre la ficha de zona
             }
         }
+    }
+
+    // ==============================================================
+    // Hoja de una percepción: Editar y Borrar solo si es del usuario
+    // ==============================================================
+    private void mostrarPercepcion(long id) {
+        Percepcion p = repo.percepcion(id);
+        if (p == null) {
+            return;
+        }
+        Context c = requireContext();
+        BottomSheetDialog hoja = new BottomSheetDialog(c);
+        ScrollView sv = new ScrollView(c);
+        LinearLayout col = Ui.columna(c);
+        sv.addView(col);
+        Ui.titulo(col, p.titulo());
+        Ui.texto(col, p.direccion, 14, false, R.color.tinta_3);
+        Ui.parrafo(col, "Publicado " + DateUtils.getRelativeTimeSpanString(p.cuando) + ". Dejará de mostrarse a las 24 h.");
+        String detalle = Percepcion.detallesTipo(p.tipo)[p.nivel - 1];
+        if (repo.esMia(p)) {
+            Ui.nota(col, "Es tu percepción («" + detalle + "»), no una medición.");
+            Ui.boton(col, "Editar", Ui.BOTON_BORDE, x -> {
+                hoja.dismiss();
+                PercepcionActivity.editar(c, p.id);
+            });
+            Ui.boton(col, "Borrar", Ui.BOTON_LLENO, x -> Ui.confirmar(c, "¿Borrar la percepción?",
+                    "Dejará de verse en el mapa.", "Borrar", () -> {
+                        repo.borrarPercepcion(p.id);
+                        hoja.dismiss();
+                    })).setBackgroundTintList(android.content.res.ColorStateList.valueOf(Ui.color(c, R.color.nivel_alto)));
+        } else {
+            Ui.nota(col, "Es la percepción de un vecino («" + detalle + "»), no una medición. "
+                    + "Solo quien la publicó puede editarla o borrarla.");
+        }
+        hoja.setContentView(sv);
+        hoja.show();
     }
 
     // ==============================================================

@@ -619,23 +619,76 @@ public final class Repositorio {
         return l;
     }
 
-    public void nuevaPercepcion(String tipo, int nivel, double lat, double lng, String direccion) {
+    public static final int MAX_PERCEPCIONES_HORA = 3;
+
+    public synchronized Percepcion percepcion(long id) {
+        for (Percepcion p : percepciones) {
+            if (p.id == id) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    // Solo quien la publicó puede editarla o borrarla
+    public synchronized boolean esMia(Percepcion p) {
+        Usuario u = usuario();
+        return p != null && u != null && u.id.equals(p.autorId);
+    }
+
+    // --------------------------------------------------------------
+    // tipo, nivel, lat, lng, direccion --> nuevaPercepcion() --> V/F
+    // F si no hay sesión o ya ha publicado 3 en la última hora
+    // --------------------------------------------------------------
+    public boolean nuevaPercepcion(String tipo, int nivel, double lat, double lng, String direccion) {
         synchronized (this) {
             Usuario u = usuario();
             if (u == null) {
-                return;
+                return false;
             }
-            long id = System.currentTimeMillis();
-            percepciones.add(new Percepcion(id, tipo, nivel, lat, lng, id, direccion, u.id));
+            long ahora = System.currentTimeMillis();
+            int enLaHora = 0;
+            for (Percepcion p : percepciones) {
+                if (u.id.equals(p.autorId) && p.cuando >= ahora - 3_600_000L) {
+                    enLaHora++;
+                }
+            }
+            if (enLaHora >= MAX_PERCEPCIONES_HORA) {
+                return false;
+            }
+            percepciones.add(new Percepcion(ahora, tipo, nivel, lat, lng, ahora, direccion, u.id));
         }
         cambio();
+        return true;
+    }
+
+    // --------------------------------------------------------------
+    // id, tipo, nivel --> editarPercepcion() --> V/F
+    // Cambia tipo y nivel; conserva lugar, hora y autor. Solo la propia.
+    // --------------------------------------------------------------
+    public boolean editarPercepcion(long id, String tipo, int nivel) {
+        synchronized (this) {
+            for (int i = 0; i < percepciones.size(); i++) {
+                Percepcion p = percepciones.get(i);
+                if (p.id == id) {
+                    if (!esMia(p)) {
+                        return false;
+                    }
+                    percepciones.set(i, new Percepcion(p.id, tipo, nivel, p.lat, p.lng, p.cuando, p.direccion, p.autorId));
+                    break;
+                }
+            }
+        }
+        cambio();
+        return true;
     }
 
     public void borrarPercepcion(long id) {
         synchronized (this) {
             Iterator<Percepcion> it = percepciones.iterator();
             while (it.hasNext()) {
-                if (it.next().id == id) {
+                Percepcion p = it.next();
+                if (p.id == id && esMia(p)) {
                     it.remove();
                 }
             }

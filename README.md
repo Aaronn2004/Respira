@@ -17,7 +17,7 @@ Respira/
 |---|---|
 | Mapa con Google Maps (app y web) | Real (necesita clave, ver abajo) |
 | Escaneo BLE del sensor y `POST /medicion` | Real: código del Sprint 0 (`ble/`) adaptado a servicio en primer plano |
-| Zonas, valores, cuentas, préstamos, puntos, regalos y canjes | **Demostración**: datos fijos del prototipo (app v24 / web v30), guardados en el móvil (`SharedPreferences`) o en memoria (web). Falta la API del servidor |
+| Zonas, valores, cuentas, préstamos, puntos, regalos y canjes | **Demostración**: datos fijos del prototipo (app v25 / web v35), guardados en el móvil (`SharedPreferences`) o en memoria (web). Falta la API del servidor |
 | Zonas sobre Gandia | **Ficticias y aproximadas**: se reemplazarán por los polígonos que dé el servidor |
 | Alertas push | Simuladas en local (Más › Controles de la demo). Las reales irán por FCM desde el servidor |
 
@@ -40,6 +40,7 @@ Estructura del código (`app/src/main/java/com/nodia/respira/`):
 - `ui/` · `SplashActivity` (carga ~3 s, «Developed by Nodia»), `OnboardingActivity`, `MainActivity` con 5 pestañas (Mapa · Parques · Sensor · Puntos · Más) y el resto de pantallas.
   - `Tema` + `RespiraApp`: modo claro (por defecto) u oscuro, en Más › Modo oscuro. Colores en `values/colors.xml` y `values-night/colors.xml` (los mismos que la web). En oscuro, Google Maps usa `res/raw/mapa_oscuro.json`.
   - `TextoActivity` (guía «Qué significan los valores») y `EfectosActivity` («Efectos en la salud»), con las piezas de `Bloques` y los textos de `datos/Salud`.
+  - Percepciones: al tocar una en el mapa sale su hoja; si es tuya, **Editar** (tipo y nivel; conserva lugar y hora) y **Borrar**. También en Más › Mis percepciones. Máximo 3 por hora y cuenta. Demo: Lucía tiene una en C/ Mayor, 43.
 
 ## Web (`web/`)
 
@@ -54,6 +55,8 @@ Diseño: fondo blanco con botón de modo oscuro en la cabecera (se recuerda en e
 Sin `config.js`, o si la clave falla, la web usa el mapa SVG del prototipo (sin marca de Google) (y la consola muestra un 404 de `config.js`, que es esperado).
 
 Panel municipal (`#acceso`): `admin@ayto.es` / `Admin2026!` · `tecnico@ayto.es` / `Tecnico2026!` · `reparto@ayto.es` / `Reparto2026!`.
+
+**Trabajadores municipales** (panel › Trabajadores, solo administración): alta con nombre, correo `@ayto.es`, nº de empleado y servicio (sin duplicados). La cuenta queda como *Trabajador municipal* (ID `T-0001…`), **sin acceso al panel**, y se activa con un enlace de un solo uso que caduca a las 48 h (`#activar/<token>`), donde el propio trabajador crea su contraseña. La asignación de sensor es otra operación (Sensores). Demo: `psanz@ayto.es` / `Trabajo2026!` (activo; el panel le deniega el acceso). El botón «Abrir correo de prueba» existe solo porque aún no hay servidor de correo: **quitarlo** cuando lo haya. Seguridad real pendiente de la API (WEB-05): contraseñas y tokens con hash en el servidor, sesión y permisos comprobados en el servidor.
 
 ## Claves de Google Maps
 

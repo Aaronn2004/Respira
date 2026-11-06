@@ -11,6 +11,7 @@ import com.nodia.respira.datos.Repositorio;
 
 import java.util.List;
 
+// Mis percepciones: las que ha publicado este usuario, con Editar y Borrar.
 public class MisPercepcionesActivity extends AppCompatActivity {
 
     private LinearLayout c;
@@ -19,14 +20,19 @@ public class MisPercepcionesActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         c = Ui.pantalla(this, "Mis percepciones");
-        pintar();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        pintar(); // también al volver de editar una
     }
 
     private void pintar() {
         c.removeAllViews();
         Repositorio repo = Repositorio.obtener(this);
         if (!repo.haySesion()) {
-            Ui.necesitaSesion(c, this, "Inicia sesión", "Tus percepciones van asociadas a tu cuenta para que puedas borrarlas.");
+            Ui.necesitaSesion(c, this, "Inicia sesión", "Tus percepciones van asociadas a tu cuenta para que puedas editarlas o borrarlas.");
             return;
         }
         List<Percepcion> mias = repo.misPercepciones();
@@ -38,6 +44,9 @@ public class MisPercepcionesActivity extends AppCompatActivity {
         for (Percepcion p : mias) {
             String cuando = DateUtils.getRelativeTimeSpanString(p.cuando).toString();
             LinearLayout f = Ui.fila(lista, p.titulo(), p.direccion + " · " + cuando, null);
+            Ui.boton(f, "Editar", Ui.BOTON_TEXTO, v -> PercepcionActivity.editar(this, p.id))
+                    .setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             Ui.boton(f, "Borrar", Ui.BOTON_TEXTO, v -> Ui.confirmar(this, "¿Borrar esta percepción?",
                     "Desaparecerá del mapa.", "Borrar", () -> {
                         repo.borrarPercepcion(p.id);
@@ -45,5 +54,6 @@ public class MisPercepcionesActivity extends AppCompatActivity {
                     })).setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         }
+        Ui.nota(c, "Se ven 24 h en el mapa, sin tu nombre. Al editar una se conservan su lugar y su hora.");
     }
 }
