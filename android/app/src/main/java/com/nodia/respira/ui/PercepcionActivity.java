@@ -17,6 +17,7 @@ import com.nodia.respira.datos.Repositorio;
 import com.nodia.respira.datos.Zona;
 
 import java.util.Locale;
+import java.util.Map;
 
 // ==============================================================
 // Nueva percepción: tipo (ruido / calor / aire) y nivel 1..3, en el
@@ -104,19 +105,27 @@ public class PercepcionActivity extends AppCompatActivity {
                 Toast.makeText(this, "Elige qué notas y cuánto", Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (editando) {
-                if (repo.editarPercepcion(original.id, tipo, nivel)) {
-                    Toast.makeText(this, "Percepción actualizada", Toast.LENGTH_SHORT).show();
+            v.setEnabled(false);
+            Repositorio.Hecho<Percepcion> hecho = new Repositorio.Hecho<Percepcion>() {
+                @Override
+                public void ok(Percepcion p) {
+                    Toast.makeText(PercepcionActivity.this, editando ? "Percepción actualizada"
+                            : "Gracias. Se verá 24 h en el mapa, sin tu nombre.", Toast.LENGTH_LONG).show();
+                    finish();
                 }
-                finish();
-                return;
+
+                @Override
+                public void error(String mensaje, Map<String, String> campos) {
+                    v.setEnabled(true);
+                    // p. ej. «Ya has publicado 3 en la última hora…» o sin conexión
+                    Toast.makeText(PercepcionActivity.this, mensaje, Toast.LENGTH_LONG).show();
+                }
+            };
+            if (editando) {
+                repo.editarPercepcion(original.id, tipo, nivel, hecho);
+            } else {
+                repo.nuevaPercepcion(tipo, nivel, lat, lng, lugar, hecho);
             }
-            if (!repo.nuevaPercepcion(tipo, nivel, lat, lng, lugar)) {
-                Toast.makeText(this, "Has publicado 3 percepciones en la última hora. Espera un poco.", Toast.LENGTH_LONG).show();
-                return;
-            }
-            Toast.makeText(this, "Gracias. Se verá 24 h en el mapa, sin tu nombre.", Toast.LENGTH_LONG).show();
-            finish();
         });
         Ui.nota(c, "Una percepción no es una medición: se muestra aparte, en la capa «Comunidad». "
                 + "Puedes editarla o borrarla en Más › Mis percepciones.");

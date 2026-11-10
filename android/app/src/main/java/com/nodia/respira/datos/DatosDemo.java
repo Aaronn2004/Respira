@@ -61,29 +61,6 @@ public final class DatosDemo {
         return z;
     }
 
-    public static List<Percepcion> percepciones(long ahora) {
-        Object[][] a = {
-                {"ruido", 70, 252, 3, 20, "Av. del Río, 40"},
-                {"ruido", 262, 206, 2, 120, "C/ del Molino, 18"},
-                {"ruido", 150, 356, 1, 300, "C/ Mayor, 61"},
-                {"ruido", 322, 330, 3, 12, "Pl. Mayor, 4"},
-                {"temp", 120, 110, 3, 35, "Av. del Río, 12"},
-                {"temp", 250, 300, 2, 80, "Pl. Mayor, 1"},
-                {"aire", 300, 150, 2, 50, "C/ del Molino, 5"},
-                {"aire", 60, 420, 1, 200, "Pl. de la Estación, 3"},
-                {"temp", 300, 450, 1, 420, "C/ Poniente, 38"}};
-        List<Percepcion> lista = new ArrayList<>();
-        for (int i = 0; i < a.length; i++) {
-            double[] g = geo((Integer) a[i][1], (Integer) a[i][2]);
-            lista.add(new Percepcion(i + 1, (String) a[i][0], (Integer) a[i][3], g[0], g[1],
-                    ahora - (Integer) a[i][4] * 60_000L, (String) a[i][5], null));
-        }
-        // Publicada por Lucía (U-48213): con su sesión se puede editar y borrar
-        double[] g = geo(205, 170);
-        lista.add(new Percepcion(a.length + 1, "ruido", 2, g[0], g[1], ahora - 40 * 60_000L, "C/ Mayor, 43", "U-48213"));
-        return lista;
-    }
-
     // --------------------------------------------------------------
     // Serie para la gráfica de evolución (misma fórmula que el prototipo).
     // per: "24h" (48 puntos, cada 30 min) | "7d" (56 puntos, cada 3 h)

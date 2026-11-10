@@ -15,6 +15,8 @@ import com.nodia.respira.datos.Canje;
 import com.nodia.respira.datos.Regalo;
 import com.nodia.respira.datos.Repositorio;
 
+import java.util.Map;
+
 // ==============================================================
 // Regalos del ayuntamiento. Al canjear se descuentan los puntos y
 // se da un código CJ-XXXX para recogerlo en 7 días.
@@ -30,6 +32,16 @@ public class RegalosActivity extends AppCompatActivity {
         repo = Repositorio.obtener(this);
         c = Ui.pantalla(this, "Regalos");
         pintar();
+        repo.observar(alCambiar);
+        repo.refrescar(true);     // saldo y existencias al día
+    }
+
+    private final Runnable alCambiar = this::pintar;
+
+    @Override
+    protected void onDestroy() {
+        repo.dejarDeObservar(alCambiar);
+        super.onDestroy();
     }
 
     private void pintar() {
@@ -59,13 +71,17 @@ public class RegalosActivity extends AppCompatActivity {
         Ui.confirmar(this, "¿Canjear " + g.nombre + "?",
                 "Se descontarán " + g.coste + " puntos (te quedarán " + (puntos - g.coste)
                         + "). Tendrás 7 días para recogerlo en un punto de reparto.", "Canjear", () -> {
-                    Canje k = repo.canjear(g.id);
-                    if (k == null) {
-                        pintar();
-                        return;
-                    }
-                    mostrarCodigo(k);
-                    pintar();
+                    repo.canjear(g.id, new Repositorio.Hecho<Canje>() {
+                        @Override
+                        public void ok(Canje k) {
+                            mostrarCodigo(k);
+                        }
+
+                        @Override
+                        public void error(String mensaje, Map<String, String> campos) {
+                            Ui.confirmar(RegalosActivity.this, "No se ha podido canjear", mensaje, "Entendido", () -> { });
+                        }
+                    });
                 });
     }
 

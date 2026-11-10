@@ -23,6 +23,7 @@ public class Zona {
     public final int numMediciones;
     private final Map<Magnitud, Double> valores = new EnumMap<>(Magnitud.class);
     private double[] posEtiqueta;           // dónde va el nombre en el mapa (null = centro)
+    private final Map<Magnitud, Double> media24 = new EnumMap<>(Magnitud.class);   // promedio de las últimas 24 h
 
     public Zona(String id, String tipo, String nombre, List<double[]> contorno,
                 Integer haceMin, int numMediciones, Double o3, Double temp, Double ruido) {
@@ -35,6 +36,16 @@ public class Zona {
         valores.put(Magnitud.O3, o3);
         valores.put(Magnitud.TEMP, temp);
         valores.put(Magnitud.RUIDO, ruido);
+    }
+
+    public Zona conMedia24h(Magnitud m, Double v) {
+        media24.put(m, v);
+        return this;
+    }
+
+    // promedio de las últimas 24 h (null si no hay o son datos de demostración)
+    public Double media24h(Magnitud m) {
+        return media24.get(m);
     }
 
     public boolean esParque() {

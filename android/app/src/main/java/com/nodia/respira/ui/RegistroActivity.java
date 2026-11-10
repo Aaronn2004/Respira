@@ -7,11 +7,13 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.checkbox.MaterialCheckBox;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputLayout;
 import com.nodia.respira.R;
 import com.nodia.respira.datos.Repositorio;
+import com.nodia.respira.datos.Usuario;
 
 import java.util.Map;
 
@@ -43,23 +45,44 @@ public class RegistroActivity extends AppCompatActivity {
         TextView errorAcepta = Ui.texto(c, "", 13, false, R.color.nivel_alto);
         errorAcepta.setVisibility(TextView.GONE);
 
-        Ui.boton(c, "Crear cuenta", Ui.BOTON_LLENO, v -> {
-            Map<String, String> err = repo.registrar(Ui.leer(nombre), Ui.leer(email), Ui.leer(clave), acepta.isChecked());
-            nombre.setError(err.get("nombre"));
-            email.setError(err.get("email"));
-            clave.setError(err.get("clave"));
-            errorAcepta.setText(err.get("acepta"));
-            errorAcepta.setVisibility(err.containsKey("acepta") ? TextView.VISIBLE : TextView.GONE);
-            if (err.isEmpty()) {
-                String id = repo.usuario().id;
-                new MaterialAlertDialogBuilder(this)
-                        .setTitle("Cuenta creada")
-                        .setMessage("Tu ID es " + id + ".\n\nDalo en el punto de reparto cuando recojas un sensor. "
-                                + "Siempre lo tienes en Más › Mi cuenta.")
-                        .setCancelable(false)
-                        .setPositiveButton("Entendido", (d, w) -> finish())
-                        .show();
-            }
+        TextView errorGeneral = Ui.texto(c, "", 13, false, R.color.nivel_alto);
+        errorGeneral.setVisibility(TextView.GONE);
+
+        MaterialButton crear = Ui.boton(c, "Crear cuenta", Ui.BOTON_LLENO, null);
+        crear.setOnClickListener(v -> {
+            crear.setEnabled(false);
+            errorGeneral.setVisibility(TextView.GONE);
+            // Las reglas las comprueba el servidor (nombre y correo no repetidos, etc.)
+            repo.registrar(Ui.leer(nombre), Ui.leer(email), Ui.leer(clave), acepta.isChecked(), new Repositorio.Hecho<Usuario>() {
+                @Override
+                public void ok(Usuario u) {
+                    nombre.setError(null);
+                    email.setError(null);
+                    clave.setError(null);
+                    errorAcepta.setVisibility(TextView.GONE);
+                    new MaterialAlertDialogBuilder(RegistroActivity.this)
+                            .setTitle("Cuenta creada")
+                            .setMessage("Tu ID es " + u.id + ".\n\nDalo en el punto de reparto cuando recojas un sensor. "
+                                    + "Siempre lo tienes en Más › Mi cuenta.")
+                            .setCancelable(false)
+                            .setPositiveButton("Entendido", (d, w) -> finish())
+                            .show();
+                }
+
+                @Override
+                public void error(String mensaje, Map<String, String> err) {
+                    crear.setEnabled(true);
+                    nombre.setError(err.get("nombre"));
+                    email.setError(err.get("email"));
+                    clave.setError(err.get("clave"));
+                    errorAcepta.setText(err.get("acepta"));
+                    errorAcepta.setVisibility(err.containsKey("acepta") ? TextView.VISIBLE : TextView.GONE);
+                    if (err.isEmpty()) {
+                        errorGeneral.setText(mensaje);
+                        errorGeneral.setVisibility(TextView.VISIBLE);
+                    }
+                }
+            });
         });
     }
 }

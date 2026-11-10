@@ -13,8 +13,8 @@ import java.util.List;
 
 // ==============================================================
 // Pestaña «Más»: cuenta, alertas, percepciones, ajustes, textos
-// legales y los controles de la demo (para enseñar el flujo sin
-// tener el servidor ni el sensor delante).
+// legales y unas pruebas (actualizar, probar una alerta, borrar
+// lo guardado en el móvil).
 // ==============================================================
 public class MasFragment extends Pestana {
 
@@ -52,43 +52,19 @@ public class MasFragment extends Pestana {
                 new Intent(requireContext(), OnboardingActivity.class).putExtra(OnboardingActivity.EXTRA_REPASO, true)));
         Ui.fila(info, "Acerca de Respira", null, v -> TextoActivity.abrir(requireContext(), TextoActivity.ACERCA));
 
-        Ui.etiqueta(c, "Controles de la demo");
+        Ui.etiqueta(c, "Pruebas");
         LinearLayout demo = Ui.tarjeta(c);
-        Ui.fila(demo, "Simular préstamo en el punto de reparto", "Presta el sensor RSP-9C2D a tu cuenta", v -> {
-            String cod = repo.simularPrestamo();
-            aviso(cod == null ? "Inicia sesión primero: el préstamo se registra con tu ID"
-                    : "Punto de reparto: sensor " + cod + " prestado a " + repo.usuario().id);
+        Ui.fila(demo, "Actualizar datos", repo.datosReales() ? "Conectado al servidor de Respira"
+                : "Sin conexión con el servidor: se ven datos de demostración", v -> {
+            repo.actualizarZonas();
+            repo.refrescar(true);
+            aviso("Pidiendo los datos al servidor…");
         });
-        Ui.fila(demo, "Simular 40 min de paseo", "15 de ellos dentro de un parque", v -> {
-            if (repo.usuario() == null) {
-                aviso("Inicia sesión primero");
-                return;
-            }
-            repo.simularPaseo(40, 15);
-            aviso("Sumados 40 minutos válidos");
-        });
-        Ui.fila(demo, "Simular fin del día", "Calcula y suma los puntos de hoy", v -> {
-            if (repo.usuario() == null) {
-                aviso("Inicia sesión primero");
-                return;
-            }
-            int pts = repo.cerrarDia();
-            if (pts < 0) {
-                aviso("Hoy no hay minutos válidos: no se suman puntos");
-                return;
-            }
-            Intent ir = new Intent(requireContext(), MainActivity.class).putExtra(MainActivity.EXTRA_PESTANA, R.id.tab_puntos);
-            boolean ok = Notificaciones.mostrar(requireContext(), Notificaciones.CANAL_PUNTOS, 2,
-                    "Has ganado " + pts + " puntos hoy", "Tu saldo es de " + repo.cuenta().puntos + " puntos.", ir);
-            if (!ok) {
-                aviso("Has ganado " + pts + " puntos (las notificaciones están desactivadas)");
-            }
-        });
-        Ui.fila(demo, "Simular que salta una alerta", null, v -> simularAlerta());
-        Ui.fila(demo, "Reiniciar datos de la demo", "Vuelve a la primera apertura", v ->
-                Ui.confirmar(requireContext(), "¿Reiniciar la demo?",
-                        "Se borran cuentas nuevas, parques, alertas y puntos de este móvil.", "Reiniciar", () -> {
-                            repo.reiniciarDemo();
+        Ui.fila(demo, "Probar una alerta", "Enseña cómo llega la notificación de tu última alerta", v -> simularAlerta());
+        Ui.fila(demo, "Borrar los datos de este móvil", "Cierra la sesión y borra favoritos, alertas y la bienvenida", v ->
+                Ui.confirmar(requireContext(), "¿Borrar los datos de este móvil?",
+                        "Tu cuenta y tus puntos siguen en el servidor: podrás volver a entrar.", "Borrar", () -> {
+                            repo.olvidarEsteMovil();
                             startActivity(new Intent(requireContext(), SplashActivity.class)
                                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
                         }));
@@ -106,8 +82,8 @@ public class MasFragment extends Pestana {
         String titulo = a.magnitud.nombre + ("custom".equals(a.condicion) ? " por encima de tu límite"
                 : " en nivel " + a.condicion) + " en " + z.nombre;
         Intent ir = new Intent(requireContext(), ZonaActivity.class).putExtra(ZonaActivity.EXTRA_ZONA, z.id);
-        if (!Notificaciones.mostrar(requireContext(), Notificaciones.CANAL_ALERTAS, 100 + z.id.hashCode() % 100,
-                titulo, a.magnitud.formatear(z.valor(a.magnitud)) + " " + a.magnitud.unidad + ". Toca para ver la zona.", ir)) {
+        if (!Notificaciones.mostrar(requireContext(), Notificaciones.CANAL_ALERTAS, 100 + Math.abs(z.id.hashCode() % 100),
+                titulo, a.magnitud.formatear(z.valor(a.magnitud)) + " " + a.magnitud.unidad + " a las " + ZonaActivity.hora(System.currentTimeMillis() - (z.haceMin == null ? 0 : z.haceMin) * 60000L, false) + ". Toca para ver la zona.", ir)) {
             aviso("No llega: las notificaciones no están permitidas para Respira");
         }
     }

@@ -14,10 +14,12 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.nodia.respira.datos.Nivel;
 import com.nodia.respira.datos.Reglas;
 import com.nodia.respira.datos.Repositorio;
+import com.nodia.respira.datos.Usuario;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Map;
 
 // ==============================================================
 // Iniciar sesión (APP-10). 5 intentos fallidos -> 15 min de bloqueo.
@@ -79,13 +81,22 @@ public class LoginActivity extends AppCompatActivity {
         if (email.getError() != null || clave.getError() != null) {
             return;
         }
-        Repositorio.ResultadoLogin r = repo.iniciarSesion(m, p);
-        if (r.error != null) {
-            mostrarError(r.error);
-            comprobarBloqueo();
-            return;
-        }
-        Toast.makeText(this, "Hola, " + r.usuario.nombre, Toast.LENGTH_SHORT).show();
-        finish();
+        entrar.setEnabled(false);
+        mostrarError(null);
+        repo.iniciarSesion(m, p, new Repositorio.Hecho<Usuario>() {
+            @Override
+            public void ok(Usuario u) {
+                Toast.makeText(LoginActivity.this, "Hola, " + u.nombre, Toast.LENGTH_SHORT).show();
+                finish();
+            }
+
+            @Override
+            public void error(String mensaje, Map<String, String> campos) {
+                entrar.setEnabled(true);
+                clave.getEditText().setText("");
+                mostrarError(mensaje);
+                comprobarBloqueo();
+            }
+        });
     }
 }

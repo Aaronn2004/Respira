@@ -19,13 +19,15 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.nodia.respira.ble.ServicioEscuharBeacons;
+import com.nodia.respira.datos.Magnitud;
 import com.nodia.respira.datos.Nivel;
 import com.nodia.respira.datos.Recorrido;
-import com.nodia.respira.datos.Reglas;
+import com.nodia.respira.datos.Repositorio;
 import com.nodia.respira.datos.Usuario;
 
 import java.util.ArrayList;
@@ -82,12 +84,17 @@ public class SensorFragment extends Pestana {
         LinearLayout datos = Ui.tarjeta(c);
         Ui.valor(datos, "Mediciones enviadas hoy", String.valueOf(r.enviadas));
         Ui.valor(datos, "Última enviada", r.ultima == null ? "—" : r.ultima);
+        for (Magnitud m : Magnitud.values()) {
+            Double v = repo.ultimoValor(m.id);
+            Ui.valor(datos, m.nombre + " (último dato)", v == null ? "—" : m.formatear(v) + " " + m.unidad);
+        }
         Ui.valor(datos, "Minutos válidos hoy", hoy[0] + " (" + hoy[1] + " en parques)");
         if (r.pendientes > 0) {
             Ui.valor(datos, "Pendientes de enviar", String.valueOf(r.pendientes));
         }
         LinearLayout pts = Ui.tarjeta(c);
-        Ui.valor(pts, "Puntos estimados de hoy (se suman esta noche)", "~" + Reglas.puntosDelDia(hoy[0], hoy[1]));
+        Repositorio.Cuenta cu = repo.cuenta();
+        Ui.valor(pts, "Puntos de hoy (provisionales: se suman al acabar el día)", "~" + (cu == null ? 0 : cu.hoyPuntos));
 
         Ui.nota(c, "Mientras el recorrido está activo verás una notificación fija: Android lo exige para escuchar en segundo plano.");
         Ui.boton(c, "Terminar recorrido", Ui.BOTON_BORDE, v -> Ui.confirmar(requireContext(),
@@ -104,8 +111,18 @@ public class SensorFragment extends Pestana {
             Ui.aviso(c, "Recorrido terminado. Hoy has enviado " + anterior.enviadas + " mediciones. Devuelve el sensor "
                     + anterior.codigo + " en un punto de reparto antes de 24 h.", Nivel.BAJO);
         }
-        Ui.parrafo(c, "Recoge un sensor en un punto de reparto dando tu ID " + u.id
-                + " y escribe aquí el código que lleva impreso.");
+        String prestado = repo.sensorPrestado();
+        if (u.esTrabajador()) {
+            Ui.parrafo(c, "Escribe el código del sensor que te ha asignado tu servicio (lo lleva impreso).");
+        } else if (prestado != null) {
+            Ui.parrafo(c, "Tienes prestado el sensor " + prestado + ". Escribe su código para empezar.");
+            if (textoCodigo.isEmpty()) {
+                textoCodigo = prestado;
+            }
+        } else {
+            Ui.parrafo(c, "Recoge un sensor en un punto de reparto dando tu ID " + u.id
+                    + " y escribe aquí el código que lleva impreso.");
+        }
 
         TextInputLayout campo = new TextInputLayout(requireContext(), null,
                 com.google.android.material.R.attr.textInputOutlinedStyle);
@@ -124,25 +141,43 @@ public class SensorFragment extends Pestana {
         lp.topMargin = Ui.dp(requireContext(), 16);
         c.addView(campo, lp);
 
+        MaterialButton boton = Ui.boton(c, "Empezar recorrido", Ui.BOTON_LLENO, null);
         Runnable enviar = () -> {
             textoCodigo = entrada.getText() == null ? "" : entrada.getText().toString().trim().toUpperCase(Locale.ROOT);
-            errorCodigo = repo.errorCodigo(textoCodigo, hayRed());
-            if (errorCodigo != null) {
-                campo.setError(errorCodigo);
-                return;
-            }
-            codigoPendiente = textoCodigo;
-            if (faltanPermisos().isEmpty()) {
-                empezar();
-            } else {
-                explicarPermisos();
-            }
+            boton.setEnabled(false);
+            campo.setError(null);
+            // El servidor comprueba que ese sensor está prestado a esta cuenta
+            repo.comprobarSensor(textoCodigo, hayRed(), new Repositorio.Hecho<String>() {
+                @Override
+                public void ok(String codigo) {
+                    errorCodigo = null;
+                    if (!isAdded()) {
+                        return;
+                    }
+                    boton.setEnabled(true);
+                    codigoPendiente = codigo;
+                    if (faltanPermisos().isEmpty()) {
+                        empezar();
+                    } else {
+                        explicarPermisos();
+                    }
+                }
+
+                @Override
+                public void error(String mensaje, Map<String, String> campos) {
+                    errorCodigo = mensaje;
+                    if (isAdded()) {
+                        boton.setEnabled(true);
+                        campo.setError(mensaje);
+                    }
+                }
+            });
         };
         entrada.setOnEditorActionListener((v, id, e) -> {
             enviar.run();
             return true;
         });
-        Ui.boton(c, "Empezar recorrido", Ui.BOTON_LLENO, v -> enviar.run());
+        boton.setOnClickListener(v -> enviar.run());
 
         LinearLayout pasos = Ui.tarjeta(c);
         Ui.fila(pasos, "1 · Recoge el sensor", "En un punto de reparto, con tu ID de usuario.", null);

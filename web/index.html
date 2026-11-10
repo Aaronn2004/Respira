@@ -20,6 +20,10 @@
   <!-- config.js NO se sube a git (lleva la clave). Si no existe, el mapa usa el SVG de demostración. -->
   <script src="js/config.js"></script>
   <script src="js/mapa-google.js"></script>
+  <!-- datos-api.js vuelve a esta ruta del panel si la sesión sigue abierta -->
+  <script>window.__respiraRutaInicial = location.hash;</script>
   <script src="js/app.js"></script>
+  <!-- Datos reales: pide zonas, series y sensores a la API (API_URL en config.js) -->
+  <script src="js/datos-api.js"></script>
 </body>
 </html>

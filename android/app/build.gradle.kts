@@ -11,7 +11,8 @@ val local = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 val mapsKey: String = local.getProperty("MAPS_API_KEY", "")
-val urlServidor: String = local.getProperty("URL_SERVIDOR", "http://192.168.1.100:8080")
+// Sin URL_SERVIDOR en local.properties, la app usa la API de Plesk
+val urlServidor: String = local.getProperty("URL_SERVIDOR", "https://ablabla.upv.edu.es/respira/api/index.php")
 
 android {
     namespace = "com.nodia.respira"

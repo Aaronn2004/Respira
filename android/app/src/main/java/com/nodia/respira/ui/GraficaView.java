@@ -13,12 +13,13 @@ import com.nodia.respira.datos.Magnitud;
 
 // ==============================================================
 // GraficaView: evolución de una magnitud con bandas de nivel.
-// Los huecos (null) se pintan en gris: «no pasó ningún sensor».
-// No se rellenan ni se interpolan.
+// Huecos cortos (hasta 2 h) que el servidor aproxima: línea de puntos.
+// Huecos largos (null y sin aproximación): franja gris, «sin datos».
 // ==============================================================
 public class GraficaView extends View {
 
     private Double[] datos = new Double[0];
+    private Double[] aprox = new Double[0];
     private Magnitud magnitud = Magnitud.O3;
     private boolean dia = true;
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -31,8 +32,9 @@ public class GraficaView extends View {
         super(c, a);
     }
 
-    public void mostrar(Double[] datos, Magnitud m, boolean dia) {
+    public void mostrar(Double[] datos, Double[] aprox, Magnitud m, boolean dia) {
         this.datos = datos;
+        this.aprox = aprox == null || aprox.length != datos.length ? new Double[datos.length] : aprox;
         this.magnitud = m;
         this.dia = dia;
         setContentDescription("Gráfica de " + m.nombre);
@@ -105,7 +107,7 @@ public class GraficaView extends View {
         txt.setTextAlign(Paint.Align.CENTER);
         int ini = -1;
         for (int i = 0; i <= datos.length; i++) {
-            boolean hueco = i < datos.length && datos[i] == null;
+            boolean hueco = i < datos.length && datos[i] == null && aprox[i] == null;
             if (hueco && ini < 0) {
                 ini = i;
             } else if (!hueco && ini >= 0) {
@@ -144,6 +146,36 @@ public class GraficaView extends View {
         if (tramo != null) {
             canvas.drawPath(tramo, p);
         }
+
+        // huecos cortos aproximados: de punto real a punto real, en línea de puntos
+        p.setStrokeWidth(Ui.dp(c, 2f));
+        p.setPathEffect(new DashPathEffect(new float[]{Ui.dp(c, 2), Ui.dp(c, 4)}, 0));
+        for (int i = 0; i < datos.length; i++) {
+            if (aprox[i] == null || datos[i] != null) {
+                continue;
+            }
+            int a = i - 1;
+            int b = i;
+            while (b < datos.length && datos[b] == null && aprox[b] != null) {
+                b++;
+            }
+            Path pa = new Path();
+            if (a >= 0 && datos[a] != null) {
+                pa.moveTo((float) X.applyAsDouble(a), (float) Y.applyAsDouble(datos[a]));
+            } else {
+                pa.moveTo((float) X.applyAsDouble(i), (float) Y.applyAsDouble(aprox[i]));
+            }
+            for (int k = i; k < b; k++) {
+                pa.lineTo((float) X.applyAsDouble(k), (float) Y.applyAsDouble(aprox[k]));
+            }
+            if (b < datos.length && datos[b] != null) {
+                pa.lineTo((float) X.applyAsDouble(b), (float) Y.applyAsDouble(datos[b]));
+            }
+            canvas.drawPath(pa, p);
+            i = b - 1;
+        }
+        p.setPathEffect(null);
+
         Double ultimo = datos[datos.length - 1];
         if (ultimo != null) {
             p.setStyle(Paint.Style.FILL);

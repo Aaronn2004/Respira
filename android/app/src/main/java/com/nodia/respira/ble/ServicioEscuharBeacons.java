@@ -16,30 +16,42 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
 
 import com.nodia.respira.R;
+import com.nodia.respira.datos.Recorrido;
 import com.nodia.respira.datos.Repositorio;
 import com.nodia.respira.ui.MainActivity;
 import com.nodia.respira.ui.Notificaciones;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 // ==============================================================
-// ServicioEscuharBeacons (Sprint 0, adaptado a Respira):
-// escanea BLE en primer plano (con notificación fija, como exige
-// Android) mientras dura el recorrido.
+// ServicioEscuharBeacons: escanea BLE en primer plano (con
+// notificación fija, como exige Android) mientras dura el recorrido.
+//
+// Solo atiende al iBeacon del sensor del recorrido:
+//   UUID = "RESPIRA-" + código del sensor (16 caracteres)
+// Cada medida NUEVA se envía a la API con la ubicación del móvil
+// (POST /mediciones). Sin conexión se guardan y se reenvían luego.
 //
 // Modos (extra MODO del Intent):
 //   MODO_TODOS   -> muestra en el Log todos los dispositivos BLE
-//   MODO_NUESTRO -> solo nuestro iBeacon; cada medida NUEVA se
-//                   envía al servidor y se apunta en el Repositorio
+//   MODO_NUESTRO -> el sensor del recorrido
 // ==============================================================
 public class ServicioEscuharBeacons extends Service {
 
@@ -47,8 +59,7 @@ public class ServicioEscuharBeacons extends Service {
     public static final String MODO_TODOS = "TODOS";
     public static final String MODO_NUESTRO = "NUESTRO";
 
-    // Debe coincidir EXACTAMENTE con beaconUUID de Publicador.h (Arduino)
-    public static final String UUID_NUESTRO_BEACON = "AARON-GTI-PBIO-1";
+    private static final int MAX_PENDIENTES = 500;
 
     private static final String ETIQUETA_LOG = ">>>>";
     private static final int ID_NOTIFICACION = 7;
@@ -56,12 +67,38 @@ public class ServicioEscuharBeacons extends Service {
     private BluetoothLeScanner elEscaner;
     private ScanCallback elCallbackDelEscaner;
     private String modoActual = null;
+    private String uuidBuscado = null;
+    private String codigoSensor = null;
 
     private final LogicaFake laLogica = new LogicaFake(LogicaFake.URL_SERVIDOR);
 
-    // La placa repite el mismo anuncio muchas veces por segundo durante 3 s.
-    // Solo enviamos al servidor cuando cambia el major (= cambia el contador).
-    private int ultimoMajorEnviado = -1;
+    // La placa repite el mismo anuncio unas 10 veces por segundo durante 2 s.
+    // Por cada tipo de medida solo se envía cuando cambia el contador.
+    private final Map<Integer, Integer> ultimoContadorPorTipo = new HashMap<>();
+    private final List<Medicion> pendientes = new ArrayList<>();
+    private boolean enviandoPendientes = false;
+
+    private LocationManager gestorUbicacion;
+    private Location ultimaUbicacion;
+    private final LocationListener oyenteUbicacion = new LocationListener() {
+        @Override
+        public void onLocationChanged(@NonNull Location l) {
+            if (ultimaUbicacion == null || l.getAccuracy() <= ultimaUbicacion.getAccuracy()
+                    || l.getTime() - ultimaUbicacion.getTime() > 10_000) {
+                ultimaUbicacion = l;
+            }
+        }
+
+        // En Android 9 y 10 el sistema llama también a estos (sin ellos, se cierra la app)
+        @Override
+        public void onStatusChanged(String proveedor, int estado, android.os.Bundle extras) { }
+
+        @Override
+        public void onProviderEnabled(@NonNull String proveedor) { }
+
+        @Override
+        public void onProviderDisabled(@NonNull String proveedor) { }
+    };
 
     // --------------------------------------------------------------
     // contexto: Context --> arrancar()   (desde la pantalla Sensor)
@@ -82,8 +119,13 @@ public class ServicioEscuharBeacons extends Service {
                 ? intent.getStringExtra(EXTRA_MODO) : MODO_TODOS;
         Log.d(ETIQUETA_LOG, "ServicioEscuharBeacons.onStartCommand(): modo = " + modo);
 
+        Recorrido r = Repositorio.obtener(this).recorrido();
+        codigoSensor = r != null ? r.codigo : null;
+        uuidBuscado = codigoSensor != null ? Medicion.uuidDelSensor(codigoSensor) : null;
+
         ponerEnPrimerPlano();
         detenerEscaneo(); // si ya escaneaba en otro modo, se reinicia
+        arrancarUbicacion();
         arrancarEscaneo(modo);
         return START_NOT_STICKY;
     }
@@ -99,18 +141,52 @@ public class ServicioEscuharBeacons extends Service {
         Notification n = new NotificationCompat.Builder(this, Notificaciones.CANAL_RECORRIDO)
                 .setSmallIcon(R.drawable.ic_sensor)
                 .setContentTitle("Recorrido activo")
-                .setContentText("Respira está escuchando a tu sensor")
+                .setContentText("Respira está escuchando a tu sensor" + (codigoSensor == null ? "" : " " + codigoSensor))
                 .setOngoing(true)
                 .setContentIntent(abrir)
                 .build();
-        int tipo = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-                ? ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE : 0;
+        // connectedDevice (BLE) + location (para situar cada dato con la pantalla apagada).
+        // El tipo location solo se puede pedir si ya hay permiso de ubicación.
+        int tipo = 0;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            tipo = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE;
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED) {
+                tipo |= ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION;
+            }
+        }
         ServiceCompat.startForeground(this, ID_NOTIFICACION, n, tipo);
     }
 
     // --------------------------------------------------------------
-    // obtenerEscaner() --> BluetoothLeScanner | null
+    // arrancarUbicacion(): GPS y red cada 5 s (para situar cada dato)
     // --------------------------------------------------------------
+    @SuppressLint("MissingPermission")
+    private void arrancarUbicacion() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.e(ETIQUETA_LOG, "Sin permiso de ubicación: los datos irán sin zona");
+            return;
+        }
+        gestorUbicacion = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (gestorUbicacion == null) {
+            return;
+        }
+        for (String proveedor : new String[]{LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER}) {
+            try {
+                if (gestorUbicacion.isProviderEnabled(proveedor)) {
+                    gestorUbicacion.requestLocationUpdates(proveedor, 5000, 0, oyenteUbicacion, Looper.getMainLooper());
+                    Location l = gestorUbicacion.getLastKnownLocation(proveedor);
+                    if (l != null) {
+                        oyenteUbicacion.onLocationChanged(l);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(ETIQUETA_LOG, "No se pudo pedir la ubicación a " + proveedor + ": " + e);
+            }
+        }
+    }
+
     private BluetoothLeScanner obtenerEscaner() {
         BluetoothManager gestor = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         BluetoothAdapter adaptador = gestor == null ? null : gestor.getAdapter();
@@ -151,7 +227,7 @@ public class ServicioEscuharBeacons extends Service {
         }
 
         modoActual = modo;
-        ultimoMajorEnviado = -1;
+        ultimoContadorPorTipo.clear();
 
         elCallbackDelEscaner = new ScanCallback() {
             @Override
@@ -173,12 +249,9 @@ public class ServicioEscuharBeacons extends Service {
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .build();
         elEscaner.startScan(null, ajustes, elCallbackDelEscaner);
-        Log.d(ETIQUETA_LOG, "Escaneo BLE arrancado en modo " + modo);
+        Log.d(ETIQUETA_LOG, "Escaneo BLE arrancado en modo " + modo + (uuidBuscado == null ? "" : ", buscando " + uuidBuscado));
     }
 
-    // --------------------------------------------------------------
-    // resultado: ScanResult --> mostrarDispositivo()
-    // --------------------------------------------------------------
     @SuppressLint("MissingPermission")
     private void mostrarDispositivo(ScanResult resultado) {
         String nombre = resultado.getScanRecord() != null ? resultado.getScanRecord().getDeviceName() : null;
@@ -190,53 +263,75 @@ public class ServicioEscuharBeacons extends Service {
     // resultado: ScanResult --> procesarSiEsNuestroBeacon()
     // --------------------------------------------------------------
     private void procesarSiEsNuestroBeacon(ScanResult resultado) {
-        if (resultado.getScanRecord() == null) {
+        if (resultado.getScanRecord() == null || uuidBuscado == null) {
             return;
         }
         TramaIBeacon trama = new TramaIBeacon(resultado.getScanRecord().getBytes());
-        if (!trama.esIBeacon() || !UUID_NUESTRO_BEACON.equals(trama.getUUIDComoTexto())) {
+        if (!trama.esIBeacon() || !uuidBuscado.equals(trama.getUUIDComoTexto())) {
             return;
         }
-        if (trama.getMajorEntero() == ultimoMajorEnviado) {
-            return; // anuncio repetido: ya enviado
+        Integer anterior = ultimoContadorPorTipo.get(trama.getTipoMedicion());
+        if (anterior != null && anterior == trama.getContador()) {
+            return; // el mismo anuncio repetido: ya enviado
         }
-        ultimoMajorEnviado = trama.getMajorEntero();
+        Medicion medicion = Medicion.desdeTrama(trama, codigoSensor, System.currentTimeMillis());
+        if (medicion == null) {
+            return; // tipo desconocido
+        }
+        ultimoContadorPorTipo.put(trama.getTipoMedicion(), trama.getContador());
 
-        Medicion medicion = Medicion.desdeTrama(trama);
-        Log.d(ETIQUETA_LOG, "¡Nuestro beacon! " + medicion + " rssi=" + resultado.getRssi());
-
-        final boolean enParque = estoyEnUnParque();
+        Location l = ultimaUbicacion;
+        if (l != null && System.currentTimeMillis() - l.getTime() < 120_000) {
+            medicion.conUbicacion(l.getLatitude(), l.getLongitude(), Math.round(l.getAccuracy()));
+        }
+        medicion.conRssi(resultado.getRssi());
         final Repositorio repo = Repositorio.obtener(this);
-        laLogica.guardarMedicion(medicion, (exito, detalle) -> {
-            Log.d(ETIQUETA_LOG, (exito ? "POST OK: " : "POST FALLIDO: ") + detalle);
+        // Con la sesión: el servidor comprueba que este sensor está prestado
+        // a esta cuenta y le cuenta los minutos (puntos)
+        laLogica.conToken(repo.token());
+        Log.d(ETIQUETA_LOG, "Medida del sensor: " + medicion);
+
+        final boolean enParque = l != null && repo.parqueEn(l.getLatitude(), l.getLongitude()) != null;
+        repo.anotarUltimoValor(medicion.getMagnitud(), medicion.getValor());
+        laLogica.guardarMedicion(medicion, (exito, codigo, detalle) -> {
+            Log.d(ETIQUETA_LOG, (exito ? "POST OK " : "POST FALLIDO ") + codigo + ": " + detalle);
+            if (exito) {
+                enviarPendientes();
+            } else if (codigo == -1 || codigo >= 500) {
+                guardarPendiente(medicion); // sin red o servidor caído: se reintenta luego
+            }
             repo.registrarMedicion(enParque, exito);
         });
     }
 
-    // --------------------------------------------------------------
-    // estoyEnUnParque() --> B   (última ubicación conocida del GPS)
-    // TODO (Sprint 2): enviar lat/lng con cada medición al servidor.
-    // --------------------------------------------------------------
-    @SuppressLint("MissingPermission")
-    private boolean estoyEnUnParque() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            return false;
+    private synchronized void guardarPendiente(Medicion m) {
+        if (pendientes.size() >= MAX_PENDIENTES) {
+            pendientes.remove(0);
         }
-        LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        if (lm == null) {
-            return false;
-        }
-        Location l = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        if (l == null) {
-            l = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-        }
-        return l != null && Repositorio.obtener(this).parqueEn(l.getLatitude(), l.getLongitude()) != null;
+        pendientes.add(m);
     }
 
     // --------------------------------------------------------------
-    // detenerEscaneo()
+    // enviarPendientes(): al volver la conexión manda el lote guardado
     // --------------------------------------------------------------
+    private synchronized void enviarPendientes() {
+        if (pendientes.isEmpty() || enviandoPendientes) {
+            return;
+        }
+        enviandoPendientes = true;
+        final List<Medicion> lote = new ArrayList<>(pendientes);
+        laLogica.guardarMediciones(lote, (exito, codigo, detalle) -> {
+            synchronized (ServicioEscuharBeacons.this) {
+                if (exito) {
+                    pendientes.removeAll(lote);
+                    Repositorio.obtener(ServicioEscuharBeacons.this).marcarPendientesEnviadas(lote.size());
+                }
+                enviandoPendientes = false;
+            }
+            Log.d(ETIQUETA_LOG, "Pendientes: " + codigo + " " + detalle);
+        });
+    }
+
     @SuppressLint("MissingPermission")
     private void detenerEscaneo() {
         if (elEscaner != null && elCallbackDelEscaner != null && tienePermisoEscanear(this)) {
@@ -250,6 +345,9 @@ public class ServicioEscuharBeacons extends Service {
     @Override
     public void onDestroy() {
         detenerEscaneo();
+        if (gestorUbicacion != null) {
+            gestorUbicacion.removeUpdates(oyenteUbicacion);
+        }
         super.onDestroy();
     }
 

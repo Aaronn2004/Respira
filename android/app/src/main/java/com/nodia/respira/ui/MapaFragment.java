@@ -89,6 +89,15 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
     private View cabecera, pie;
 
     private final Runnable alCambiar = this::refrescar;
+    // Datos reales: se piden a la API al abrir el mapa y cada minuto
+    private final android.os.Handler temporizador = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable recargarZonas = new Runnable() {
+        @Override
+        public void run() {
+            repo.actualizarZonas();
+            temporizador.postDelayed(this, 60_000);
+        }
+    };
 
     private final ActivityResultLauncher<String[]> pedirUbicacion = registerForActivityResult(
             new ActivityResultContracts.RequestMultiplePermissions(), r -> activarMiUbicacion(true));
@@ -157,12 +166,14 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
     public void onStart() {
         super.onStart();
         repo.observar(alCambiar);
+        temporizador.post(recargarZonas);
         refrescar();
     }
 
     @Override
     public void onStop() {
         repo.dejarDeObservar(alCambiar);
+        temporizador.removeCallbacks(recargarZonas);
         super.onStop();
     }
 
@@ -247,7 +258,8 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
             franja.setOnClickListener(x -> nuevaPercepcion());
         } else {
             leyenda.setText(leyenda(magnitud.abreviatura + " (" + magnitud.unidad + ") · última hora",
-                    "Parques con contorno; barrios en tono suave", true));
+                    repo.datosReales() ? "Parques con contorno; barrios en tono suave"
+                            : "DATOS DE DEMOSTRACIÓN: no hay conexión con el servidor", true));
             Recorrido r = repo.recorrido();
             if (r != null && r.enCurso()) {
                 franja.setText("● Enviando datos · " + r.enviadas + " mediciones hoy   Ver ›");
@@ -418,8 +430,7 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
             });
             Ui.boton(col, "Borrar", Ui.BOTON_LLENO, x -> Ui.confirmar(c, "¿Borrar la percepción?",
                     "Dejará de verse en el mapa.", "Borrar", () -> {
-                        repo.borrarPercepcion(p.id);
-                        hoja.dismiss();
+                        repo.borrarPercepcion(p.id, Ui.hecho(c, hoja::dismiss));
                     })).setBackgroundTintList(android.content.res.ColorStateList.valueOf(Ui.color(c, R.color.nivel_alto)));
         } else {
             Ui.nota(col, "Es la percepción de un vecino («" + detalle + "»), no una medición. "

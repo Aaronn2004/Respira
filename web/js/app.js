@@ -4,8 +4,10 @@
    - Fondo blanco con botón de modo oscuro (data-tema en <html>, localStorage «respira-tema»).
    - El mapa usa Google Maps JavaScript API si hay clave en js/config.js (js/mapa-google.js).
      Sin clave, usa el mapa SVG de demostración.
-   - Datos: de DEMOSTRACIÓN (constantes de abajo). Al conectar la API real,
-     se sustituyen por fetch() al servidor.
+   - Datos: si js/config.js trae API_URL, js/datos-api.js los pide a la API
+     (mapa, gráficas, comunidad) y el panel municipal funciona contra el
+     servidor (sesión, sensores, préstamos, puntos, regalos, trabajadores).
+     Sin API_URL, se usan los datos de DEMOSTRACIÓN de abajo.
    ============================================================= */
 (function(){
 "use strict";
@@ -38,7 +40,7 @@ I.box=sv('<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>
 I.list=sv('<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',18);
 
 /* ---------- datos ---------- */
-const TODAY='2026-11-02';
+const TODAY=(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'))(new Date());
 const MAG={o3:{n:'Ozono',ab:'O₃',u:'ppm'},temp:{n:'Temperatura',ab:'T',u:'°C'},ruido:{n:'Ruido',ab:'dB',u:'dB'}};
 const LIM={o3:[0.060,0.090],temp:[25,32],ruido:[55,65]};
 /* ---------- efectos en la salud (mismo texto en web y app) ---------- */
@@ -213,24 +215,47 @@ function avisoSVG(a){const c=['','var(--lv-bajo)','var(--lv-medio)','var(--lv-al
 const barsIco=(n,s=18)=>{const c=['','var(--lv-bajo)','var(--lv-medio)','var(--lv-alto)'][n];return `<span style="display:inline-flex;align-items:flex-end;gap:2px;height:${s}px">${[7,12,18].map((h,i)=>`<i style="width:4px;border-radius:2px;height:${h*s/18}px;background:${i<n?c:'var(--surface-3)'}"></i>`).join('')}</span>`};
 
 /* ---------- gráfica ---------- */
-function serie(id,mag,per,shift=0){const n=per==='24h'?48:per==='7d'?56:60;let seed=[...id+mag+per].reduce((a,c)=>a+c.charCodeAt(0),7+shift);const r=()=>{seed=(seed*9301+49297)%233280;return seed/233280};
+// Media de las últimas 24 h de la zona (la da la API)
+const M24=z=>z.m24&&Object.keys(MAG).some(k=>z.m24[k]!=null)?`<span class="hint">Media de las últimas 24 h: ${Object.keys(MAG).filter(k=>z.m24[k]!=null).map(k=>`${MAG[k].ab} <b class="mono">${fmt(z.m24[k],k)}</b> ${MAG[k].u}`).join(' · ')}</span>`:'';
+// Efectos en la salud de lo que está ahora en Medio o Alto en la zona (textos de «Qué te puede pasar»)
+const EFZ=z=>{const l=Object.keys(MAG).map(k=>[k,nivel(k,z[k])]).filter(([k,n])=>n==='medio'||n==='alto');if(!l.length)return '';
+ return l.map(([k,n])=>{const e=EF_B.find(x=>x.k===k);const p=e.pasos.find(x=>x[0]===n);return `<div class="alert ${n==='alto'?'bad':'warn'}" style="margin-top:8px">${I.info}<span><b>${MAG[k].n} en nivel ${NIV[n]}.</b> ${p?p[3]+'. ':''}${e.hacer}. <span class="hint">Más sensibles: ${e.peor.join(', ').toLowerCase()}.</span> <a href="#como-funciona">Efectos en la salud</a></span></div>`}).join('')};
+const AVISO_DATOS=()=>window.RespiraDatos?window.RespiraDatos.avisoHTML():'';
+// Con la API conectada, las series son las del servidor (datos-api.js); si no, las de demostración
+// Alertas (ratos en Alto, o en Medio si no hubo Alto) y picos del periodo: los de la API o, sin API, calculados aquí
+function EVENTOS(id,mag,per,d){const D=window.RespiraDatos;let ev=D&&D.eventos?D.eventos(id,mag,per):null;const n=d.length,paso=(per==='24h'?.5:per==='7d'?3:12)*36e5,ini=Date.now()-n*paso;
+ if(!ev){const l=LIM[mag];const al=[];for(const [nv,lim] of [['alto',l[1]],['medio',l[0]]]){for(let i=0;i<n;i++){if(d[i]==null||d[i]<lim)continue;let j=i,mx=d[i];while(j+1<n&&d[j+1]!=null&&d[j+1]>=lim){j++;mx=Math.max(mx,d[j])}al.push({desde:ini+i*paso,hasta:ini+(j+1)*paso,max:mx,nivel:nv});i=j}if(al.length)break}
+  const o=d.map((v,i)=>[v,i]).filter(x=>x[0]!=null).sort((a,b)=>b[0]-a[0]);const us={},pi=[];for(const [v,i] of o){if(us[i-1]||us[i+1])continue;us[i]=1;pi.push({momento:ini+i*paso+paso/2,valor:v});if(pi.length===3)break}ev={alertas:al.slice(-10),picos:pi}}
+ const F=t=>{const x=new Date(t);return x.getDate()+' '+['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][x.getMonth()]+' '+String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0')};const H=t=>{const x=new Date(t);return String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0')};
+ const u=MAG[mag].u;const nv=ev.alertas.length?ev.alertas[0].nivel:'alto';
+ return `<section class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b>Alertas y picos</b>`+
+  (ev.alertas.length?`<span class="hint">Ratos con la media en nivel ${NIV[nv]} (desde ${fmt(LIM[mag][nv==='alto'?1:0],mag)} ${u}):</span><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">${ev.alertas.slice().reverse().map(a=>`<li>${F(a.desde)}–${H(a.hasta)} · máx. <b class="mono">${fmt(a.max,mag)}</b> ${u} <span class="badge b-${a.nivel}">${NIV[a.nivel]}</span></li>`).join('')}</ul>`:`<span class="hint">Ningún rato en nivel Medio o Alto en este periodo.</span>`)+
+  (ev.picos.length?`<span class="hint">Valores más altos medidos:</span><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">${ev.picos.map(p=>`<li><b class="mono">${fmt(p.valor,mag)}</b> ${u} · ${F(p.momento)} ${badge(mag,p.valor)}</li>`).join('')}</ul>`:'')+`</section>`}
+function serie(id,mag,per,shift=0){const real=window.RespiraDatos&&window.RespiraDatos.serie(id,mag,per);if(real)return real;const n=per==='24h'?48:per==='7d'?56:60;let seed=[...id+mag+per].reduce((a,c)=>a+c.charCodeAt(0),7+shift);const r=()=>{seed=(seed*9301+49297)%233280;return seed/233280};
  const z=byZ(id);const base=z[mag]??(mag==='o3'?0.05:mag==='temp'?22:58);const o=[];
  for(let i=0;i<n;i++){const t=i/n;const d=per==='24h'?Math.sin((t-.3)*Math.PI*2):Math.sin(t*Math.PI*2*(per==='7d'?7:30));let v=mag==='o3'?base*(0.75+0.35*d+0.12*(r()-.5)):mag==='temp'?base+3*d+(r()-.5):base+6*d+3*(r()-.5);
   if(per==='24h'&&i>=4&&i<=12&&z.tipo==='parque')v=null;if(per!=='24h'&&r()<.06)v=null;o.push(v)}if(z[mag]!=null)o[n-1]=z[mag];return o}
 function chart(series,mag,per,w=860,h=330){
- const all=series.flatMap(x=>x.d).filter(v=>v!=null);const l=LIM[mag];let mn=Math.min(...all,l[0]*.6),mx=Math.max(...all,l[1]*1.08);if(mag==='temp'){mn=Math.min(...all)-2;mx=Math.max(...all,l[0])+2}
+ const all=series.flatMap(x=>x.d).filter(v=>v!=null);const l=LIM[mag];let mn=Math.min(...all,l[0]*.6),mx=Math.max(...all,l[1]*1.08);if(mag==='temp'){mn=(all.length?Math.min(...all):l[0]-6)-2;mx=Math.max(...all,l[0])+2}
  const n=series[0].d.length,x0=46,y0=h-28,X=i=>x0+i*(w-x0-10)/(n-1),Y=v=>y0-(v-mn)/(mx-mn)*(y0-12);
  const band=(a,b,c)=>{const ya=Y(Math.min(Math.max(a,mn),mx)),yb=Y(Math.min(Math.max(b,mn),mx));return yb<ya?`<rect x="${x0}" y="${yb}" width="${w-x0-10}" height="${ya-yb}" fill="${c}" opacity=".5"/>`:''};
  let s=`<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Gráfica de ${MAG[mag].n}">`+band(mn,l[0],'var(--lv-bajo-soft)')+band(l[0],l[1],'var(--lv-medio-soft)')+band(l[1],mx,'var(--lv-alto-soft)');
  l.forEach(t=>{if(t>mn&&t<mx)s+=`<line x1="${x0}" x2="${w-10}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--ink-3)" stroke-dasharray="4 4"/><text x="${x0-6}" y="${Y(t)+4}" font-size="11" text-anchor="end" fill="var(--ink-3)" font-family="JetBrains Mono,monospace">${fmt(t,mag)}</text>`});
- const d0=series[0].d;let st=null;d0.forEach((v,i)=>{if(v==null&&st==null)st=i;if((v!=null||i===n-1)&&st!=null){const e=v==null?i:i-1;s+=`<rect x="${X(Math.max(st-.5,0))}" y="12" width="${X(Math.min(e+.5,n-1))-X(Math.max(st-.5,0))}" height="${y0-12}" fill="var(--surface-2)"/>`;if(e-st>3)s+=`<text x="${(X(st)+X(e))/2}" y="${y0/2}" font-size="11" text-anchor="middle" fill="var(--ink-3)">sin datos</text>`;st=null}});
+ const d0=series[0].d;const hu=i=>d0[i]==null&&!(d0.aprox&&d0.aprox[i]!=null);let st=null;d0.forEach((v,i)=>{if(hu(i)&&st==null)st=i;if((!hu(i)||i===n-1)&&st!=null){const e=hu(i)?i:i-1;s+=`<rect x="${X(Math.max(st-.5,0))}" y="12" width="${X(Math.min(e+.5,n-1))-X(Math.max(st-.5,0))}" height="${y0-12}" fill="var(--surface-2)"/>`;if(e-st>3)s+=`<text x="${(X(st)+X(e))/2}" y="${y0/2}" font-size="11" text-anchor="middle" fill="var(--ink-3)">sin datos</text>`;st=null}});
  series.forEach((se,k)=>{let seg=[],segs=[];se.d.forEach((v,i)=>{if(v==null){if(seg.length)segs.push(seg);seg=[]}else seg.push([X(i),Y(v)])});if(seg.length)segs.push(seg);
   segs.forEach(p=>{const d=p.map((q,i)=>(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' ');if(k===0)s+=`<path d="${d} L${p[p.length-1][0]} ${y0} L${p[0][0]} ${y0}Z" fill="var(--primary)" opacity=".1"/>`;s+=`<path d="${d}" fill="none" stroke="${k?'var(--sim)':'var(--primary)'}" stroke-width="2.5" ${k?'stroke-dasharray="7 5"':''} stroke-linejoin="round"/>`});
   const lv=se.d[n-1];if(lv!=null)s+=`<circle cx="${X(n-1)}" cy="${Y(lv)}" r="5" fill="${k?'var(--sim)':'var(--primary)'}" stroke="var(--surface)" stroke-width="2"/>`});
+ series.forEach((se,k)=>{const a=se.d.aprox;if(!a)return;let i=0;while(i<n){if(a[i]==null){i++;continue}let j=i;while(j<n&&a[j]!=null)j++;const pts=[];if(i>0&&se.d[i-1]!=null)pts.push([X(i-1),Y(se.d[i-1])]);for(let q=i;q<j;q++)pts.push([X(q),Y(a[q])]);if(j<n&&se.d[j]!=null)pts.push([X(j),Y(se.d[j])]);s+=`<path d="${pts.map((q,m)=>(m?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' ')}" fill="none" stroke="${k?'var(--sim)':'var(--primary)'}" stroke-width="2" stroke-dasharray="2 4" opacity=".8"><title>Aproximado: no hay medición en este rato</title></path>`;i=j}});
  s+=`<line x1="${x0}" x2="${w-10}" y1="${y0}" y2="${y0}" stroke="var(--line)"/>`;
- const labs=per==='24h'?['00:00','06:00','12:00','18:00','ahora']:per==='7d'?['lun','mié','vie','dom','hoy']:['3 oct','10 oct','17 oct','24 oct','hoy'];
+ const labs=ejeTiempo(per);
  labs.forEach((t,i)=>s+=`<text x="${x0+i*(w-x0-10)/4}" y="${h-8}" font-size="11.5" text-anchor="${i===0?'start':i===4?'end':'middle'}" fill="var(--ink-3)">${t}</text>`);
  return s+'</svg>'}
+// Etiquetas del eje X con la hora o la fecha reales (las series acaban «ahora»)
+function ejeTiempo(per){const MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];const h=S.hist;
+ let fin=Date.now(),ini;if(location.hash==='#historial'&&h.per==='custom'&&h.desde&&h.hasta){ini=new Date(h.desde+'T00:00').getTime();fin=Math.min(fin,new Date(h.hasta+'T23:59').getTime())}
+ else ini=fin-(per==='24h'?1:per==='7d'?7:30)*864e5;
+ return [0,1,2,3,4].map(i=>{const d=new Date(ini+(fin-ini)*i/4);if(i===4&&fin>=Date.now()-6e4)return 'ahora';
+  return per==='24h'?String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'):d.getDate()+' '+MES[d.getMonth()]})}
 const statsOf=d=>{const v=d.filter(x=>x!=null);return v.length?[Math.min(...v),v.reduce((a,b)=>a+b,0)/v.length,Math.max(...v)]:[null,null,null]};
 
 /* ---------- web pública ---------- */
@@ -256,7 +281,7 @@ function vMapa(){const zon=S.layer==='zonas';
  <div class="seg" role="tablist" aria-label="Capa"><button role="tab" aria-selected="true" data-act="layer" data-arg="zonas">Sensores</button><button role="tab" aria-selected="false" data-act="layer" data-arg="comunidad">Comunidad</button></div>
  <div class="field"><span class="lbl">Magnitud</span><div class="chips">${Object.keys(MAG).map(k=>`<button class="chip" aria-pressed="${S.mag===k}" data-act="mag" data-arg="${k}">${MAG[k].n}</button>`).join('')}</div></div>
  ${bad?'':!list.length?`<p class="note">No hay zonas para «${esc(q)}».</p>`:['parque','barrio'].map(t=>{const L=list.filter(z=>z.tipo===t);return L.length?`<div class="field"><span class="lbl">${t==='parque'?'Parques':'Barrios'}${q.length>1?' · '+L.length:''}</span><div class="card slist">${L.map(row).join('')}</div></div>`:''}).join('')}
- <p class="note" style="margin-top:auto">Media de la última hora con lo que miden voluntarios, personal de limpieza y mantenimiento, bicis y autobuses. <a href="#como-funciona">¿De dónde salen los datos?</a></p>`
+ ${AVISO_DATOS()}<p class="note" style="margin-top:auto">Media de la última hora con lo que miden voluntarios, personal de limpieza y mantenimiento, bicis y autobuses. <a href="#como-funciona">¿De dónde salen los datos?</a></p>`
  :`<div class="seg" role="tablist" aria-label="Capa"><button role="tab" aria-selected="false" data-act="layer" data-arg="zonas">Sensores</button><button role="tab" aria-selected="true" data-act="layer" data-arg="comunidad">Comunidad</button></div>
  <p class="note">Lo que notan los vecinos sobre el ruido, el calor y el aire. Son <b>percepciones</b>, no mediciones. Se muestran las de las últimas 24 h.</p>
  <div class="field"><span class="lbl">Tipo</span><div class="chips">${[['todos','Todos'],['ruido','Ruido'],['temp','Temperatura'],['aire','Aire']].map(([k,t])=>`<button class="chip" aria-pressed="${S.avt===k}" data-act="avt" data-arg="${k}">${t}</button>`).join('')}</div></div>
@@ -272,7 +297,7 @@ function vMapa(){const zon=S.layer==='zonas';
   <p class="hint" style="margin:0">Son <b>percepciones</b>, no mediciones: no las mide ningún sensor y no cuentan en las medias de las zonas. Para datos medidos, usa la pestaña Sensores.</p></div>`;
  const z=S.sel&&byZ(S.sel);const e=z&&est(z);
  const pop=z&&zon?`<div class="popup" role="dialog" aria-label="${esc(z.n)}"><div style="display:flex;gap:10px"><div style="flex:1"><span class="hint">${z.tipo==='parque'?'Parque':'Barrio'} · ${z.nm} mediciones en la última hora</span><h2 style="font-size:20px">${esc(z.n)}</h2></div><button class="ib" data-act="sel" data-arg="" aria-label="Cerrar">${I.x}</button></div>
- ${e==='none'?`<div class="alert warn">${I.info}<span>Nadie con sensor ha pasado por aquí en las últimas 24 h. No significa que el aire esté limpio.</span></div>`:`<div>${Object.keys(MAG).map(k=>`<div class="vrow"><span style="flex:1">${MAG[k].n}</span><span class="v">${fmt(z[k],k)}</span><span class="hint" style="width:28px">${z[k]==null?'':MAG[k].u}</span>${e==='old'?'<span class="badge b-none">Antiguo</span>':badge(k,z[k])}${`<button type="button" class="gv-q" data-act="aValores" data-arg="${k}" aria-label="Qué significa el valor de ${MAG[k].n.toLowerCase()}" title="Qué significa">?</button>`}</div>`).join('')}</div><span class="hint">Última medición: ${hace(z.hace)}${e==='old'?' · <b style="color:var(--lv-medio)">dato antiguo</b>':''}. Media de la zona; no se muestran recorridos.</span>`}
+ ${e==='none'?`<div class="alert warn">${I.info}<span>Nadie con sensor ha pasado por aquí en las últimas 24 h. No significa que el aire esté limpio.</span></div>`:`<div>${Object.keys(MAG).map(k=>`<div class="vrow"><span style="flex:1">${MAG[k].n}</span><span class="v">${fmt(z[k],k)}</span><span class="hint" style="width:28px">${z[k]==null?'':MAG[k].u}</span>${e==='old'?'<span class="badge b-none">Antiguo</span>':badge(k,z[k])}${`<button type="button" class="gv-q" data-act="aValores" data-arg="${k}" aria-label="Qué significa el valor de ${MAG[k].n.toLowerCase()}" title="Qué significa">?</button>`}</div>`).join('')}</div><span class="hint">Última medición: ${hace(z.hace)}${e==='old'?' · <b style="color:var(--lv-medio)">dato antiguo</b>':''}. Media de la zona; no se muestran recorridos.</span>${M24(z)}${EFZ(z)}`}
  <div style="display:flex;gap:8px"><button class="btn sm" style="flex:1" data-act="toHist" data-arg="${z.id}" ${e==='none'?'disabled':''}>Ver historial</button><button class="btn sm sec" data-act="toCmp" data-arg="${z.id}" ${e==='none'?'disabled':''}>Comparar</button></div></div>`:'';
  const legend=zon?`<div class="legend"><b>${MAG[S.mag].ab} (${MAG[S.mag].u}) · última hora</b><span><i style="background:var(--lv-bajo)"></i>Bajo</span><span><i style="background:var(--lv-medio)"></i>Medio</span><span><i style="background:var(--lv-alto)"></i>Alto</span><span><i style="background:repeating-linear-gradient(45deg,var(--lv-none) 0 2px,transparent 2px 5px);border:1px dashed var(--lv-none)"></i>Sin datos (más de 24 h)</span><span><i style="background:var(--ink-2)"></i>Antiguo (1–24 h)</span>${'<button type="button" class="gv-abrir" data-act="guia">'+sv('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17v.01"/>',15,2)+'Qué significan</button>'}<span class="hint">Parques con contorno · barrios en tono suave</span></div>`:`<div class="legend"><b>${S.avt==='todos'?'Percepciones · 24 h':PERC[S.avt].n+' percibido'}</b>${[1,2,3].map(k=>`<span>${barsIco(k,14)} ${S.avt==='todos'?['Bajo','Medio','Alto'][k-1]:PERC[S.avt].lv[k-1]}</span>`).join('')}<span class="hint">No son mediciones</span></div>`;
  return header('mapa')+`<main class="mapview"><aside class="side" aria-label="Filtros y lista">${side}</aside><div class="mapwrap${S.tilt&&!GMAP()?' tilt':''}">${GMAP()?GMAP().slotHTML()+pop+GMAP().controlesHTML()+legend:`<svg class="map" viewBox="${vb()}" preserveAspectRatio="xMidYMid slice">${mapBase()}${zon?ZONAS.filter(z=>z.tipo==='barrio').map(barrioSVG).join('')+ZONAS.filter(z=>z.tipo==='parque').map(parqueSVG).join(''):AVISOS.map(avisoSVG).join('')}</svg>${pop}<div class="mapctl"><button aria-label="Vista inicial" data-act="zoom" data-arg="reset">⟲</button><button class="t3" aria-label="Vista en perspectiva" aria-pressed="${S.tilt}" data-act="tilt">3D</button></div><div class="gtipo" role="group" aria-label="Tipo de mapa"><button aria-pressed="true">Mapa</button><button aria-pressed="false" data-act="toastMsg" data-arg="La vista Satélite la da Google Maps en la web real">Satélite</button></div><button class="gfull" aria-label="Pantalla completa" data-act="toastMsg" data-arg="Pantalla completa: control de Google Maps en la web real">⛶</button><div class="gzoom"><button aria-label="Acercar" data-act="zoom" data-arg="in">+</button><button aria-label="Alejar" data-act="zoom" data-arg="out">−</button></div><span class="glogo" aria-hidden="true">Google</span><span class="gcred" aria-hidden="true">Datos del mapa ©2026 Google · Imitación para el prototipo</span>${legend}`}</div></main>`}
@@ -284,8 +309,8 @@ function vHist(){const h=S.hist,z=byZ(h.id);const per=h.per==='custom'?'30d':h.p
  <div class="field"><span class="flabel">Magnitud</span><div class="seg" role="tablist">${Object.keys(MAG).map(k=>`<button role="tab" aria-selected="${h.mag===k}" data-act="hmag" data-arg="${k}">${MAG[k].n}</button>`).join('')}</div></div>
  <div class="field"><span class="flabel">Periodo</span><div class="chips">${[['24h','24 h'],['7d','7 días'],['30d','30 días'],['custom','Entre dos fechas']].map(p=>`<button class="chip" aria-pressed="${h.per===p[0]}" data-act="hper" data-arg="${p[0]}">${p[1]}</button>`).join('')}</div></div></div>
  ${h.per==='custom'?`<form class="card" id="f-rango" style="padding:16px;display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap" novalidate><div class="field" style="width:200px"><label for="h-desde">Desde</label><input class="input mono" type="date" id="h-desde" data-bind="hist.desde" value="${h.desde}" ${inv('desde')}>${err('desde')}</div><div class="field" style="width:200px"><label for="h-hasta">Hasta</label><input class="input mono" type="date" id="h-hasta" data-bind="hist.hasta" value="${h.hasta}" ${inv('hasta')}>${err('hasta')}</div><button class="btn" type="submit" style="margin-top:27px">Aplicar</button><span class="hint" style="flex-basis:100%">Máximo 90 días. Los datos empiezan el 01/06/2026.</span></form>`:''}
- <div class="grid2"><section class="card" style="padding:16px 14px 8px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:0 4px 8px"><b>${MAG[h.mag].n} (${MAG[h.mag].u}) · media de la zona</b><span class="hint">Fondo verde, ámbar y rojo: niveles Bajo, Medio y Alto</span></div>${chart([{d}],h.mag,per)}<p class="hint" style="margin:6px 4px">Las franjas grises son ratos en los que no pasó ningún sensor por la zona. No se rellenan ni se interpolan.</p></section>
- <aside style="display:flex;flex-direction:column;gap:14px"><div class="stats"><div><span>Mínimo</span><b>${fmt(st[0],h.mag)}</b></div><div><span>Media</span><b>${fmt(st[1],h.mag)}</b></div><div><span>Máximo</span><b>${fmt(st[2],h.mag)}</b></div></div><p class="note">Cada punto de la gráfica es la media de lo medido en la zona en ${per==='24h'?'30 minutos':per==='7d'?'3 horas':'12 horas'}. Los datos son orientativos y no sustituyen a las estaciones oficiales.</p></aside></div>
+ <div class="grid2"><section class="card" style="padding:16px 14px 8px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:0 4px 8px"><b>${MAG[h.mag].n} (${MAG[h.mag].u}) · media de la zona</b><span class="hint">Fondo verde, ámbar y rojo: niveles Bajo, Medio y Alto</span></div>${chart([{d}],h.mag,per)}<p class="hint" style="margin:6px 4px">Línea de puntos: hueco corto (hasta 2 h) aproximado; no cuenta en mínimo, media y máximo. Franjas grises: ratos más largos sin ningún sensor, que no se rellenan.</p></section>
+ <aside style="display:flex;flex-direction:column;gap:14px"><div class="stats"><div><span>Mínimo</span><b>${fmt(st[0],h.mag)}</b></div><div><span>Media</span><b>${fmt(st[1],h.mag)}</b></div><div><span>Máximo</span><b>${fmt(st[2],h.mag)}</b></div></div><p class="note">Cada punto de la gráfica es la media de lo medido en la zona en ${per==='24h'?'30 minutos':per==='7d'?'3 horas':'12 horas'}. Los datos son orientativos y no sustituyen a las estaciones oficiales.</p>${EVENTOS(h.id,h.mag,per,d)}${AVISO_DATOS()}</aside></div>
  </div></main>`+footer()}
 
 function vCmp(){const c=S.cmp;const A=byZ(c.a),B=byZ(c.b);const same=c.a===c.b;
@@ -296,7 +321,7 @@ function vCmp(){const c=S.cmp;const A=byZ(c.a),B=byZ(c.b);const same=c.a===c.b;
  return header('comparar')+`<main class="page wrap"><div class="inner"><nav class="crumb"><a href="#mapa">Mapa</a> › <a href="#historial">Historial</a> › Comparar</nav><div class="pagehead"><h1>Comparar zonas</h1></div>
  <div class="toolbar"><div class="field" style="width:260px;max-width:100%"><label for="c-a">Zona A (línea continua)</label><select class="input" id="c-a" data-bind="cmp.a" data-rr="1">${zonaOpts(c.a)}</select></div><div class="field" style="width:260px;max-width:100%"><label for="c-b">Zona B (línea discontinua)</label><select class="input" id="c-b" data-bind="cmp.b" data-rr="1" ${same?'aria-invalid="true"':''}>${zonaOpts(c.b)}</select></div>
  <div class="field" style="width:170px"><label for="c-m">Magnitud</label><select class="input" id="c-m" data-bind="cmp.mag" data-rr="1">${Object.keys(MAG).map(k=>`<option value="${k}" ${c.mag===k?'selected':''}>${MAG[k].n}</option>`).join('')}</select></div><div class="field" style="width:150px"><label for="c-p">Periodo</label><select class="input" id="c-p" data-bind="cmp.per" data-rr="1">${[['24h','24 h'],['7d','7 días'],['30d','30 días']].map(p=>`<option value="${p[0]}" ${c.per===p[0]?'selected':''}>${p[1]}</option>`).join('')}</select></div>
- <button class="btn ghost" data-act="swap" style="margin-bottom:1px">${I.swap} Intercambiar</button></div>${body}</div></main>`+footer()}
+ <button class="btn ghost" data-act="swap" style="margin-bottom:1px">${I.swap} Intercambiar</button></div>${AVISO_DATOS()}${body}</div></main>`+footer()}
 
 /* ---------- portada (v10): la Tierra a pantalla completa ----------
    Paleta «atmósfera»: noche orbital + el azul de la capa de aire que se
@@ -607,14 +632,15 @@ function vAcceso(rec){
  const art=`<div class="art"><a class="logo" href="#inicio" aria-label="Respira, inicio">${LOGO(36,'#FFFFFF','#FFFFFF','#5FC4C0')}</a><div style="display:flex;flex-direction:column;gap:14px"><h2>Panel de gestión de sensores, préstamos y puntos</h2><span style="display:inline-flex;gap:8px;align-items:center;color:#B9CFC4">Un servicio de ${NODIA(22,'#FFFFFF')}<b style="letter-spacing:.08em;color:#fff">NODIA</b></span></div><a href="#mapa" style="color:#9EE3C9">← Volver al mapa público</a></div>`;
  if(rec)return `<div class="login">${art}<div class="formside">${S.recOk?`<div style="width:min(400px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert ok">${I.check}<span>Si <b>${esc(S.f.rmail)}</b> está registrado, recibirás un enlace en unos minutos.</span></div><a class="btn" href="#acceso" data-act="recBack">Volver a iniciar sesión</a></div>`:`<form id="f-rec" novalidate><h1 style="font-size:30px">Recuperar contraseña</h1><p class="muted" style="margin:0">Te enviaremos un enlace para crear una nueva.</p><div class="field"><label for="r-mail">Correo municipal</label><input class="input" id="r-mail" type="email" data-bind="f.rmail" value="${esc(S.f.rmail||'')}" placeholder="nombre@ayto.es" autocomplete="email" ${inv('rmail')}>${err('rmail')}</div><button class="btn" type="submit">Enviar enlace</button><p class="note">Por seguridad, no te diremos si el correo existe o no.</p><a href="#acceso">← Volver a iniciar sesión</a></form>`}</div></div>`;
  return `<div class="login">${art}<div class="formside"><form id="f-login" novalidate><div><span class="lbl">Acceso restringido</span><h1 style="font-size:30px">Personal municipal</h1></div>
- ${S.lock?`<div class="alert bad" role="alert">${I.alert}<span><b>Acceso bloqueado 15 minutos</b> por 5 intentos fallidos. <button type="button" class="link" data-act="unlock">Desbloquear (solo demo)</button></span></div>`:S.e.login?`<div class="alert bad" role="alert">${I.alert}<span>${S.e.login}</span></div>`:''}
+ ${S.lock?`<div class="alert bad" role="alert">${I.alert}<span><b>Acceso bloqueado 15 minutos</b> por 5 intentos fallidos. ${window.RespiraDatos&&RespiraDatos.conApi()?'Vuelve a intentarlo más tarde.':'<button type="button" class="link" data-act="unlock">Desbloquear (solo demo)</button>'}</span></div>`:S.e.login?`<div class="alert bad" role="alert">${I.alert}<span>${S.e.login}</span></div>`:''}
  <div class="field"><label for="l-mail">Correo</label><input class="input" id="l-mail" type="email" data-bind="f.mail" value="${esc(S.f.mail||'')}" placeholder="nombre@ayto.es" autocomplete="username" ${inv('mail')} ${S.lock?'disabled':''}>${err('mail')}</div>
  <div class="field"><label for="l-pass">Contraseña</label><div style="position:relative"><input class="input" id="l-pass" type="${S.showPass?'text':'password'}" data-bind="f.pass" value="${esc(S.f.pass||'')}" autocomplete="current-password" style="padding-right:84px" ${inv('pass')} ${S.lock?'disabled':''}><button type="button" class="link" style="position:absolute;right:12px;top:13px" data-act="showPass">${S.showPass?'Ocultar':'Mostrar'}</button></div>${err('pass')}</div>
  <button class="btn" type="submit" ${S.lock?'disabled':''}>Entrar</button><a href="#recuperar" style="align-self:center">¿Has olvidado la contraseña?</a>
  <div class="demo-creds"><b>Cuentas de prueba del prototipo</b><br>Administración: <code>admin@ayto.es</code> · <code>Admin2026!</code><br>Técnico: <code>tecnico@ayto.es</code> · <code>Tecnico2026!</code><br>Punto de reparto: <code>reparto@ayto.es</code> · <code>Reparto2026!</code><br>Trabajador (no entra al panel): <code>psanz@ayto.es</code> · <code>Trabajo2026!</code></div></form></div></div>`}
 
 /* ---------- panel ---------- */
-const pendDev=()=>LOANS.filter(l=>!l.fin&&l.ini!==undefined&&/^1 nov|^31 oct/.test(l.ini));
+// pendiente de devolución: más de 24 h fuera (con la API, por la hora real del préstamo)
+const pendDev=()=>LOANS.filter(l=>!l.fin&&l.ini!==undefined&&(l.iniMs!=null?Date.now()-l.iniMs>864e5:/^1 nov|^31 oct/.test(l.ini)));
 const sinDatos=s=>['activo','prestado'].includes(s.est)&&(s.ult==null||s.ult>1440);
 const batBaja=s=>s.bat!=null&&s.bat<25&&s.est!=='baja';
 function pshell(cur,inner){const u=S.user;const L=[['panel','Flota',I.grid],['panel-sensores','Sensores',I.pin],['panel-prestamos','Préstamos',I.box,pendDev().length],['panel-puntos','Puntos',I.coin,SOSP.filter(d=>d.estado==='pend').length],['panel-regalos','Regalos y canjes',I.gift],['panel-trabajadores','Trabajadores',I.users,TRAB().filter(t=>t.estado==='pendiente').length]].filter(l=>ACCESS[u.r].includes(l[0]));
@@ -625,7 +651,7 @@ const batCell=s=>s.bat==null?'<span class="hint">Corriente</span>':`<span class=
 function vFlota(){const q=S.fQ.trim().toLowerCase();
  let rows=SENS.filter(s=>(S.fT==='todos'||s.tipo===S.fT)&&(S.fE==='todos'||(S.fE==='sindatos'&&sinDatos(s))||(S.fE==='bateria'&&batBaja(s))||(S.fE==='pend'&&pendDev().some(l=>l.code===s.code))||(S.fE==='mant'&&s.est==='mant'))&&(!q||(s.code+' '+(s.asig||'')+' '+(s.user||'')).toLowerCase().includes(q)));
  const act=SENS.filter(s=>['activo','prestado'].includes(s.est)&&s.ult!=null&&s.ult<=1440).length;
- return pshell('panel',`<div class="pagehead"><div><h1>Estado de la flota</h1><span class="hint">Datos a 02/11/2026 10:42 · ${SENS.length} sensores</span></div>${S.user.r==='admin'||S.user.r==='tecnico'?'<a class="btn sec" href="#panel-sensores">Gestionar sensores</a>':''}</div>
+ return pshell('panel',`<div class="pagehead"><div><h1>Estado de la flota</h1><span class="hint">Datos a ${new Date().toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})} · ${SENS.length} sensores</span></div>${S.user.r==='admin'||S.user.r==='tecnico'?'<a class="btn sec" href="#panel-sensores">Gestionar sensores</a>':''}</div>
  <div class="kpis"><div class="kpi"><span class="t">Con datos hoy</span><b>${act}</b><span>de ${SENS.filter(s=>s.est!=='mant').length} en servicio</span></div><button class="kpi" data-act="fE" data-arg="sindatos"><span class="t">Sin datos en 24 h</span><b style="color:var(--lv-medio)">${SENS.filter(sinDatos).length}</b><span>Ver ›</span></button><button class="kpi" data-act="fE" data-arg="bateria"><span class="t">Batería baja (&lt;25 %)</span><b style="color:var(--lv-alto)">${SENS.filter(batBaja).length}</b><span>Ver ›</span></button><button class="kpi" data-act="fE" data-arg="pend"><span class="t">Pendientes de devolución</span><b style="color:var(--lv-alto)">${pendDev().length}</b><span>Más de 24 h fuera ›</span></button></div>
  <p class="note">«Sin datos» no equivale a avería: puede que el sensor no haya salido ese día o que su autobús esté en cocheras. Si un sensor activo lleva varios días sin datos, conviene revisarlo.</p>
  <div class="toolbar"><div class="field" style="width:240px;max-width:100%"><label for="f-q" class="lbl">Buscar</label><input class="input" id="f-q" data-bind="fQ" data-live="1" value="${esc(S.fQ)}" placeholder="Código, línea, servicio o ID"></div>
@@ -677,7 +703,7 @@ function vPuntos(){const r=S.rules;
  <div class="tw"><table><thead><tr><th scope="col">Usuario</th><th scope="col">Día</th><th scope="col">Min. válidos</th><th scope="col">Puntos</th><th scope="col">Motivo</th><th scope="col">Estado</th><th scope="col"><span class="hint" style="text-transform:none;letter-spacing:0">Acciones</span></th></tr></thead><tbody>${SOSP.map(d=>`<tr><td class="mono">${d.user}</td><td>${d.d}</td><td class="mono">${d.min}</td><td class="mono"><b>${d.pts}</b></td><td>${esc(d.mot)}${d.razon?`<br><span class="hint">${esc(d.razon)}</span>`:''}</td><td>${d.estado==='pend'?'<span class="badge b-medio">Pendiente</span>':d.estado==='ok'?'<span class="badge b-bajo">Aprobado</span>':'<span class="badge b-alto">Anulado</span>'}</td><td style="white-space:nowrap">${d.estado==='pend'?`<button class="link" data-act="aprobar" data-arg="${d.id}">Aprobar</button> · <button class="link" style="color:var(--lv-alto)" data-act="anular" data-arg="${d.id}">Anular</button>`:'<span class="hint">Revisado</span>'}</td></tr>`).join('')}</tbody></table></div>
  <p class="note">El voluntario ve el resultado en su historial de puntos. Al anular, se le restan los puntos de ese día.</p>`)}
 
-function vRegalos(){const admin=S.user.r==='admin';const c=S.canje;const g=c&&GIFTS.find(x=>x.id===c.gift);
+function vRegalos(){const admin=S.user.r==='admin';const c=S.canje;const g=c&&(GIFTS.find(x=>x.id===c.gift)||{n:c.giftN||'Regalo retirado',stock:0});
  const entregar=`<form class="card" id="f-canje" style="padding:20px;display:flex;flex-direction:column;gap:14px" novalidate><h2 style="font-size:20px">Entregar un regalo canjeado</h2>
  <div class="field"><label for="c-code">Código de recogida</label><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="input mono" id="c-code" data-bind="f.ccode" value="${esc(S.f.ccode||'')}" placeholder="CJ-XXXX" style="text-transform:uppercase;flex:1;min-width:160px" ${inv('ccode')}><button class="btn" type="submit">Comprobar</button></div>${err('ccode')}</div>
  ${c?`<div class="alert ok" style="align-items:center">${I.gift}<span style="flex:1"><b>${esc(g.n)}</b> para <b class="mono">${c.user}</b> · válido hasta el ${fecha(c.cad)}</span><button type="button" class="btn sm" data-act="entregar">Marcar como entregado</button></div>`:''}
@@ -685,7 +711,7 @@ function vRegalos(){const admin=S.user.r==='admin';const c=S.canje;const g=c&&GI
  return pshell('panel-regalos',`<div class="pagehead"><div><h1>${admin?'Regalos y canjes':'Entregar regalos'}</h1><span class="hint">${admin?'Catálogo que ven los voluntarios en la app':'Comprueba el código que enseña el voluntario'}</span></div>${admin?'<button class="btn" data-act="nuevoRegalo">+ Nuevo regalo</button>':''}</div>
  ${entregar}
  ${admin?`<h2 style="font-size:20px">Catálogo</h2><div class="tw"><table><thead><tr><th scope="col">Regalo</th><th scope="col">Coste</th><th scope="col">Existencias</th><th scope="col">En la app</th><th scope="col"><span class="hint" style="text-transform:none;letter-spacing:0">Acciones</span></th></tr></thead><tbody>${GIFTS.map(x=>`<tr><td><b>${esc(x.n)}</b></td><td class="mono">${x.c} pts</td><td class="mono">${x.stock}</td><td>${x.stock?'<span class="badge b-bajo">Disponible</span>':'<span class="badge b-none">Agotado</span>'}</td><td style="white-space:nowrap"><button class="link" data-act="editRegalo" data-arg="${x.id}">Editar</button> · <button class="link" style="color:var(--lv-alto)" data-act="retirarRegalo" data-arg="${x.id}">Retirar</button></td></tr>`).join('')}</tbody></table></div>
- <h2 style="font-size:20px">Canjes</h2><div class="tw"><table><thead><tr><th scope="col">Código</th><th scope="col">Usuario</th><th scope="col">Regalo</th><th scope="col">Caduca</th><th scope="col">Estado</th></tr></thead><tbody>${CANJES.map(x=>`<tr><td class="mono">${x.code}</td><td class="mono">${x.user}</td><td>${esc((GIFTS.find(y=>y.id===x.gift)||{n:'Regalo retirado'}).n)}</td><td>${fecha(x.cad)}</td><td>${x.estado==='entregado'?'<span class="badge b-bajo">Entregado</span>':x.cad<TODAY?'<span class="badge b-none">Caducado · puntos devueltos</span>':'<span class="badge b-medio">Pendiente</span>'}</td></tr>`).join('')}</tbody></table></div>`:''}`)}
+ <h2 style="font-size:20px">Canjes</h2><div class="tw"><table><thead><tr><th scope="col">Código</th><th scope="col">Usuario</th><th scope="col">Regalo</th><th scope="col">Caduca</th><th scope="col">Estado</th></tr></thead><tbody>${CANJES.map(x=>`<tr><td class="mono">${x.code}</td><td class="mono">${x.user}</td><td>${esc((GIFTS.find(y=>y.id===x.gift)||{n:x.giftN||'Regalo retirado'}).n)}</td><td>${fecha(x.cad)}</td><td>${x.estado==='entregado'?'<span class="badge b-bajo">Entregado</span>':x.cad<TODAY?'<span class="badge b-none">Caducado · puntos devueltos</span>':'<span class="badge b-medio">Pendiente</span>'}</td></tr>`).join('')}</tbody></table></div>`:''}`)}
 
 /* ---------- trabajadores municipales (alta desde administración) ---------- */
 const estTrab=t=>t.estado==='activo'?'<span class="badge b-bajo">Activa</span>':t.caduca<Date.now()?'<span class="badge b-alto">Enlace caducado</span>':'<span class="badge b-medio">Pendiente de activar</span>';
@@ -710,14 +736,14 @@ function vTrabajadores(){
  </tbody></table></div>`)}
 
 function vActivar(){
- const t=STAFF.find(x=>x.r==='trabajador'&&x.token&&x.token===S.tok);
- const art=`<div class="art"><a class="logo" href="#inicio" aria-label="Respira, inicio">${LOGO(36,'#FFFFFF','#FFFFFF','#5FC4C0')}</a><div style="display:flex;flex-direction:column;gap:14px"><h2>Activa tu cuenta de trabajador municipal</h2><span style="display:inline-flex;gap:8px;align-items:center;color:#B9CFC4">Un servicio de ${NODIA(22,'#FFFFFF')}<b style="letter-spacing:.08em;color:#fff">NODIA</b></span></div><a href="#mapa" style="color:#9EE3C9">← Ir al mapa público</a></div>`;
+ const t=enlaceAct();
+ const art=`<div class="art"><a class="logo" href="#inicio" aria-label="Respira, inicio">${LOGO(36,'#FFFFFF','#FFFFFF','#5FC4C0')}</a><div style="display:flex;flex-direction:column;gap:14px"><h2>${t&&t.tipo==='recuperar'?'Crea una contraseña nueva':'Activa tu cuenta de trabajador municipal'}</h2><span style="display:inline-flex;gap:8px;align-items:center;color:#B9CFC4">Un servicio de ${NODIA(22,'#FFFFFF')}<b style="letter-spacing:.08em;color:#fff">NODIA</b></span></div><a href="#mapa" style="color:#9EE3C9">← Ir al mapa público</a></div>`;
  let b;
- if(S.activOk)b=`<div style="width:min(420px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert ok">${I.check}<span><b>Cuenta activada.</b> Ya puedes entrar en la app Respira con <b>${esc(S.activOk)}</b> y la contraseña que acabas de crear.</span></div><p class="note" style="margin:0">Tu cuenta es de <b>trabajador municipal</b>: sirve para llevar el sensor que te asigne tu servicio. No da acceso al panel de gestión.</p></div>`;
- else if(!t)b=`<div style="width:min(420px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert bad" role="alert">${I.alert}<span><b>Este enlace no es válido.</b> Puede que ya se haya usado o que administración haya enviado uno nuevo. Pide que te lo reenvíen.</span></div></div>`;
+ if(S.activOk)b=`<div style="width:min(420px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert ok">${I.check}<span><b>${S.activTipo==='recuperar'?'Contraseña cambiada.':'Cuenta activada.'}</b> Ya puedes entrar ${['admin','tecnico','reparto'].includes(S.activRol)?'en el panel':'en la app Respira'} con <b>${esc(S.activOk)}</b> y la contraseña que acabas de crear.</span></div>${S.activTipo==='recuperar'?'':'<p class="note" style="margin:0">Tu cuenta es de <b>trabajador municipal</b>: sirve para llevar el sensor que te asigne tu servicio. No da acceso al panel de gestión.</p>'}</div>`;
+ else if(t===undefined&&window.RespiraDatos&&RespiraDatos.conApi())b=`<div style="width:min(420px,100%)"><p class="muted">Comprobando el enlace…</p></div>`;else if(!t)b=`<div style="width:min(420px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert bad" role="alert">${I.alert}<span><b>Este enlace no es válido.</b> Puede que ya se haya usado o que administración haya enviado uno nuevo. Pide que te lo reenvíen.</span></div></div>`;
  else if(t.caduca<Date.now())b=`<div style="width:min(420px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert bad" role="alert">${I.alert}<span><b>El enlace ha caducado</b> (dura ${ACTIV_H} h). Pide a administración que te envíe uno nuevo.</span></div></div>`;
  else b=`<form id="f-activar" novalidate><div><span class="lbl">Trabajador municipal</span><h1 style="font-size:30px">Hola, ${esc(t.n.split(' ')[0])}</h1></div><p class="muted" style="margin:0">Crea la contraseña de tu cuenta <b class="mono">${t.id}</b> (${esc(t.e)}).</p>
-  <div class="field"><label for="ac-p1">Contraseña nueva</label><input class="input" id="ac-p1" type="password" data-bind="f.ap1" value="" autocomplete="new-password" ${inv('ap1')}>${err('ap1')}<span class="hint">Mínimo 10 caracteres, con letras y números.</span></div>
+  <div class="field"><label for="ac-p1">Contraseña nueva</label><input class="input" id="ac-p1" type="password" data-bind="f.ap1" value="" autocomplete="new-password" ${inv('ap1')}>${err('ap1')}<span class="hint">${t.rol==='vecino'?'Mínimo 8 caracteres.':'Mínimo 10 caracteres, con letras y números.'}</span></div>
   <div class="field"><label for="ac-p2">Repite la contraseña</label><input class="input" id="ac-p2" type="password" data-bind="f.ap2" value="" autocomplete="new-password" ${inv('ap2')}>${err('ap2')}</div>
   <button class="btn" type="submit">Activar cuenta</button></form>`;
  return `<div class="login">${art}<div class="formside">${b}</div></div>`}
@@ -763,6 +789,9 @@ document.addEventListener('pointerup',()=>{if(!drag)return;if(drag.moved){justDr
 document.addEventListener('click',e=>{if(justDragged){justDragged=false;e.stopPropagation();e.preventDefault()}},true);
 
 /* ---------- acciones ---------- */
+// Panel con servidor: si hay API, la acción la hace datos-api.js (y devuelve true)
+const SRV=(k,d)=>{const D=window.RespiraDatos;if(!D||!D.conApi())return false;D.accion(k,d);return true};
+const enlaceAct=()=>window.RespiraDatos&&RespiraDatos.conApi()?RespiraDatos.enlace(S.tok):STAFF.find(x=>x.r==='trabajador'&&x.token&&x.token===S.tok);
 const vEmail=v=>/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v);
 const A={
  tema:()=>{TEMA=TEMA==='oscuro'?'claro':'oscuro';try{localStorage.setItem('respira-tema',TEMA)}catch(_){}aplicarTema();render()},
@@ -777,8 +806,8 @@ const A={
  hmag:a=>{S.hist.mag=a;render()}, hper:a=>{S.hist.per=a;S.e={};render()},
  swap:()=>{const c=S.cmp;[c.a,c.b]=[c.b,c.a];render()},
  showPass:()=>{S.showPass=!S.showPass;render()}, unlock:()=>{S.lock=false;S.tries=0;S.e={};render()}, recBack:()=>{S.recOk=false},
- logout:()=>{S.user=null;S.f={};S.altaOk=null;toast('Has cerrado sesión');nav('acceso')},
- reenviarActiv:id=>{if(!S.user||S.user.r!=='admin'){toast('Solo administración puede hacerlo');return}const t=STAFF.find(x=>x.id===id&&x.r==='trabajador'&&x.estado==='pendiente');if(!t)return;t.token=nuevoToken();t.caduca=Date.now()+ACTIV_H*36e5;S.altaOk=t.id;render();toast(`Enlace nuevo enviado a ${t.e}. El anterior ya no sirve.`)},
+ logout:()=>{window.RespiraDatos&&RespiraDatos.cerrarSesion();S.user=null;S.f={};S.altaOk=null;toast('Has cerrado sesión');nav('acceso')},
+ reenviarActiv:id=>{if(!S.user||S.user.r!=='admin'){toast('Solo administración puede hacerlo');return}if(SRV('reenviar',{id}))return;const t=STAFF.find(x=>x.id===id&&x.r==='trabajador'&&x.estado==='pendiente');if(!t)return;t.token=nuevoToken();t.caduca=Date.now()+ACTIV_H*36e5;S.altaOk=t.id;render();toast(`Enlace nuevo enviado a ${t.e}. El anterior ya no sirve.`)},
  fT:a=>{S.fT=a;render()}, fE:a=>{S.fE=S.fE===a&&a!=='todos'?'todos':a;if(route()!=='panel')nav('panel');else render()},
  editar:a=>{const s=a&&byCode(a);S.edit=s?{orig:s.code,code:s.code,mags:[...s.mags],tipo:s.tipo,asig:s.asig||'',estado:s.est==='mant'?'mant':'ok',motivo:s.motivo||''}:{orig:null,code:'',mags:[],tipo:'vol',asig:'',estado:'ok',motivo:''};S.e={};nav('panel-editar')},
  emag:a=>{const m=S.edit.mags;const i=m.indexOf(a);i>=0?m.splice(i,1):m.push(a);delete S.e.mags;render()},
@@ -786,12 +815,12 @@ const A={
  eest:a=>{S.edit.estado=a;delete S.e.motivo;render()},
  baja:a=>{if(S.user.r!=='admin')return;S.f.bmot='';S.f.bconf='';S.e={};S.modal={k:'baja',id:a};render()},
  dest:a=>{S.f.dest=a;render()},
- aprobar:a=>{SOSP.find(d=>d.id===a).estado='ok';render();toast('Día aprobado: los puntos se mantienen')},
+ aprobar:a=>{if(SRV('revisar',{id:a,decision:'aprobar'}))return;SOSP.find(d=>d.id===a).estado='ok';render();toast('Día aprobado: los puntos se mantienen')},
  anular:a=>{S.f.amot='';S.e={};S.modal={k:'anular',id:a};render()},
  nuevoRegalo:()=>{S.f.gn='';S.f.gc='';S.f.gs='';S.e={};S.modal={k:'regalo',id:null};render()},
  editRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.f.gn=g.n;S.f.gc=String(g.c);S.f.gs=String(g.stock);S.e={};S.modal={k:'regalo',id:a};render()},
- retirarRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.modal={k:'confirm',t:`¿Retirar «${g.n}»?`,p:'Dejará de verse en la app. Los canjes pendientes de este regalo se podrán seguir entregando.',ok:'Retirar',danger:true,fn:()=>{GIFTS=GIFTS.filter(x=>x.id!==a);toast('Regalo retirado del catálogo')}};render()},
- entregar:()=>{const c=S.canje;const g=GIFTS.find(x=>x.id===c.gift);c.estado='entregado';if(g)g.stock=Math.max(0,g.stock-1);S.canje=null;S.f.ccode='';render();toast(g&&g.stock===0?`Entregado. «${g.n}» queda agotado en la app.`:'Regalo entregado')},
+ retirarRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.modal={k:'confirm',t:`¿Retirar «${g.n}»?`,p:'Dejará de verse en la app. Los canjes pendientes de este regalo se podrán seguir entregando.',ok:'Retirar',danger:true,fn:()=>{if(SRV('retirar',{id:a}))return;GIFTS=GIFTS.filter(x=>x.id!==a);toast('Regalo retirado del catálogo')}};render()},
+ entregar:()=>{const c=S.canje;if(SRV('entregar',{codigo:c.code}))return;const g=GIFTS.find(x=>x.id===c.gift);c.estado='entregado';if(g)g.stock=Math.max(0,g.stock-1);S.canje=null;S.f.ccode='';render();toast(g&&g.stock===0?`Entregado. «${g.n}» queda agotado en la app.`:'Regalo entregado')},
  closeModal:()=>{S.modal=null;S.e={};render()},
  guia:()=>{S.modal={k:'guia'};render()},
  aValores:k=>{S.modal={k:'guia',foco:k};render()},
@@ -811,6 +840,7 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
   if(!m)er.mail='Escribe tu correo.';else if(!vEmail(m))er.mail='El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';else if(!m.endsWith('@ayto.es'))er.mail='Usa tu correo municipal (termina en @ayto.es).';
   if(!p)er.pass='Escribe tu contraseña.';else if(p.length<8)er.pass=`La contraseña tiene al menos 8 caracteres (has escrito ${p.length}).`;
   if(!ok())return;
+  if(SRV('login',{email:m,clave:p}))return;
   const u=STAFF.find(x=>x.e===m&&x.p!=null&&x.p===p);
   if(!u){S.tries++;S.f.pass='';if(S.tries>=5){S.lock=true}else S.e={login:`<b>Correo o contraseña incorrectos.</b> Te quedan ${5-S.tries} intento${5-S.tries===1?'':'s'} antes del bloqueo temporal.`};render();return}
   if(u.r==='trabajador'){S.tries=0;S.f.pass='';S.e={login:'<b>Tu cuenta es de trabajador municipal.</b> No tiene acceso al panel de gestión: entra en la app Respira con este correo.'};render();return}
@@ -823,17 +853,19 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
   if(!emp)er.temp='Escribe el número de empleado.';else if(!/^\d{6}$/.test(emp))er.temp='Son 6 cifras, por ejemplo 104233.';else if(TRAB().some(x=>x.emp===emp))er.temp='Este número de empleado ya tiene una cuenta.';
   if(!sv)er.ts='Elige el servicio.';
   if(!ok())return;
+  if(SRV('trabajador',{nombre:n,email:m,num_empleado:emp,servicio:sv}))return;
   const num=Math.max(0,...TRAB().map(x=>+x.id.slice(2)))+1,cid='T-'+String(num).padStart(4,'0');
   const t={n,e:m,p:null,r:'trabajador',id:cid,emp,serv:sv,estado:'pendiente',alta:'4 nov',por:S.user.e,token:nuevoToken(),caduca:Date.now()+ACTIV_H*36e5};
   STAFF.push(t);S.altaOk=cid;S.f.tn='';S.f.te='';S.f.temp='';S.f.ts='';render();toast(`Trabajador ${cid} dado de alta`);return}
- if(id==='f-activar'){const t=STAFF.find(x=>x.r==='trabajador'&&x.token&&x.token===S.tok);
+ if(id==='f-activar'){const t=enlaceAct();
   if(!t||t.caduca<Date.now()){render();return}
   const p1=S.f.ap1||'',p2=S.f.ap2||'';
-  if(!p1)er.ap1='Escribe una contraseña.';else if(p1.length<10)er.ap1=`Tiene que tener al menos 10 caracteres (has escrito ${p1.length}).`;else if(!/[a-z]/i.test(p1)||!/\d/.test(p1))er.ap1='Tiene que llevar letras y números.';else if(p1.toLowerCase().includes(t.e.split('@')[0]))er.ap1='No puede contener tu nombre de usuario.';
+  const vec=t.rol==='vecino';if(!p1)er.ap1='Escribe una contraseña.';else if(vec&&p1.length<8)er.ap1=`Tiene que tener al menos 8 caracteres (has escrito ${p1.length}).`;else if(vec){}else if(p1.length<10)er.ap1=`Tiene que tener al menos 10 caracteres (has escrito ${p1.length}).`;else if(!/[a-z]/i.test(p1)||!/\d/.test(p1))er.ap1='Tiene que llevar letras y números.';else if(p1.toLowerCase().includes(t.e.split('@')[0]))er.ap1='No puede contener tu nombre de usuario.';
   if(!er.ap1&&p2!==p1)er.ap2='Las dos contraseñas no coinciden.';
   if(!ok()){S.f.ap1='';S.f.ap2='';render();return}
+  if(SRV('activar',{token:S.tok,clave:p1}))return;
   t.p=p1;t.estado='activo';t.token=null;t.caduca=null;S.activOk=t.e;S.f.ap1='';S.f.ap2='';render();return}
- if(id==='f-rec'){const m=(S.f.rmail||'').trim();if(!m)er.rmail='Escribe tu correo.';else if(!vEmail(m))er.rmail='El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';if(!ok())return;S.recOk=true;render();return}
+ if(id==='f-rec'){const m=(S.f.rmail||'').trim();if(!m)er.rmail='Escribe tu correo.';else if(!vEmail(m))er.rmail='El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';if(!ok())return;if(SRV('recuperar',{email:m}))return;S.recOk=true;render();return}
  if(id==='f-rango'){const h=S.hist;if(!h.desde)er.desde='Elige la fecha de inicio.';else if(h.desde<'2026-06-01')er.desde='No hay datos antes del 01/06/2026.';else if(h.desde>TODAY)er.desde='No puede ser una fecha futura.';
   if(!h.hasta)er.hasta='Elige la fecha de fin.';else if(h.hasta>TODAY)er.hasta='No puede ser una fecha futura.';else if(h.desde&&h.hasta<h.desde)er.hasta='La fecha de fin debe ser posterior a la de inicio.';
   else if(h.desde&&(new Date(h.hasta)-new Date(h.desde))/864e5>90)er.hasta='El rango máximo es de 90 días.';if(!ok())return;render();toast(`Mostrando del ${h.desde.split('-').reverse().join('/')} al ${h.hasta.split('-').reverse().join('/')}`);return}
@@ -843,33 +875,34 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
   if(s.tipo!=='vol'&&(s.asig||'').trim().length<3)er.asig='Indica a qué servicio, línea o vehículo va asignado (mínimo 3 caracteres).';
   if(s.estado==='mant'&&(s.motivo||'').trim().length<5)er.motivo='Explica el motivo del mantenimiento (mínimo 5 caracteres).';
   if(!ok())return;
+  if(SRV('sensor',{orig:s.orig,codigo:c,tipo:s.tipo,mags:s.mags,asig:s.asig,mant:s.estado==='mant',motivo:s.motivo}))return;
   const asig=s.tipo==='vol'?null:s.asig.trim();
   if(s.orig){const o=byCode(s.orig);o.mags=s.mags;o.tipo=s.tipo;o.asig=asig;if(s.estado==='mant'){o.est='mant';o.motivo=s.motivo.trim()}else if(o.est==='mant'){o.est=s.tipo==='vol'?'disponible':'activo';o.motivo=null}else if(o.est!=='prestado')o.est=s.tipo==='vol'?'disponible':'activo';toast(`${o.code} guardado`)}
   else{SENS.push({code:c,tipo:s.tipo,asig,mags:s.mags,est:s.estado==='mant'?'mant':s.tipo==='vol'?'disponible':'activo',motivo:s.estado==='mant'?s.motivo.trim():null,ult:null,bat:s.tipo==='bus'?null:100});toast(`${c} dado de alta${s.tipo==='vol'?': ya se puede prestar':''}`)}
   S.edit=null;nav('panel-sensores');return}
- if(id==='f-baja'){const c=S.modal.id;if(!S.f.bmot)er.bmot='Elige un motivo.';if(up(S.f.bconf)!==c)er.bconf=`Escribe exactamente ${c} para confirmar.`;if(!ok())return;SENS=SENS.filter(x=>x.code!==c);S.modal=null;render();toast(`${c} dado de baja. Sus mediciones se conservan.`);return}
+ if(id==='f-baja'){const c=S.modal.id;if(!S.f.bmot)er.bmot='Elige un motivo.';if(up(S.f.bconf)!==c)er.bconf=`Escribe exactamente ${c} para confirmar.`;if(!ok())return;if(SRV('baja',{codigo:c,motivo:S.f.bmot}))return;SENS=SENS.filter(x=>x.code!==c);S.modal=null;render();toast(`${c} dado de baja. Sus mediciones se conservan.`);return}
  if(id==='f-prestar'){const u=up(S.f.puser),c=up(S.f.pcode);
   if(!u)er.puser='Escribe el ID que aparece en la app del voluntario.';else if(!/^U-\d{5}$/.test(u))er.puser='Formato no válido: U- y 5 cifras, por ejemplo U-48213.';else if(!APPUSERS.some(x=>x.id===u))er.puser=`No existe ningún usuario ${u}. Pídele que lo compruebe en la app, en Mi cuenta.`;else if(LOANS.some(l=>l.user===u&&!l.fin))er.puser=`${u} ya tiene un sensor prestado. Tiene que devolverlo antes de llevarse otro.`;
   const s=byCode(c);if(!c)er.pcode='Escribe el código del sensor.';else if(!/^RSP-[A-Z0-9]{4}$/.test(c))er.pcode='Formato no válido: RSP- y 4 letras o números.';else if(!s)er.pcode=`No existe ningún sensor ${c}.`;else if(s.tipo!=='vol')er.pcode=`${c} va asignado a ${TIPOS[s.tipo].toLowerCase()}: no se presta.`;else if(s.est==='prestado')er.pcode=`${c} ya está prestado a ${s.user}.`;else if(s.est==='mant')er.pcode=`${c} está en mantenimiento.`;
-  if(!ok())return;s.est='prestado';s.user=u;LOANS.unshift({code:c,user:u,ini:'2 nov 10:42',fin:null,punto:S.user.punto||'Biblioteca Central'});S.f.puser='';S.f.pcode='';render();toast(`${c} prestado a ${u}. Ya puede escribir el código en su app.`);return}
+  if(!ok())return;if(SRV('prestar',{usuario:u,codigo:c}))return;s.est='prestado';s.user=u;LOANS.unshift({code:c,user:u,ini:'2 nov 10:42',fin:null,punto:S.user.punto||'Biblioteca Central'});S.f.puser='';S.f.pcode='';render();toast(`${c} prestado a ${u}. Ya puede escribir el código en su app.`);return}
  if(id==='f-devolver'){const c=up(S.f.dcode);const s=byCode(c);const l=LOANS.find(x=>x.code===c&&!x.fin);
   if(!c)er.dcode='Escribe el código del sensor.';else if(!/^RSP-[A-Z0-9]{4}$/.test(c))er.dcode='Formato no válido: RSP- y 4 letras o números.';else if(!s)er.dcode=`No existe ningún sensor ${c}.`;else if(!l)er.dcode=`${c} no figura como prestado.`;
-  if(!ok())return;const st=S.f.dest||'Correcto';l.fin='2 nov 10:42';l.estDev=st;s.user=null;if(st==='Dañado'){s.est='mant';s.motivo='Dañado al devolverlo'}else{s.est='disponible';if(st==='Batería baja')s.bat=12}
+  if(!ok())return;if(SRV('devolver',{codigo:c,estado:S.f.dest||'Correcto'}))return;const st=S.f.dest||'Correcto';l.fin='2 nov 10:42';l.estDev=st;s.user=null;if(st==='Dañado'){s.est='mant';s.motivo='Dañado al devolverlo'}else{s.est='disponible';if(st==='Batería baja')s.bat=12}
   S.f.dcode='';S.f.dest='Correcto';render();toast(st==='Dañado'?`${c} devuelto y en mantenimiento`:`${c} devuelto${st==='Batería baja'?': ponlo a cargar':''}`);return}
  if(id==='f-rules'){const r=S.rules;const chk=(k,v,a,b,msg)=>{const n=String(v).trim();if(!/^\d+$/.test(n))er[k]='Escribe un número entero.';else if(+n<a||+n>b)er[k]=msg};
   chk('rmin',r.min,1,60,'Debe estar entre 1 y 60 minutos.');chk('rmult',r.mult,1,5,'Debe estar entre 1 y 5.');chk('rmax',r.max,10,500,'Debe estar entre 10 y 500 puntos.');
-  if(!ok())return;RULES={min:+r.min,mult:+r.mult,max:+r.max};render();toast('Reglas guardadas: se aplican desde mañana');return}
- if(id==='f-anular'){const t=(S.f.amot||'').trim();if(t.length<10)er.amot='Explica el motivo con al menos 10 caracteres: el voluntario lo verá.';if(!ok())return;const d=SOSP.find(x=>x.id===S.modal.id);d.estado='anulado';d.razon=t;S.modal=null;render();toast(`Puntos anulados: se restan ${d.pts} a ${d.user}`);return}
+  if(!ok())return;if(SRV('reglas',{min:r.min,mult:r.mult,max:r.max}))return;RULES={min:+r.min,mult:+r.mult,max:+r.max};render();toast('Reglas guardadas: se aplican desde mañana');return}
+ if(id==='f-anular'){const t=(S.f.amot||'').trim();if(t.length<10)er.amot='Explica el motivo con al menos 10 caracteres: el voluntario lo verá.';if(!ok())return;if(SRV('revisar',{id:S.modal.id,decision:'anular',razon:t}))return;const d=SOSP.find(x=>x.id===S.modal.id);d.estado='anulado';d.razon=t;S.modal=null;render();toast(`Puntos anulados: se restan ${d.pts} a ${d.user}`);return}
  if(id==='f-regalo'){const n=(S.f.gn||'').trim(),c=String(S.f.gc||'').trim(),st=String(S.f.gs||'').trim();
   if(n.length<3)er.gn='Escribe un nombre de al menos 3 caracteres.';else if(GIFTS.some(g=>g.n.toLowerCase()===n.toLowerCase()&&g.id!==S.modal.id))er.gn='Ya hay un regalo con ese nombre.';
   if(!/^\d+$/.test(c)||+c<1||+c>5000)er.gc='Entre 1 y 5000 puntos.';if(!/^\d+$/.test(st)||+st>999)er.gs='Entre 0 y 999 unidades.';
-  if(!ok())return;if(S.modal.id){Object.assign(GIFTS.find(g=>g.id===S.modal.id),{n,c:+c,stock:+st})}else GIFTS.push({id:'g'+Date.now(),n,c:+c,stock:+st});S.modal=null;render();toast('Catálogo actualizado');return}
- if(id==='f-canje'){const c=up(S.f.ccode);S.canje=null;const x=CANJES.find(y=>y.code===c);
+  if(!ok())return;if(SRV('regalo',{id:S.modal.id,nombre:n,coste:c,stock:st}))return;if(S.modal.id){Object.assign(GIFTS.find(g=>g.id===S.modal.id),{n,c:+c,stock:+st})}else GIFTS.push({id:'g'+Date.now(),n,c:+c,stock:+st});S.modal=null;render();toast('Catálogo actualizado');return}
+ if(id==='f-canje'){const c=up(S.f.ccode);S.canje=null;if(c&&/^CJ-[A-Z0-9]{4}$/.test(c)&&SRV('comprobarCanje',{codigo:c}))return;const x=CANJES.find(y=>y.code===c);
   if(!c)er.ccode='Escribe el código que enseña el voluntario.';else if(!/^CJ-[A-Z0-9]{4}$/.test(c))er.ccode='Formato no válido: CJ- y 4 letras o números.';else if(!x)er.ccode=`No existe ningún canje ${c}.`;else if(x.estado==='entregado')er.ccode=`El canje ${c} ya se entregó.`;else if(x.cad<TODAY)er.ccode=`El canje ${c} caducó el ${fecha(x.cad)}: los puntos ya se devolvieron al usuario.`;
   if(!ok())return;S.canje=x;render();return}
 });
 /* Lo que necesita js/mapa-google.js */
-window.Respira={S,ZONAS,AVISOS,MAG,PERC,nivel,est,fmt,hace,esc,avOk,render,byZ};
+window.Respira={S,ZONAS,AVISOS,MAG,PERC,nivel,est,fmt,hace,esc,avOk,render,byZ,sens:()=>SENS,nav,toast,HOME,estado:{get SENS(){return SENS},set SENS(v){SENS=v},get LOANS(){return LOANS},set LOANS(v){LOANS=v},get RULES(){return RULES},set RULES(v){RULES=v},get SOSP(){return SOSP},set SOSP(v){SOSP=v},get GIFTS(){return GIFTS},set GIFTS(v){GIFTS=v},get CANJES(){return CANJES},set CANJES(v){CANJES=v},get STAFF(){return STAFF},set STAFF(v){STAFF=v},get APPUSERS(){return APPUSERS},set APPUSERS(v){APPUSERS=v},AYTOS,PUNTOS_REPARTO}};
 aplicarTema();
 render();
 })();

@@ -8,7 +8,6 @@ import android.widget.TextView;
 import com.nodia.respira.R;
 import com.nodia.respira.datos.Movimiento;
 import com.nodia.respira.datos.Nivel;
-import com.nodia.respira.datos.Reglas;
 import com.nodia.respira.datos.Repositorio;
 
 // ==============================================================
@@ -38,7 +37,7 @@ public class PuntosFragment extends Pestana {
         int[] hoy = repo.hoy();
         if (hoy[0] > 0) {
             Ui.aviso(c, "Hoy llevas " + hoy[0] + " minutos válidos: unos "
-                    + Reglas.puntosDelDia(hoy[0], hoy[1]) + " puntos que se sumarán esta noche.", Nivel.BAJO);
+                    + cuenta.hoyPuntos + " puntos que se sumarán al acabar el día.", Nivel.BAJO);
         }
 
         Ui.boton(c, "🎁  Ver regalos", Ui.BOTON_LLENO, v -> startActivity(new Intent(requireContext(), RegalosActivity.class)));
@@ -52,11 +51,16 @@ public class PuntosFragment extends Pestana {
         for (Movimiento m : cuenta.historial) {
             String sub = m.canje != null ? "Canje: " + m.canje
                     : m.minutos + " min válidos · " + m.minutosParque + " en parques"
-                    + (m.descartados > 0 ? "\n" + m.descartados + " min descartados: sensor parado o a velocidad de vehículo" : "");
+                    + (m.descartados > 0 ? "\n" + m.descartados + " min descartados: sensor parado, sin datos o a velocidad de vehículo" : "");
+            if (m.nota != null) {
+                sub += "\n" + m.nota;
+            }
             LinearLayout f = Ui.fila(h, m.fecha, sub, null);
             Ui.insignia(f, (m.puntos > 0 ? "+" : "") + m.puntos, m.puntos < 0 ? Nivel.ALTO : Nivel.BAJO);
         }
-        Ui.nota(c, "Cómo se ganan: 1 punto cada 5 minutos válidos y el doble dentro de los parques, hasta 100 al día. "
-                + "No cuentan los ratos con el sensor parado más de 15 minutos ni a velocidad de vehículo.");
+        Ui.nota(c, "Cómo se ganan: 1 punto cada " + cuenta.minPorPunto + " minutos válidos"
+                + (cuenta.multParque > 1 ? " y x" + cuenta.multParque + " dentro de los parques" : "")
+                + ", hasta " + cuenta.maxDia + " al día. Los calcula el servidor al acabar el día. "
+                + "No cuentan los ratos con el sensor parado más de 15 minutos, sin datos ni a velocidad de vehículo.");
     }
 }

@@ -310,6 +310,24 @@ public final class Ui {
                 ? "" : campo.getEditText().getText().toString();
     }
 
+    // --------------------------------------------------------------
+    // Respuesta del servidor para acciones sencillas: si va bien, alAcabar;
+    // si no, enseña el mensaje del servidor (p. ej. «Sin conexión…»)
+    // --------------------------------------------------------------
+    public static <T> com.nodia.respira.datos.Repositorio.Hecho<T> hecho(Context c, Runnable alAcabar) {
+        return new com.nodia.respira.datos.Repositorio.Hecho<T>() {
+            @Override
+            public void ok(T r) {
+                alAcabar.run();
+            }
+
+            @Override
+            public void error(String mensaje, java.util.Map<String, String> campos) {
+                android.widget.Toast.makeText(c, mensaje, android.widget.Toast.LENGTH_LONG).show();
+            }
+        };
+    }
+
     public static void confirmar(Context c, String titulo, String mensaje, String ok, Runnable accion) {
         new MaterialAlertDialogBuilder(c)
                 .setTitle(titulo)

@@ -17,8 +17,9 @@ import com.nodia.respira.R;
 
 // ==============================================================
 // Notificaciones: canales y envío.
-// En la versión real las alertas llegarán por push desde el
-// servidor (FCM); aquí se lanzan en local desde los controles demo.
+// Las alertas las comprueba la app con los datos reales del servidor
+// cada vez que lee las zonas (Repositorio.comprobarAlertas). Con la
+// app cerrada no llegan: para eso haría falta push (FCM).
 // ==============================================================
 public final class Notificaciones {
 

@@ -22,10 +22,20 @@ public class MisPercepcionesActivity extends AppCompatActivity {
         c = Ui.pantalla(this, "Mis percepciones");
     }
 
+    private final Runnable alCambiar = this::pintar;
+
     @Override
     protected void onResume() {
         super.onResume();
         pintar(); // también al volver de editar una
+        Repositorio.obtener(this).observar(alCambiar);
+        Repositorio.obtener(this).refrescar(true);
+    }
+
+    @Override
+    protected void onPause() {
+        Repositorio.obtener(this).dejarDeObservar(alCambiar);
+        super.onPause();
     }
 
     private void pintar() {
@@ -49,8 +59,7 @@ public class MisPercepcionesActivity extends AppCompatActivity {
                             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             Ui.boton(f, "Borrar", Ui.BOTON_TEXTO, v -> Ui.confirmar(this, "¿Borrar esta percepción?",
                     "Desaparecerá del mapa.", "Borrar", () -> {
-                        repo.borrarPercepcion(p.id);
-                        pintar();
+                        repo.borrarPercepcion(p.id, Ui.hecho(this, this::pintar));
                     })).setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         }

@@ -33,7 +33,7 @@ public class CuentaActivity extends AppCompatActivity {
         id.setGravity(Gravity.CENTER_HORIZONTAL);
         int p = Ui.dp(this, 20);
         id.setPadding(p, p, p, p);
-        Ui.texto(id, "Tu ID para el punto de reparto", 14, false, R.color.tinta_2);
+        Ui.texto(id, u.esTrabajador() ? "Tu ID de trabajador municipal" : "Tu ID para el punto de reparto", 14, false, R.color.tinta_2);
         TextView t = Ui.texto(id, u.id, 34, true, R.color.primario);
         t.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         t.setBackgroundResource(R.drawable.fondo_codigo);
@@ -51,14 +51,20 @@ public class CuentaActivity extends AppCompatActivity {
             Toast.makeText(this, "Sesión cerrada", Toast.LENGTH_SHORT).show();
             finish();
         });
+        if (u.esTrabajador()) {
+            Ui.nota(c, "Tu cuenta de trabajador la gestiona el ayuntamiento: para darla de baja, habla con tu servicio.");
+            return;
+        }
         Ui.boton(c, "Borrar mi cuenta", Ui.BOTON_TEXTO, v -> Ui.confirmar(this, "¿Borrar tu cuenta?",
                 "Se borrarán tu cuenta, tus percepciones y tu historial. Perderás "
                         + (cuenta == null ? 0 : cuenta.puntos) + " puntos sin canjear. No se puede deshacer.",
                 "Borrar cuenta", () -> {
-                    ServicioEscuharBeacons.detener(this);
-                    repo.borrarCuenta();
-                    Toast.makeText(this, "Cuenta borrada", Toast.LENGTH_SHORT).show();
-                    finish();
+                    // Si tiene un sensor prestado, el servidor no deja: primero hay que devolverlo
+                    repo.borrarCuenta(Ui.hecho(this, () -> {
+                        ServicioEscuharBeacons.detener(this);
+                        Toast.makeText(this, "Cuenta borrada", Toast.LENGTH_SHORT).show();
+                        finish();
+                    }));
                 }));
     }
 }

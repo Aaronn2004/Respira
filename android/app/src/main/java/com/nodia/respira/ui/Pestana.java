@@ -39,6 +39,7 @@ public abstract class Pestana extends Fragment {
     public void onStart() {
         super.onStart();
         repo.observar(alCambiar);
+        repo.refrescar();      // como mucho cada 30 s: cuenta, puntos, regalos y percepciones
         repintar();
     }
 

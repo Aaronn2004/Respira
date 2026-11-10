@@ -4,19 +4,19 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,11 +27,18 @@ import java.util.Set;
 // ==============================================================
 // Repositorio: único punto de acceso a los datos de la app.
 //
-// HOY: todo es de demostración y se guarda en SharedPreferences
-// (como JSON), igual que el prototipo. Las cuentas, préstamos,
-// puntos y canjes "simulan" lo que en la versión real estará en el
-// servidor. Cuando exista la API, solo cambia ESTA clase: las
-// pantallas no saben de dónde salen los datos.
+// Todo lo que se comparte vive en el SERVIDOR (API de Respira):
+// cuentas y sesión, sensor prestado, puntos, regalos, canjes,
+// percepciones y zonas. Aquí se guarda una copia (caché) para que
+// la app se abra al momento y se vea algo sin conexión.
+//
+// Solo en este móvil: favoritos, alertas, la bienvenida y el
+// recorrido en curso.
+//
+//   - Las lecturas (usuario(), cuenta(), regalos()…) devuelven la caché.
+//   - refrescar() la pone al día y avisa a las pantallas (observar).
+//   - Lo que cambia algo en el servidor (iniciar sesión, canjear,
+//     publicar…) responde por callback (Hecho) en el hilo principal.
 // ==============================================================
 public final class Repositorio {
 
@@ -40,55 +47,60 @@ public final class Repositorio {
         public int puntos;
         public final List<Movimiento> historial = new ArrayList<>();
         public final List<Canje> canjes = new ArrayList<>();
+        public int hoyMin, hoyMinParque, hoyDescartados, hoyPuntos;
+        // reglas de hoy (para el texto «Cómo se ganan»)
+        public int minPorPunto = 5, multParque = 2, maxDia = 100;
     }
 
-    public static class Prestamo {
-        public final String usuarioId;
-        public final String estado; // prestado | devuelto | disponible
+    // Resultado de una operación con el servidor (llega en el hilo principal)
+    public interface Hecho<T> {
+        void ok(T resultado);
 
-        Prestamo(String usuarioId, String estado) {
-            this.usuarioId = usuarioId;
-            this.estado = estado;
-        }
+        // mensaje para enseñar; campos = errores de cada campo del formulario
+        void error(String mensaje, Map<String, String> campos);
     }
 
-    public static class ResultadoLogin {
-        public final Usuario usuario;
-        public final String error;
-
-        ResultadoLogin(Usuario usuario, String error) {
-            this.usuario = usuario;
-            this.error = error;
-        }
+    // Lo usa RespiraApp para enseñar la notificación de una alerta
+    public interface AvisoDeAlerta {
+        void avisar(Alerta alerta, Zona zona);
     }
 
+    public static final int MAX_PERCEPCIONES_HORA = 3;
     private static final String PREFS = "respira";
-    private static final String CLAVE = "estado_v1";
+    private static final String CLAVE = "estado_v2";
+    private static final String CLAVE_V1 = "estado_v1";
+    private static final long REFRESCO_MIN_MS = 30_000;
+    private static final long ALERTA_CADA_MS = 3_600_000;   // una misma alerta, como mucho cada hora
     private static Repositorio instancia;
 
     private final SharedPreferences prefs;
     private final Handler hiloPrincipal = new Handler(Looper.getMainLooper());
     private final List<Runnable> observadores = new ArrayList<>();
-    private final SecureRandom azar = new SecureRandom();
+    private final ApiRespira api = new ApiRespira();
 
-    private final List<Zona> zonas = DatosDemo.zonas();
+    // Zonas: las de demostración hasta que responde la API; luego, las reales
+    private final List<Zona> zonas = new ArrayList<>(DatosDemo.zonas());
+    private boolean datosReales = false;
+    private final Map<String, Double> ultimosValores = new HashMap<>();
 
-    // "servidor" simulado
-    private final List<Usuario> usuarios = new ArrayList<>();
-    private final Map<String, Prestamo> prestamos = new LinkedHashMap<>();
+    // ---------- copia de lo del servidor ----------
+    private String token;
+    private Usuario usuario;
+    private Cuenta cuenta;
+    private String sensorPrestado;            // código del préstamo en curso (o null)
     private final List<Regalo> regalos = new ArrayList<>();
-    private final Map<String, Cuenta> cuentas = new HashMap<>();
     private final List<Percepcion> percepciones = new ArrayList<>();
+    private final List<Percepcion> mias = new ArrayList<>();
+    private long ultimoRefresco;
 
-    // solo en este móvil
+    // ---------- solo en este móvil ----------
     private final Set<String> favoritos = new LinkedHashSet<>();
     private final Map<String, Alerta> alertas = new LinkedHashMap<>();
-    private String sesionId;
+    private final Map<String, Long> alertaAvisada = new HashMap<>();
     private boolean onboardingVisto;
-    private int intentosFallidos;
     private long bloqueoHasta;
     private Recorrido recorrido;
-    private int hoyMin, hoyMinParque, hoyDescartados;
+    private AvisoDeAlerta avisoDeAlerta;
 
     // --------------------------------------------------------------
     // contexto: Context --> obtener() --> Repositorio
@@ -103,18 +115,14 @@ public final class Repositorio {
     private Repositorio(Context contexto) {
         prefs = contexto.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String json = prefs.getString(CLAVE, null);
-        boolean cargado = false;
-        if (json != null) {
-            try {
+        try {
+            if (json != null) {
                 cargar(new JSONObject(json));
-                cargado = true;
-            } catch (JSONException e) {
-                limpiar();
+            } else if (prefs.getString(CLAVE_V1, null) != null) {
+                cargarV1(new JSONObject(prefs.getString(CLAVE_V1, "{}")));
             }
-        }
-        if (!cargado) {
-            sembrarDemo();
-            guardar();
+        } catch (JSONException e) {
+            Log.w("Respira", "Datos guardados no válidos: se empieza de cero", e);
         }
     }
 
@@ -142,14 +150,132 @@ public final class Repositorio {
         });
     }
 
+    public void alAvisarDeAlerta(AvisoDeAlerta a) {
+        avisoDeAlerta = a;
+    }
+
     // ==============================================================
     // Zonas, favoritos y alertas
     // ==============================================================
-    public List<Zona> zonas() {
-        return Collections.unmodifiableList(zonas);
+    public synchronized List<Zona> zonas() {
+        return Collections.unmodifiableList(new ArrayList<>(zonas));
     }
 
-    public List<Zona> parques() {
+    // --------------------------------------------------------------
+    // datosReales() --> B   (F = la API no responde: se ven los de demostración)
+    // --------------------------------------------------------------
+    public synchronized boolean datosReales() {
+        return datosReales;
+    }
+
+    // --------------------------------------------------------------
+    // actualizarZonas(): GET /zonas y, si responde, sustituye las zonas
+    // y comprueba las alertas de este móvil con los datos nuevos
+    // --------------------------------------------------------------
+    public void actualizarZonas() {
+        api.obtenerZonas(lista -> hiloPrincipal.post(() -> {
+            synchronized (this) {
+                zonas.clear();
+                zonas.addAll(lista);
+                datosReales = true;
+            }
+            comprobarAlertas();
+            cambio();
+        }), error -> Log.w("Respira", "No se pudieron leer las zonas de la API: " + error));
+    }
+
+    // --------------------------------------------------------------
+    // zonaId, magnitud, periodo --> serie() --> Serie | null (en el hilo principal)
+    // --------------------------------------------------------------
+    public void serie(String zonaId, Magnitud m, String periodo, ApiRespira.Listo<Serie> listo) {
+        api.obtenerSerie(zonaId, m, periodo, d -> hiloPrincipal.post(() -> listo.ok(d)),
+                e -> hiloPrincipal.post(() -> listo.ok(null)));
+    }
+
+    // --------------------------------------------------------------
+    // Alertas: con datos reales, si una zona que sigues cumple tu
+    // condición, se avisa (una vez por hora y alerta como mucho).
+    // Funciona mientras la app está abierta o el recorrido en marcha:
+    // sin un servicio de notificaciones push no se puede avisar con
+    // la app cerrada.
+    // --------------------------------------------------------------
+    private void comprobarAlertas() {
+        List<Alerta> saltan = new ArrayList<>();
+        List<Zona> donde = new ArrayList<>();
+        long ahora = System.currentTimeMillis();
+        synchronized (this) {
+            if (!datosReales) {
+                return;
+            }
+            for (Alerta a : alertas.values()) {
+                Zona z = zona(a.zonaId);
+                if (z == null || !Reglas.ESTADO_OK.equals(z.estado()) || !seCumple(a, z)) {
+                    continue;
+                }
+                Long antes = alertaAvisada.get(a.zonaId);
+                if (antes != null && ahora - antes < ALERTA_CADA_MS) {
+                    continue;
+                }
+                alertaAvisada.put(a.zonaId, ahora);
+                saltan.add(a);
+                donde.add(z);
+            }
+        }
+        if (avisoDeAlerta != null) {
+            for (int i = 0; i < saltan.size(); i++) {
+                avisoDeAlerta.avisar(saltan.get(i), donde.get(i));
+            }
+        }
+    }
+
+    // alerta, zona --> seCumple() --> B
+    public static boolean seCumple(Alerta a, Zona z) {
+        Double v = z.valor(a.magnitud);
+        if (v == null) {
+            return false;
+        }
+        if ("custom".equals(a.condicion)) {
+            try {
+                return v > Double.parseDouble(a.valor.replace(',', '.'));
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        Nivel n = a.magnitud.nivel(v);
+        if ("bajo".equals(a.condicion)) {
+            return n == Nivel.BAJO;
+        }
+        if ("alto".equals(a.condicion)) {
+            return n == Nivel.ALTO;
+        }
+        return n == Nivel.MEDIO || n == Nivel.ALTO;    // «medio»: medio o peor
+    }
+
+    // Último valor recibido del sensor del recorrido (pantalla «Mi sensor»)
+    public void anotarUltimoValor(String magnitud, double valor) {
+        synchronized (this) {
+            ultimosValores.put(magnitud, valor);
+        }
+        cambio();
+    }
+
+    public synchronized Double ultimoValor(String magnitud) {
+        return ultimosValores.get(magnitud);
+    }
+
+    // Las que estaban pendientes (sin red) ya han llegado al servidor
+    public void marcarPendientesEnviadas(int n) {
+        synchronized (this) {
+            if (recorrido != null) {
+                int k = Math.min(n, recorrido.pendientes);
+                recorrido.pendientes -= k;
+                recorrido.enviadas += k;
+            }
+        }
+        cambio();
+    }
+
+    public synchronized List<Zona> parques() {
         List<Zona> p = new ArrayList<>();
         for (Zona z : zonas) {
             if (z.esParque()) {
@@ -159,7 +285,7 @@ public final class Repositorio {
         return p;
     }
 
-    public Zona zona(String id) {
+    public synchronized Zona zona(String id) {
         for (Zona z : zonas) {
             if (z.id.equals(id)) {
                 return z;
@@ -169,7 +295,7 @@ public final class Repositorio {
     }
 
     // Parque (no barrio) que contiene el punto, o null
-    public Zona parqueEn(double lat, double lng) {
+    public synchronized Zona parqueEn(double lat, double lng) {
         for (Zona z : zonas) {
             if (z.esParque() && Reglas.dentro(lat, lng, z.contorno)) {
                 return z;
@@ -213,9 +339,11 @@ public final class Repositorio {
     public void guardarAlerta(Alerta a) {
         synchronized (this) {
             alertas.put(a.zonaId, a);
+            alertaAvisada.remove(a.zonaId);
             // Una alerta solo tiene sentido en un parque que sigues
             favoritos.add(a.zonaId);
         }
+        comprobarAlertas();
         cambio();
     }
 
@@ -241,194 +369,430 @@ public final class Repositorio {
     }
 
     // ==============================================================
-    // Cuenta de usuario
+    // Sesión y cuenta (servidor)
     // ==============================================================
     public synchronized Usuario usuario() {
-        if (sesionId == null) {
-            return null;
-        }
-        for (Usuario u : usuarios) {
-            if (u.id.equals(sesionId)) {
-                return u;
-            }
-        }
-        return null;
+        return usuario;
     }
 
-    public boolean haySesion() {
-        return usuario() != null;
+    public synchronized boolean haySesion() {
+        return usuario != null && token != null;
+    }
+
+    // token de la sesión (para mandar las mediciones a su nombre)
+    public synchronized String token() {
+        return token;
     }
 
     public synchronized long bloqueadoHasta() {
         return bloqueoHasta > System.currentTimeMillis() ? bloqueoHasta : 0;
     }
 
-    // --------------------------------------------------------------
-    // email, clave: Text --> iniciarSesion() --> ResultadoLogin
-    // --------------------------------------------------------------
-    public ResultadoLogin iniciarSesion(String email, String clave) {
-        ResultadoLogin r;
+    // Pasa el resultado al hilo principal
+    private <T> void enPrincipal(Hecho<T> h, T r) {
+        hiloPrincipal.post(() -> h.ok(r));
+    }
+
+    private void errorEnPrincipal(Hecho<?> h, ApiRespira.Error e) {
+        if (e.codigo == 401 && haySesion()) {
+            sesionCaducada();
+        }
+        hiloPrincipal.post(() -> h.error(e.mensaje, e.campos));
+    }
+
+    private void sesionCaducada() {
         synchronized (this) {
-            if (bloqueadoHasta() > 0) {
-                return new ResultadoLogin(null,
-                        "Has fallado " + Reglas.MAX_INTENTOS_LOGIN + " veces. Por seguridad, el acceso queda bloqueado 15 minutos.");
-            }
-            Usuario encontrado = null;
-            String m = email.trim().toLowerCase(Locale.ROOT);
-            for (Usuario u : usuarios) {
-                if (u.email.equals(m) && u.clave.equals(clave)) {
-                    encontrado = u;
-                }
-            }
-            if (encontrado == null) {
-                intentosFallidos++;
-                int quedan = Reglas.MAX_INTENTOS_LOGIN - intentosFallidos;
-                if (quedan <= 0) {
-                    bloqueoHasta = System.currentTimeMillis() + Reglas.BLOQUEO_LOGIN_MS;
-                    intentosFallidos = 0;
-                    r = new ResultadoLogin(null,
-                            "Has fallado " + Reglas.MAX_INTENTOS_LOGIN + " veces. Por seguridad, el acceso queda bloqueado 15 minutos.");
-                } else {
-                    r = new ResultadoLogin(null, "Correo o contraseña incorrectos. Te quedan "
-                            + quedan + (quedan == 1 ? " intento." : " intentos."));
-                }
-            } else {
-                intentosFallidos = 0;
-                sesionId = encontrado.id;
-                hoyMin = hoyMinParque = hoyDescartados = 0;
-                r = new ResultadoLogin(encontrado, null);
-            }
+            token = null;
+            usuario = null;
+            cuenta = null;
+            sensorPrestado = null;
+            mias.clear();
         }
         cambio();
-        return r;
+    }
+
+    private static Usuario usuarioDeJSON(JSONObject u) throws JSONException {
+        return new Usuario(u.getString("id"), u.getString("nombre"), u.getString("email"), u.optString("rol", Usuario.VECINO));
+    }
+
+    // Respuesta de POST /sesiones o /usuarios: {token, usuario}
+    private Usuario abrirSesion(String cuerpo) throws JSONException {
+        JSONObject o = new JSONObject(cuerpo);
+        Usuario u = usuarioDeJSON(o.getJSONObject("usuario"));
+        synchronized (this) {
+            token = o.getString("token");
+            usuario = u;
+            cuenta = new Cuenta();
+            bloqueoHasta = 0;
+            recorrido = null;
+            ultimoRefresco = 0;
+        }
+        refrescar(true);
+        return u;
     }
 
     // --------------------------------------------------------------
-    // nombre, email, clave: Text --> registrar() --> {campo: error} (vacío = OK)
+    // email, clave --> iniciarSesion() --> Usuario (por Hecho)
     // --------------------------------------------------------------
-    public Map<String, String> registrar(String nombre, String email, String clave, boolean acepta) {
-        Map<String, String> err = new HashMap<>();
-        String n = nombre.trim();
-        String m = email.trim().toLowerCase(Locale.ROOT);
-        synchronized (this) {
-            if (n.isEmpty()) {
-                err.put("nombre", "Elige un nombre de usuario.");
-            } else if (!Reglas.esNombreUsuario(n)) {
-                err.put("nombre", "Usa de 3 a 20 letras, números, puntos o guiones bajos, sin espacios.");
-            } else {
-                for (Usuario u : usuarios) {
-                    if (u.nombre.equalsIgnoreCase(n)) {
-                        err.put("nombre", "Ese nombre de usuario ya existe. Prueba con otro.");
-                    }
-                }
-            }
-            if (m.isEmpty()) {
-                err.put("email", "Escribe tu correo.");
-            } else if (!Reglas.esEmail(m)) {
-                err.put("email", "El correo no tiene un formato válido. Ejemplo: nombre@correo.es");
-            } else {
-                for (Usuario u : usuarios) {
-                    if (u.email.equals(m)) {
-                        err.put("email", "Ya hay una cuenta con este correo. Inicia sesión o recupera la contraseña.");
-                    }
-                }
-            }
-            if (clave.isEmpty()) {
-                err.put("clave", "Elige una contraseña.");
-            } else if (clave.length() < 8) {
-                err.put("clave", "La contraseña debe tener al menos 8 caracteres.");
-            }
-            if (!acepta) {
-                err.put("acepta", "Tienes que aceptar los términos para crear la cuenta.");
-            }
-            if (!err.isEmpty()) {
-                return err;
-            }
-            String id;
-            do {
-                id = "U-" + (10000 + azar.nextInt(89999));
-            } while (buscarUsuarioPorId(id) != null);
-            usuarios.add(new Usuario(id, n, m, clave));
-            cuentas.put(id, new Cuenta());
-            sesionId = id;
-            hoyMin = hoyMinParque = hoyDescartados = 0;
+    public void iniciarSesion(String email, String clave, Hecho<Usuario> hecho) {
+        JSONObject c = new JSONObject();
+        try {
+            c.put("email", email.trim()).put("clave", clave).put("cliente", "app");
+        } catch (JSONException ignorada) {
+            // no pasa con textos
         }
-        cambio();
-        return err;
+        api.pedir("POST", "/sesiones", c, null, new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                try {
+                    enPrincipal(hecho, abrirSesion(cuerpo));
+                    cambio();
+                } catch (JSONException e) {
+                    errorEnPrincipal(hecho, ApiRespira.error(500, ""));
+                }
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                if (e.codigo == 423) {
+                    synchronized (Repositorio.this) {
+                        bloqueoHasta = System.currentTimeMillis() + Reglas.BLOQUEO_LOGIN_MS;
+                    }
+                    guardar();
+                }
+                errorEnPrincipal(hecho, e);
+            }
+        });
     }
 
-    private Usuario buscarUsuarioPorId(String id) {
-        for (Usuario u : usuarios) {
-            if (u.id.equals(id)) {
-                return u;
-            }
+    // --------------------------------------------------------------
+    // nombre, email, clave, acepta --> registrar() --> Usuario (deja la sesión abierta)
+    // Errores por campo: nombre, email, clave, acepta
+    // --------------------------------------------------------------
+    public void registrar(String nombre, String email, String clave, boolean acepta, Hecho<Usuario> hecho) {
+        JSONObject c = new JSONObject();
+        try {
+            c.put("nombre", nombre.trim()).put("email", email.trim()).put("clave", clave).put("acepta", acepta);
+        } catch (JSONException ignorada) {
+            // no pasa con textos
         }
-        return null;
+        api.pedir("POST", "/usuarios", c, null, new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                try {
+                    enPrincipal(hecho, abrirSesion(cuerpo));
+                    cambio();
+                } catch (JSONException e) {
+                    errorEnPrincipal(hecho, ApiRespira.error(500, ""));
+                }
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                errorEnPrincipal(hecho, e);
+            }
+        });
+    }
+
+    // Enlace para crear una contraseña nueva (llega por correo). La
+    // respuesta es la misma exista o no la cuenta.
+    public void recuperar(String email, Hecho<Void> hecho) {
+        JSONObject c = new JSONObject();
+        try {
+            c.put("email", email.trim());
+        } catch (JSONException ignorada) {
+            // no pasa
+        }
+        api.pedir("POST", "/recuperaciones", c, null, respuestaVacia(hecho));
+    }
+
+    private ApiRespira.Respuesta respuestaVacia(Hecho<Void> hecho) {
+        return new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                enPrincipal(hecho, null);
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                errorEnPrincipal(hecho, e);
+            }
+        };
     }
 
     public void cerrarSesion() {
+        String t;
         synchronized (this) {
-            sesionId = null;
+            t = token;
             recorrido = null;
-            hoyMin = hoyMinParque = hoyDescartados = 0;
         }
-        cambio();
+        if (t != null) {
+            api.pedir("DELETE", "/sesiones", null, t, new ApiRespira.Respuesta() {
+                @Override
+                public void ok(String cuerpo) {
+                    // nada más que hacer
+                }
+
+                @Override
+                public void error(ApiRespira.Error e) {
+                    // sin red: la sesión caduca sola en el servidor
+                }
+            });
+        }
+        sesionCaducada();
     }
 
-    public void borrarCuenta() {
+    // Borra la cuenta en el servidor (no se puede con un sensor prestado)
+    public void borrarCuenta(Hecho<Void> hecho) {
+        api.pedir("DELETE", "/yo", null, token(), new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                sesionCaducada();
+                enPrincipal(hecho, null);
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                errorEnPrincipal(hecho, e);
+            }
+        });
+    }
+
+    // --------------------------------------------------------------
+    // refrescar(forzar): pone al día la caché (cuenta, préstamo, regalos,
+    // percepciones). Sin forzar, como mucho cada 30 s.
+    // --------------------------------------------------------------
+    public void refrescar() {
+        refrescar(false);
+    }
+
+    public void refrescar(boolean forzar) {
+        final String t;
         synchronized (this) {
-            Usuario u = usuario();
-            if (u == null) {
+            long ahora = System.currentTimeMillis();
+            if (!forzar && ahora - ultimoRefresco < REFRESCO_MIN_MS) {
                 return;
             }
-            Iterator<Percepcion> it = percepciones.iterator();
-            while (it.hasNext()) {
-                if (u.id.equals(it.next().autorId)) {
-                    it.remove();
+            ultimoRefresco = ahora;
+            t = token;
+        }
+        api.pedir("GET", "/percepciones", null, t, new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                try {
+                    List<Percepcion> l;
+                    synchronized (Repositorio.this) {
+                        l = percepcionesDeJSON(new JSONArray(cuerpo));
+                        percepciones.clear();
+                        percepciones.addAll(l);
+                    }
+                    cambio();
+                } catch (JSONException e) {
+                    Log.w("Respira", "percepciones: " + e);
                 }
             }
-            usuarios.remove(u);
-            cuentas.remove(u.id);
-            sesionId = null;
-            recorrido = null;
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                Log.w("Respira", "percepciones: " + e.mensaje);
+            }
+        });
+        api.pedir("GET", "/regalos", null, null, new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                try {
+                    JSONArray a = new JSONArray(cuerpo);
+                    List<Regalo> l = new ArrayList<>();
+                    for (int i = 0; i < a.length(); i++) {
+                        JSONObject g = a.getJSONObject(i);
+                        l.add(new Regalo(g.getString("id"), g.getString("nombre"), g.getInt("coste"), g.getInt("stock")));
+                    }
+                    synchronized (Repositorio.this) {
+                        regalos.clear();
+                        regalos.addAll(l);
+                    }
+                    cambio();
+                } catch (JSONException e) {
+                    Log.w("Respira", "regalos: " + e);
+                }
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                Log.w("Respira", "regalos: " + e.mensaje);
+            }
+        });
+        if (t == null) {
+            return;
         }
-        cambio();
+        api.pedir("GET", "/yo", null, t, new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                try {
+                    JSONObject o = new JSONObject(cuerpo);
+                    Usuario u = usuarioDeJSON(o.getJSONObject("usuario"));
+                    Cuenta c = o.has("cuenta") ? cuentaDeJSON(o.getJSONObject("cuenta")) : new Cuenta();
+                    JSONObject p = o.optJSONObject("prestamo");
+                    synchronized (Repositorio.this) {
+                        if (!t.equals(token)) {
+                            return;           // mientras tanto se cerró la sesión
+                        }
+                        usuario = u;
+                        cuenta = c;
+                        sensorPrestado = p == null ? null : p.optString("codigo", null);
+                    }
+                    cambio();
+                } catch (JSONException e) {
+                    Log.w("Respira", "yo: " + e);
+                }
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                if (e.codigo == 401) {
+                    sesionCaducada();
+                }
+            }
+        });
+        api.pedir("GET", "/yo/percepciones", null, t, new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                try {
+                    synchronized (Repositorio.this) {
+                        List<Percepcion> l = percepcionesDeJSON(new JSONArray(cuerpo));
+                        mias.clear();
+                        mias.addAll(l);
+                    }
+                    cambio();
+                } catch (JSONException e) {
+                    Log.w("Respira", "mis percepciones: " + e);
+                }
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                Log.w("Respira", "mis percepciones: " + e.mensaje);
+            }
+        });
+    }
+
+    // ---------- JSON del servidor --> modelo de la app ----------
+
+    // 'YYYY-MM-DD' --> '6 nov'
+    static String fechaCorta(String iso) {
+        try {
+            LocalDate d = LocalDate.parse(iso.substring(0, 10));
+            String[] m = {"ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"};
+            return d.getDayOfMonth() + " " + m[d.getMonthValue() - 1];
+        } catch (Exception e) {
+            return iso;
+        }
+    }
+
+    private static Cuenta cuentaDeJSON(JSONObject o) throws JSONException {
+        Cuenta c = new Cuenta();
+        c.puntos = o.getInt("puntos");
+        JSONObject h = o.getJSONObject("hoy");
+        c.hoyMin = h.getInt("minutos");
+        c.hoyMinParque = h.getInt("minutos_parque");
+        c.hoyDescartados = h.getInt("descartados");
+        c.hoyPuntos = h.getInt("puntos");
+        JSONObject r = o.optJSONObject("reglas");
+        if (r != null) {
+            c.minPorPunto = r.getInt("min");
+            c.multParque = r.getInt("mult");
+            c.maxDia = r.getInt("max");
+        }
+        JSONArray hist = o.getJSONArray("historial");
+        for (int i = 0; i < hist.length(); i++) {
+            JSONObject m = hist.getJSONObject(i);
+            String rev = m.isNull("revision") ? null : m.getString("revision");
+            String razon = m.isNull("razon") ? null : m.getString("razon");
+            String nota = "anulado".equals(rev) ? "Anulado" + (razon == null ? "" : ": " + razon)
+                    : "pend".equals(rev) ? "En revisión: el ayuntamiento lo está comprobando" : razon;
+            c.historial.add(new Movimiento(fechaCorta(m.getString("fecha")), m.getInt("minutos"),
+                    m.getInt("minutos_parque"), m.getInt("descartados"), m.getInt("puntos"),
+                    m.isNull("canje") ? null : m.getString("canje"), nota));
+        }
+        JSONArray cj = o.getJSONArray("canjes");
+        for (int i = 0; i < cj.length(); i++) {
+            JSONObject x = cj.getJSONObject(i);
+            c.canjes.add(new Canje(x.getString("codigo"), x.getString("regalo"), fechaCorta(x.getString("fecha")),
+                    fechaCorta(x.getString("caduca")), x.getString("estado")));
+        }
+        return c;
+    }
+
+    // (llamar con el monitor de this: usa el usuario de la sesión)
+    private Percepcion percepcionDeJSON(JSONObject p) throws JSONException {
+        long cuando;
+        try {
+            cuando = Instant.parse(p.getString("creada")).toEpochMilli();
+        } catch (Exception e) {
+            cuando = System.currentTimeMillis() - p.optInt("hace_min", 0) * 60_000L;
+        }
+        String autor = p.optBoolean("mia", false) && usuario != null ? usuario.id : null;
+        return new Percepcion(p.getLong("id"), p.getString("tipo"), p.getInt("nivel"), p.getDouble("lat"),
+                p.getDouble("lng"), cuando, p.getString("direccion"), autor);
+    }
+
+    private List<Percepcion> percepcionesDeJSON(JSONArray a) throws JSONException {
+        List<Percepcion> l = new ArrayList<>();
+        for (int i = 0; i < a.length(); i++) {
+            l.add(percepcionDeJSON(a.getJSONObject(i)));
+        }
+        return l;
     }
 
     // ==============================================================
-    // Sensor (préstamo por código RSP-XXXX)
+    // Sensor y recorrido
     // ==============================================================
 
+    // código del préstamo en curso de la cuenta (o null)
+    public synchronized String sensorPrestado() {
+        return sensorPrestado;
+    }
+
     // --------------------------------------------------------------
-    // codigo: Text, conRed: B --> errorCodigo() --> Text | null
+    // codigo, conRed --> comprobarSensor() --> código normalizado (por Hecho)
+    // Primero lo que se puede ver en el móvil (vacío, formato, sin red);
+    // luego pregunta al servidor si ese sensor es de quien tiene la sesión.
     // --------------------------------------------------------------
-    public synchronized String errorCodigo(String codigo, boolean conRed) {
+    public void comprobarSensor(String codigo, boolean conRed, Hecho<String> hecho) {
         String c = codigo.trim().toUpperCase(Locale.ROOT);
-        Usuario u = usuario();
-        if (c.isEmpty()) {
-            return "Escribe el código que lleva impreso el sensor.";
+        String local = c.isEmpty() ? "Escribe el código que lleva impreso el sensor."
+                : !Reglas.esCodigoSensor(c) ? "Formato no válido: es RSP- seguido de 4 letras o números. Ejemplo: RSP-4F7K."
+                : !conRed ? "Sin conexión no podemos comprobar el código. Inténtalo cuando tengas internet."
+                : !haySesion() ? "Inicia sesión para usar un sensor." : null;
+        if (local != null) {
+            Map<String, String> campos = new HashMap<>();
+            campos.put("codigo", local);
+            hiloPrincipal.post(() -> hecho.error(local, campos));
+            return;
         }
-        if (!Reglas.esCodigoSensor(c)) {
-            return "Formato no válido: es RSP- seguido de 4 letras o números. Ejemplo: RSP-4F7K.";
+        JSONObject cuerpo = new JSONObject();
+        try {
+            cuerpo.put("codigo", c);
+        } catch (JSONException ignorada) {
+            // no pasa
         }
-        if (!conRed) {
-            return "Sin conexión no podemos comprobar el código. Inténtalo cuando tengas internet.";
-        }
-        Prestamo p = prestamos.get(c);
-        if (p == null) {
-            return "No existe ningún sensor con el código " + c + ". Revisa que lo has copiado bien.";
-        }
-        if ("devuelto".equals(p.estado)) {
-            return "El sensor " + c + " ya se devolvió. Pide uno nuevo en el punto de reparto.";
-        }
-        if ("disponible".equals(p.estado)) {
-            return "El sensor " + c + " no está prestado a nadie. Pide en el punto de reparto que lo registren con tu ID "
-                    + (u == null ? "" : u.id) + ".";
-        }
-        if (u == null || !u.id.equals(p.usuarioId)) {
-            return "El sensor " + c + " está prestado a otra persona. Comprueba el código o pregunta en el punto de reparto.";
-        }
-        return null;
+        api.pedir("POST", "/yo/sensor", cuerpo, token(), new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String texto) {
+                String cod = c;
+                try {
+                    cod = new JSONObject(texto).getString("codigo");
+                } catch (JSONException ignorada) {
+                    // se queda el que escribió
+                }
+                enPrincipal(hecho, cod);
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                errorEnPrincipal(hecho, e);
+            }
+        });
     }
 
     public synchronized Recorrido recorrido() {
@@ -438,15 +802,16 @@ public final class Repositorio {
     public void iniciarRecorrido(String codigo) {
         synchronized (this) {
             recorrido = new Recorrido(codigo.trim().toUpperCase(Locale.ROOT), hora(new Date()));
+            ultimosValores.clear();
         }
         cambio();
     }
 
     // --------------------------------------------------------------
     // Llega una medición NUEVA del sensor (la llama el servicio BLE).
-    // enParque: B, enviada: B
-    // Minutos válidos: el tiempo desde la anterior, si son <= 15 min
-    // (si el sensor estuvo parado o lejos, ese rato no cuenta).
+    // Los minutos y los puntos los cuenta el servidor: aquí solo se
+    // lleva la cuenta de enviadas/pendientes y se pide el «hoy» al
+    // servidor de vez en cuando.
     // --------------------------------------------------------------
     public void registrarMedicion(boolean enParque, boolean enviada) {
         synchronized (this) {
@@ -454,17 +819,6 @@ public final class Repositorio {
                 return;
             }
             long ahora = System.currentTimeMillis();
-            if (recorrido.ultimaMs > 0) {
-                int min = (int) ((ahora - recorrido.ultimaMs) / 60_000L);
-                if (min <= 15) {
-                    hoyMin += min;
-                    if (enParque) {
-                        hoyMinParque += min;
-                    }
-                } else {
-                    hoyDescartados += min;
-                }
-            }
             recorrido.estado = Recorrido.ACTIVO;
             recorrido.ultimaMs = ahora;
             recorrido.ultima = hora(new Date(ahora));
@@ -474,6 +828,7 @@ public final class Repositorio {
                 recorrido.pendientes++;
             }
         }
+        refrescar(false);
         cambio();
     }
 
@@ -483,6 +838,7 @@ public final class Repositorio {
                 recorrido.estado = Recorrido.TERMINADO;
             }
         }
+        refrescar(true);
         cambio();
     }
 
@@ -493,24 +849,22 @@ public final class Repositorio {
         cambio();
     }
 
+    // {minutos válidos, en parques, descartados} de hoy (los calcula el servidor)
     public synchronized int[] hoy() {
-        return new int[]{hoyMin, hoyMinParque, hoyDescartados};
+        return cuenta == null ? new int[]{0, 0, 0} : new int[]{cuenta.hoyMin, cuenta.hoyMinParque, cuenta.hoyDescartados};
     }
 
     // ==============================================================
     // Puntos, regalos y canjes
     // ==============================================================
     public synchronized Cuenta cuenta() {
-        Usuario u = usuario();
-        if (u == null) {
+        if (usuario == null) {
             return null;
         }
-        Cuenta c = cuentas.get(u.id);
-        if (c == null) {
-            c = new Cuenta();
-            cuentas.put(u.id, c);
+        if (cuenta == null) {
+            cuenta = new Cuenta();
         }
-        return c;
+        return cuenta;
     }
 
     public synchronized List<Regalo> regalos() {
@@ -518,78 +872,36 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // regaloId: Text --> canjear() --> Canje | null (sin saldo o sin stock)
+    // regaloId --> canjear() --> Canje (por Hecho). El servidor comprueba
+    // el saldo y las existencias y resta los puntos.
     // --------------------------------------------------------------
-    public Canje canjear(String regaloId) {
-        Canje canje = null;
-        synchronized (this) {
-            Cuenta c = cuenta();
-            Regalo g = null;
-            for (Regalo r : regalos) {
-                if (r.id.equals(regaloId)) {
-                    g = r;
+    public void canjear(String regaloId, Hecho<Canje> hecho) {
+        JSONObject c = new JSONObject();
+        try {
+            c.put("regalo", regaloId);
+        } catch (JSONException ignorada) {
+            // no pasa
+        }
+        api.pedir("POST", "/canjes", c, token(), new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                try {
+                    JSONObject x = new JSONObject(cuerpo);
+                    Canje k = new Canje(x.getString("codigo"), x.getString("regalo"), fechaCorta(x.getString("fecha")),
+                            fechaCorta(x.getString("caduca")), x.getString("estado"));
+                    refrescar(true);
+                    enPrincipal(hecho, k);
+                } catch (JSONException e) {
+                    errorEnPrincipal(hecho, ApiRespira.error(500, ""));
                 }
             }
-            if (c == null || g == null || g.stock <= 0 || c.puntos < g.coste) {
-                return null;
-            }
-            c.puntos -= g.coste;
-            g.stock--;
-            Date hoy = new Date();
-            canje = new Canje(nuevoCodigo("CJ-"), g.nombre, fecha(hoy), fecha(sumarDias(hoy, 7)), "pendiente");
-            c.canjes.add(0, canje);
-            c.historial.add(0, new Movimiento(fecha(hoy), 0, 0, 0, -g.coste, g.nombre));
-        }
-        cambio();
-        return canje;
-    }
 
-    // --------------------------------------------------------------
-    // Cierre del día (lo hará el servidor cada noche).
-    // cerrarDia() --> puntos ganados | -1 si no hay minutos válidos
-    // --------------------------------------------------------------
-    public int cerrarDia() {
-        int pts;
-        synchronized (this) {
-            Cuenta c = cuenta();
-            if (c == null || hoyMin == 0) {
-                return -1;
+            @Override
+            public void error(ApiRespira.Error e) {
+                refrescar(true);
+                errorEnPrincipal(hecho, e);
             }
-            pts = Reglas.puntosDelDia(hoyMin, hoyMinParque);
-            c.puntos += pts;
-            c.historial.add(0, new Movimiento(fecha(new Date()), hoyMin, hoyMinParque, hoyDescartados, pts, null));
-            hoyMin = hoyMinParque = hoyDescartados = 0;
-        }
-        cambio();
-        return pts;
-    }
-
-    // Demo: el punto de reparto presta RSP-9C2D a la cuenta abierta
-    public String simularPrestamo() {
-        String codigo = "RSP-9C2D";
-        synchronized (this) {
-            Usuario u = usuario();
-            if (u == null) {
-                return null;
-            }
-            prestamos.put(codigo, new Prestamo(u.id, "prestado"));
-        }
-        cambio();
-        return codigo;
-    }
-
-    // Demo: suma minutos como si se hubiera paseado con el sensor
-    public void simularPaseo(int minutos, int enParque) {
-        synchronized (this) {
-            hoyMin += minutos;
-            hoyMinParque += enParque;
-            if (recorrido != null && recorrido.enCurso()) {
-                recorrido.estado = Recorrido.ACTIVO;
-                recorrido.enviadas += minutos / 2;
-                recorrido.ultima = hora(new Date());
-            }
-        }
-        cambio();
+        });
     }
 
     // ==============================================================
@@ -607,22 +919,16 @@ public final class Repositorio {
     }
 
     public synchronized List<Percepcion> misPercepciones() {
-        Usuario u = usuario();
-        List<Percepcion> l = new ArrayList<>();
-        if (u != null) {
-            for (Percepcion p : percepciones) {
-                if (u.id.equals(p.autorId)) {
-                    l.add(0, p);
-                }
-            }
-        }
-        return l;
+        return usuario == null ? new ArrayList<>() : new ArrayList<>(mias);
     }
-
-    public static final int MAX_PERCEPCIONES_HORA = 3;
 
     public synchronized Percepcion percepcion(long id) {
         for (Percepcion p : percepciones) {
+            if (p.id == id) {
+                return p;
+            }
+        }
+        for (Percepcion p : mias) {
             if (p.id == id) {
                 return p;
             }
@@ -632,77 +938,90 @@ public final class Repositorio {
 
     // Solo quien la publicó puede editarla o borrarla
     public synchronized boolean esMia(Percepcion p) {
-        Usuario u = usuario();
-        return p != null && u != null && u.id.equals(p.autorId);
+        return p != null && usuario != null && usuario.id.equals(p.autorId);
     }
 
-    // --------------------------------------------------------------
-    // tipo, nivel, lat, lng, direccion --> nuevaPercepcion() --> V/F
-    // F si no hay sesión o ya ha publicado 3 en la última hora
-    // --------------------------------------------------------------
-    public boolean nuevaPercepcion(String tipo, int nivel, double lat, double lng, String direccion) {
-        synchronized (this) {
-            Usuario u = usuario();
-            if (u == null) {
-                return false;
-            }
-            long ahora = System.currentTimeMillis();
-            int enLaHora = 0;
-            for (Percepcion p : percepciones) {
-                if (u.id.equals(p.autorId) && p.cuando >= ahora - 3_600_000L) {
-                    enLaHora++;
-                }
-            }
-            if (enLaHora >= MAX_PERCEPCIONES_HORA) {
-                return false;
-            }
-            percepciones.add(new Percepcion(ahora, tipo, nivel, lat, lng, ahora, direccion, u.id));
-        }
-        cambio();
-        return true;
-    }
-
-    // --------------------------------------------------------------
-    // id, tipo, nivel --> editarPercepcion() --> V/F
-    // Cambia tipo y nivel; conserva lugar, hora y autor. Solo la propia.
-    // --------------------------------------------------------------
-    public boolean editarPercepcion(long id, String tipo, int nivel) {
-        synchronized (this) {
-            for (int i = 0; i < percepciones.size(); i++) {
-                Percepcion p = percepciones.get(i);
-                if (p.id == id) {
-                    if (!esMia(p)) {
-                        return false;
+    private ApiRespira.Respuesta respuestaPercepcion(Hecho<Percepcion> hecho) {
+        return new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                try {
+                    Percepcion p;
+                    synchronized (Repositorio.this) {
+                        p = percepcionDeJSON(new JSONObject(cuerpo));
                     }
-                    percepciones.set(i, new Percepcion(p.id, tipo, nivel, p.lat, p.lng, p.cuando, p.direccion, p.autorId));
-                    break;
+                    refrescar(true);
+                    enPrincipal(hecho, p);
+                } catch (JSONException e) {
+                    errorEnPrincipal(hecho, ApiRespira.error(500, ""));
                 }
             }
-        }
-        cambio();
-        return true;
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                errorEnPrincipal(hecho, e);
+            }
+        };
     }
 
-    public void borrarPercepcion(long id) {
-        synchronized (this) {
-            Iterator<Percepcion> it = percepciones.iterator();
-            while (it.hasNext()) {
-                Percepcion p = it.next();
-                if (p.id == id && esMia(p)) {
-                    it.remove();
-                }
-            }
+    // --------------------------------------------------------------
+    // tipo, nivel, lat, lng, direccion --> nuevaPercepcion() --> Percepcion
+    // El servidor limita a 3 por hora y cuenta.
+    // --------------------------------------------------------------
+    public void nuevaPercepcion(String tipo, int nivel, double lat, double lng, String direccion, Hecho<Percepcion> hecho) {
+        JSONObject c = new JSONObject();
+        try {
+            c.put("tipo", tipo).put("nivel", nivel).put("lat", lat).put("lng", lng).put("direccion", direccion);
+        } catch (JSONException ignorada) {
+            // no pasa
         }
-        cambio();
+        api.pedir("POST", "/percepciones", c, token(), respuestaPercepcion(hecho));
+    }
+
+    // Cambia tipo y nivel; conserva lugar, hora y autor. Solo la propia.
+    public void editarPercepcion(long id, String tipo, int nivel, Hecho<Percepcion> hecho) {
+        JSONObject c = new JSONObject();
+        try {
+            c.put("tipo", tipo).put("nivel", nivel);
+        } catch (JSONException ignorada) {
+            // no pasa
+        }
+        api.pedir("PUT", "/percepciones/" + id, c, token(), respuestaPercepcion(hecho));
+    }
+
+    public void borrarPercepcion(long id, Hecho<Void> hecho) {
+        api.pedir("DELETE", "/percepciones/" + id, null, token(), new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                synchronized (Repositorio.this) {
+                    percepciones.removeIf(p -> p.id == id);
+                    mias.removeIf(p -> p.id == id);
+                }
+                cambio();
+                refrescar(true);
+                enPrincipal(hecho, null);
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                errorEnPrincipal(hecho, e);
+            }
+        });
     }
 
     // ==============================================================
-    // Demo: volver a empezar
+    // Borrar lo guardado en este móvil (favoritos, alertas, sesión…)
     // ==============================================================
-    public void reiniciarDemo() {
+    public void olvidarEsteMovil() {
+        cerrarSesion();
         synchronized (this) {
-            limpiar();
-            sembrarDemo();
+            favoritos.clear();
+            alertas.clear();
+            alertaAvisada.clear();
+            onboardingVisto = false;
+            bloqueoHasta = 0;
+            percepciones.clear();
+            regalos.clear();
         }
         cambio();
     }
@@ -710,130 +1029,43 @@ public final class Repositorio {
     // ==============================================================
     // Utilidades privadas
     // ==============================================================
-    private String nuevoCodigo(String prefijo) {
-        String abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        StringBuilder sb = new StringBuilder(prefijo);
-        for (int i = 0; i < 4; i++) {
-            sb.append(abc.charAt(azar.nextInt(abc.length())));
-        }
-        return sb.toString();
-    }
-
     private static String hora(Date d) {
         return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(d);
     }
 
-    private static String fecha(Date d) {
-        return new SimpleDateFormat("d MMM", new Locale("es", "ES")).format(d);
-    }
-
-    private static Date sumarDias(Date d, int dias) {
-        Calendar c = Calendar.getInstance();
-        c.setTime(d);
-        c.add(Calendar.DAY_OF_YEAR, dias);
-        return c.getTime();
-    }
-
-    private void limpiar() {
-        usuarios.clear();
-        prestamos.clear();
-        regalos.clear();
-        cuentas.clear();
-        percepciones.clear();
-        favoritos.clear();
-        alertas.clear();
-        sesionId = null;
-        onboardingVisto = false;
-        intentosFallidos = 0;
-        bloqueoHasta = 0;
-        recorrido = null;
-        hoyMin = hoyMinParque = hoyDescartados = 0;
-    }
-
-    private void sembrarDemo() {
-        usuarios.add(new Usuario("U-48213", "lucia", "lucia@correo.es", "Respira2026"));
-        usuarios.add(new Usuario("U-11902", "marcos", "marcos@correo.es", "Marcos2026"));
-
-        prestamos.put("RSP-4F7K", new Prestamo("U-48213", "prestado"));
-        prestamos.put("RSP-2B9Q", new Prestamo("U-11902", "prestado"));
-        prestamos.put("RSP-7H3M", new Prestamo("U-48213", "devuelto"));
-        prestamos.put("RSP-5K8P", new Prestamo(null, "disponible"));
-
-        regalos.add(new Regalo("g1", "Bolsa de tela", 100, 0));
-        regalos.add(new Regalo("g2", "Gorra Respira", 150, 12));
-        regalos.add(new Regalo("g3", "Cantimplora", 250, 8));
-        regalos.add(new Regalo("g4", "Mochila del ayuntamiento", 600, 3));
-
-        Cuenta lucia = new Cuenta();
-        lucia.puntos = 340;
-        lucia.historial.add(new Movimiento("1 nov", 120, 40, 12, 32, null));
-        lucia.historial.add(new Movimiento("31 oct", 310, 150, 0, 91, null));
-        lucia.historial.add(new Movimiento("30 oct", 0, 0, 0, -150, "Gorra Respira"));
-        lucia.historial.add(new Movimiento("28 oct", 95, 20, 30, 23, null));
-        lucia.canjes.add(new Canje("CJ-8R2T", "Gorra Respira", "30 oct", "6 nov", "pendiente"));
-        cuentas.put("U-48213", lucia);
-
-        Cuenta marcos = new Cuenta();
-        marcos.puntos = 120;
-        marcos.historial.add(new Movimiento("1 nov", 180, 60, 0, 48, null));
-        marcos.historial.add(new Movimiento("31 oct", 240, 0, 0, 72, null));
-        cuentas.put("U-11902", marcos);
-
-        percepciones.addAll(DatosDemo.percepciones(System.currentTimeMillis()));
-    }
-
-    // ---------- JSON ----------
+    // ---------- guardar / cargar (SharedPreferences, JSON) ----------
     private synchronized void guardar() {
         try {
             JSONObject o = new JSONObject();
-            JSONArray us = new JSONArray();
-            for (Usuario u : usuarios) {
-                us.put(new JSONObject().put("id", u.id).put("nombre", u.nombre)
-                        .put("email", u.email).put("clave", u.clave));
+            o.put("token", token == null ? JSONObject.NULL : token);
+            if (usuario != null) {
+                o.put("usuario", new JSONObject().put("id", usuario.id).put("nombre", usuario.nombre)
+                        .put("email", usuario.email).put("rol", usuario.rol));
             }
-            o.put("usuarios", us);
-
-            JSONObject pr = new JSONObject();
-            for (Map.Entry<String, Prestamo> e : prestamos.entrySet()) {
-                pr.put(e.getKey(), new JSONObject()
-                        .put("usuario", e.getValue().usuarioId == null ? JSONObject.NULL : e.getValue().usuarioId)
-                        .put("estado", e.getValue().estado));
-            }
-            o.put("prestamos", pr);
-
-            JSONArray rg = new JSONArray();
-            for (Regalo g : regalos) {
-                rg.put(new JSONObject().put("id", g.id).put("nombre", g.nombre)
-                        .put("coste", g.coste).put("stock", g.stock));
-            }
-            o.put("regalos", rg);
-
-            JSONObject cs = new JSONObject();
-            for (Map.Entry<String, Cuenta> e : cuentas.entrySet()) {
-                Cuenta c = e.getValue();
+            if (cuenta != null) {
                 JSONArray h = new JSONArray();
-                for (Movimiento m : c.historial) {
-                    h.put(new JSONObject().put("fecha", m.fecha).put("min", m.minutos)
-                            .put("minParque", m.minutosParque).put("desc", m.descartados)
-                            .put("pts", m.puntos).put("canje", m.canje == null ? JSONObject.NULL : m.canje));
+                for (Movimiento m : cuenta.historial) {
+                    h.put(new JSONObject().put("fecha", m.fecha).put("min", m.minutos).put("minParque", m.minutosParque)
+                            .put("desc", m.descartados).put("pts", m.puntos)
+                            .put("canje", m.canje == null ? JSONObject.NULL : m.canje)
+                            .put("nota", m.nota == null ? JSONObject.NULL : m.nota));
                 }
                 JSONArray cj = new JSONArray();
-                for (Canje k : c.canjes) {
+                for (Canje k : cuenta.canjes) {
                     cj.put(new JSONObject().put("codigo", k.codigo).put("regalo", k.regalo)
                             .put("fecha", k.fecha).put("caduca", k.caduca).put("estado", k.estado));
                 }
-                cs.put(e.getKey(), new JSONObject().put("puntos", c.puntos).put("historial", h).put("canjes", cj));
+                o.put("cuenta", new JSONObject().put("puntos", cuenta.puntos).put("historial", h).put("canjes", cj)
+                        .put("hoy", new JSONArray().put(cuenta.hoyMin).put(cuenta.hoyMinParque)
+                                .put(cuenta.hoyDescartados).put(cuenta.hoyPuntos))
+                        .put("reglas", new JSONArray().put(cuenta.minPorPunto).put(cuenta.multParque).put(cuenta.maxDia)));
             }
-            o.put("cuentas", cs);
-
-            JSONArray pc = new JSONArray();
-            for (Percepcion p : percepciones) {
-                pc.put(new JSONObject().put("id", p.id).put("tipo", p.tipo).put("nivel", p.nivel)
-                        .put("lat", p.lat).put("lng", p.lng).put("cuando", p.cuando)
-                        .put("dir", p.direccion).put("autor", p.autorId == null ? JSONObject.NULL : p.autorId));
+            o.put("sensor", sensorPrestado == null ? JSONObject.NULL : sensorPrestado);
+            JSONArray rg = new JSONArray();
+            for (Regalo g : regalos) {
+                rg.put(new JSONObject().put("id", g.id).put("nombre", g.nombre).put("coste", g.coste).put("stock", g.stock));
             }
-            o.put("percepciones", pc);
-
+            o.put("regalos", rg);
             o.put("favoritos", new JSONArray(favoritos));
             JSONArray al = new JSONArray();
             for (Alerta a : alertas.values()) {
@@ -841,12 +1073,13 @@ public final class Repositorio {
                         .put("cond", a.condicion).put("valor", a.valor == null ? "" : a.valor));
             }
             o.put("alertas", al);
-
-            o.put("sesion", sesionId == null ? JSONObject.NULL : sesionId);
+            JSONObject av = new JSONObject();
+            for (Map.Entry<String, Long> e : alertaAvisada.entrySet()) {
+                av.put(e.getKey(), e.getValue());
+            }
+            o.put("alertaAvisada", av);
             o.put("onboarding", onboardingVisto);
-            o.put("intentos", intentosFallidos);
             o.put("bloqueo", bloqueoHasta);
-            o.put("hoy", new JSONArray().put(hoyMin).put(hoyMinParque).put(hoyDescartados));
             if (recorrido != null) {
                 o.put("recorrido", new JSONObject().put("codigo", recorrido.codigo).put("inicio", recorrido.inicio)
                         .put("estado", recorrido.estado).put("enviadas", recorrido.enviadas)
@@ -861,36 +1094,19 @@ public final class Repositorio {
     }
 
     private void cargar(JSONObject o) throws JSONException {
-        limpiar();
-        JSONArray us = o.getJSONArray("usuarios");
-        for (int i = 0; i < us.length(); i++) {
-            JSONObject u = us.getJSONObject(i);
-            usuarios.add(new Usuario(u.getString("id"), u.getString("nombre"), u.getString("email"), u.getString("clave")));
-        }
-        JSONObject pr = o.getJSONObject("prestamos");
-        Iterator<String> claves = pr.keys();
-        while (claves.hasNext()) {
-            String k = claves.next();
-            JSONObject p = pr.getJSONObject(k);
-            prestamos.put(k, new Prestamo(p.isNull("usuario") ? null : p.getString("usuario"), p.getString("estado")));
-        }
-        JSONArray rg = o.getJSONArray("regalos");
-        for (int i = 0; i < rg.length(); i++) {
-            JSONObject g = rg.getJSONObject(i);
-            regalos.add(new Regalo(g.getString("id"), g.getString("nombre"), g.getInt("coste"), g.getInt("stock")));
-        }
-        JSONObject cs = o.getJSONObject("cuentas");
-        claves = cs.keys();
-        while (claves.hasNext()) {
-            String k = claves.next();
-            JSONObject c = cs.getJSONObject(k);
-            Cuenta cuenta = new Cuenta();
+        token = o.isNull("token") ? null : o.getString("token");
+        JSONObject u = o.optJSONObject("usuario");
+        usuario = u == null ? null : usuarioDeJSON(u);
+        JSONObject c = o.optJSONObject("cuenta");
+        if (c != null) {
+            cuenta = new Cuenta();
             cuenta.puntos = c.getInt("puntos");
             JSONArray h = c.getJSONArray("historial");
             for (int i = 0; i < h.length(); i++) {
                 JSONObject m = h.getJSONObject(i);
                 cuenta.historial.add(new Movimiento(m.getString("fecha"), m.getInt("min"), m.getInt("minParque"),
-                        m.getInt("desc"), m.getInt("pts"), m.isNull("canje") ? null : m.getString("canje")));
+                        m.getInt("desc"), m.getInt("pts"), m.isNull("canje") ? null : m.getString("canje"),
+                        m.isNull("nota") ? null : m.getString("nota")));
             }
             JSONArray cj = c.getJSONArray("canjes");
             for (int i = 0; i < cj.length(); i++) {
@@ -898,33 +1114,31 @@ public final class Repositorio {
                 cuenta.canjes.add(new Canje(x.getString("codigo"), x.getString("regalo"), x.getString("fecha"),
                         x.getString("caduca"), x.getString("estado")));
             }
-            cuentas.put(k, cuenta);
+            JSONArray hoy = c.getJSONArray("hoy");
+            cuenta.hoyMin = hoy.getInt(0);
+            cuenta.hoyMinParque = hoy.getInt(1);
+            cuenta.hoyDescartados = hoy.getInt(2);
+            cuenta.hoyPuntos = hoy.getInt(3);
+            JSONArray r = c.getJSONArray("reglas");
+            cuenta.minPorPunto = r.getInt(0);
+            cuenta.multParque = r.getInt(1);
+            cuenta.maxDia = r.getInt(2);
         }
-        JSONArray pc = o.getJSONArray("percepciones");
-        for (int i = 0; i < pc.length(); i++) {
-            JSONObject p = pc.getJSONObject(i);
-            percepciones.add(new Percepcion(p.getLong("id"), p.getString("tipo"), p.getInt("nivel"),
-                    p.getDouble("lat"), p.getDouble("lng"), p.getLong("cuando"), p.getString("dir"),
-                    p.isNull("autor") ? null : p.getString("autor")));
+        sensorPrestado = o.isNull("sensor") ? null : o.getString("sensor");
+        JSONArray rg = o.getJSONArray("regalos");
+        for (int i = 0; i < rg.length(); i++) {
+            JSONObject g = rg.getJSONObject(i);
+            regalos.add(new Regalo(g.getString("id"), g.getString("nombre"), g.getInt("coste"), g.getInt("stock")));
         }
-        JSONArray fv = o.getJSONArray("favoritos");
-        for (int i = 0; i < fv.length(); i++) {
-            favoritos.add(fv.getString(i));
+        cargarLocales(o);
+        JSONObject av = o.optJSONObject("alertaAvisada");
+        if (av != null) {
+            JSONArray k = av.names();
+            for (int i = 0; k != null && i < k.length(); i++) {
+                alertaAvisada.put(k.getString(i), av.getLong(k.getString(i)));
+            }
         }
-        JSONArray al = o.getJSONArray("alertas");
-        for (int i = 0; i < al.length(); i++) {
-            JSONObject a = al.getJSONObject(i);
-            alertas.put(a.getString("zona"), new Alerta(a.getString("zona"), Magnitud.desdeId(a.getString("mag")),
-                    a.getString("cond"), a.getString("valor")));
-        }
-        sesionId = o.isNull("sesion") ? null : o.getString("sesion");
-        onboardingVisto = o.getBoolean("onboarding");
-        intentosFallidos = o.getInt("intentos");
-        bloqueoHasta = o.getLong("bloqueo");
-        JSONArray hoy = o.getJSONArray("hoy");
-        hoyMin = hoy.getInt(0);
-        hoyMinParque = hoy.getInt(1);
-        hoyDescartados = hoy.getInt(2);
+        bloqueoHasta = o.optLong("bloqueo", 0);
         if (o.has("recorrido")) {
             JSONObject r = o.getJSONObject("recorrido");
             recorrido = new Recorrido(r.getString("codigo"), r.getString("inicio"));
@@ -934,5 +1148,28 @@ public final class Repositorio {
             recorrido.ultima = r.getString("ultima").isEmpty() ? null : r.getString("ultima");
             recorrido.ultimaMs = r.getLong("ultimaMs");
         }
+    }
+
+    // favoritos, alertas y bienvenida (iguales en la versión 1 y la 2)
+    private void cargarLocales(JSONObject o) throws JSONException {
+        JSONArray fv = o.optJSONArray("favoritos");
+        for (int i = 0; fv != null && i < fv.length(); i++) {
+            favoritos.add(fv.getString(i));
+        }
+        JSONArray al = o.optJSONArray("alertas");
+        for (int i = 0; al != null && i < al.length(); i++) {
+            JSONObject a = al.getJSONObject(i);
+            alertas.put(a.getString("zona"), new Alerta(a.getString("zona"), Magnitud.desdeId(a.getString("mag")),
+                    a.getString("cond"), a.getString("valor")));
+        }
+        onboardingVisto = o.optBoolean("onboarding", false);
+    }
+
+    // Versión 1 (datos de demostración en el móvil): solo se conservan
+    // favoritos, alertas y la bienvenida. Las cuentas ahora son del servidor.
+    private void cargarV1(JSONObject o) throws JSONException {
+        cargarLocales(o);
+        prefs.edit().remove(CLAVE_V1).apply();
+        guardar();
     }
 }

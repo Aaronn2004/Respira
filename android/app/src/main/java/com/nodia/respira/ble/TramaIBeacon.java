@@ -105,6 +105,14 @@ public class TramaIBeacon {
         return Utilidades.bytesToIntOK(minor);
     }
 
+    // --------------------------------------------------------------
+    // getValorConSigno() --> Z   (minor como entero de 16 bits con signo:
+    // la temperatura puede ser negativa)
+    // --------------------------------------------------------------
+    public int getValorConSigno() {
+        return (short) getValorEntero();
+    }
+
     public byte[] getLosBytes() { return losBytes; }
     public byte[] getUUID() { return uuid; }
     public byte[] getMajor() { return major; }

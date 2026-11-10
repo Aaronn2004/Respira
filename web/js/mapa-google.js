@@ -5,8 +5,8 @@
      Sin clave, o si la clave falla, app.js usa el mapa SVG.
    - Las zonas del prototipo están en un lienzo de 900 x 560; aquí
      se colocan sobre Gandia con una transformación lineal. Son
-     zonas FICTICIAS de demostración: con la API real llegarán ya
-     como polígonos (GeoJSON) desde el servidor.
+     zonas de demostración; con la API (datos-api.js) cada zona trae
+     su polígono real (z.poligono) y se dibuja ese.
    - El contenedor del mapa se crea UNA vez y se reengancha tras
      cada render(): así no se crea un mapa nuevo (ni se cobra una
      carga nueva) cada vez que cambia el estado.
@@ -106,9 +106,12 @@
   // ---------------- geometría de las zonas ----------------
   const cacheContornos = {};
   function contorno(z) {
-    if (cacheContornos[z.id]) return cacheContornos[z.id];
+    const clave = z.id + (z.poligono ? ':api' : '');
+    if (cacheContornos[clave]) return cacheContornos[clave];
     let puntos;
-    if (z.rect) {
+    if (z.poligono && z.poligono.length > 2) {
+      puntos = z.poligono.map(p => ({ lat: p[0], lng: p[1] }));
+    } else if (z.rect) {
       const [x, y, w, h] = z.rect;
       puntos = [geo(x, y), geo(x + w, y), geo(x + w, y + h), geo(x, y + h)];
     } else {
@@ -125,7 +128,7 @@
       for (let i = 0; i < N; i++) { const p = path.getPointAtLength(L * i / N); puntos.push(geo(p.x, p.y)); }
       svg.remove();
     }
-    return (cacheContornos[z.id] = puntos);
+    return (cacheContornos[clave] = puntos);
   }
 
   // ---------------- dibujo ----------------
@@ -201,7 +204,8 @@
   function dibujar() {
     const { S } = R();
     const tema = document.documentElement.getAttribute('data-theme') || '';
-    const firma = [S.layer, S.mag, S.sel, S.avt, S.avf, tema].join('|');
+    const datos = window.RespiraDatos ? window.RespiraDatos.version : 0;   // se repinta al llegar datos nuevos
+    const firma = [S.layer, S.mag, S.sel, S.avt, S.avf, tema, datos].join('|');
     if (firma !== ultimaFirma) {
       ultimaFirma = firma;
       limpiar();

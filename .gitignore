@@ -22,3 +22,6 @@ web/node_modules/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---- Paquete para subir a Plesk (se genera; no va a git) ----
+_plesk/

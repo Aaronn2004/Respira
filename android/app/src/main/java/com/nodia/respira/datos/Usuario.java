@@ -1,21 +1,30 @@
 package com.nodia.respira.datos;
 
 // ==============================================================
-// Cuenta de usuario. id = "U-XXXXX": lo da en el punto de reparto.
-// OJO: en la versión real la contraseña NO se guarda en el móvil;
-// la comprueba el servidor (con hash). Aquí es una cuenta de demo.
+// Cuenta con la que se ha iniciado sesión en la app.
+//   id = "U-XXXXX" (vecinos: lo dicen en el punto de reparto) o
+//        "T-XXXX" (trabajadores municipales).
+// La contraseña NO se guarda en el móvil: la comprueba el servidor
+// (con hash) y el móvil solo guarda el token de la sesión.
 // ==============================================================
 public class Usuario {
+
+    public static final String VECINO = "vecino";
+    public static final String TRABAJADOR = "trabajador";
 
     public final String id;
     public final String nombre;
     public final String email;
-    final String clave;
+    public final String rol;
 
-    public Usuario(String id, String nombre, String email, String clave) {
+    public Usuario(String id, String nombre, String email, String rol) {
         this.id = id;
         this.nombre = nombre;
         this.email = email;
-        this.clave = clave;
+        this.rol = rol == null ? VECINO : rol;
+    }
+
+    public boolean esTrabajador() {
+        return TRABAJADOR.equals(rol);
     }
 }

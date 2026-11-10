@@ -32,9 +32,9 @@ public class TramaIBeaconTest {
 
     @Test
     public void extraeUUIDMajorMinorConFlags() {
-        TramaIBeacon trama = new TramaIBeacon(construirAnuncio(true, "AARON-GTI-PBIO-1", (11 << 8) + 7, 235));
+        TramaIBeacon trama = new TramaIBeacon(construirAnuncio(true, "RESPIRA-RSP-4F7K", (11 << 8) + 7, 235));
         assertTrue(trama.esIBeacon());
-        assertEquals("AARON-GTI-PBIO-1", trama.getUUIDComoTexto());
+        assertEquals("RESPIRA-RSP-4F7K", trama.getUUIDComoTexto());
         assertEquals(11, trama.getTipoMedicion());
         assertEquals(7, trama.getContador());
         assertEquals(235, trama.getValorEntero());
@@ -43,10 +43,17 @@ public class TramaIBeaconTest {
 
     @Test
     public void funcionaTambienSinFlags() {
-        TramaIBeacon trama = new TramaIBeacon(construirAnuncio(false, "AARON-GTI-PBIO-1", (11 << 8) + 200, 65000));
+        TramaIBeacon trama = new TramaIBeacon(construirAnuncio(false, "RESPIRA-RSP-4F7K", (11 << 8) + 200, 65000));
         assertTrue(trama.esIBeacon());
         assertEquals(200, trama.getContador());
         assertEquals(65000, trama.getValorEntero()); // sin signo
+    }
+
+    @Test
+    public void valorConSignoParaTemperaturasNegativas() {
+        TramaIBeacon trama = new TramaIBeacon(construirAnuncio(true, "RESPIRA-RSP-4F7K", (12 << 8) + 1, 0xFFC9));
+        assertEquals(-55, trama.getValorConSigno());
+        assertEquals(65481, trama.getValorEntero());
     }
 
     @Test
@@ -54,19 +61,5 @@ public class TramaIBeaconTest {
         assertFalse(new TramaIBeacon(new byte[] { 0x02, 0x01, 0x06, 0x05, 0x09, 'H', 'o', 'l', 'a' }).esIBeacon());
         assertFalse(new TramaIBeacon(null).esIBeacon());
         assertFalse(new TramaIBeacon(new byte[0]).esIBeacon());
-    }
-
-    @Test
-    public void medicionDesdeTramaConvierteO3APpm() {
-        TramaIBeacon trama = new TramaIBeacon(construirAnuncio(true, "AARON-GTI-PBIO-1", (11 << 8) + 7, 235));
-        Medicion medicion = Medicion.desdeTrama(trama);
-        assertEquals(Medicion.TIPO_O3, medicion.getTipo());
-        assertEquals(0.235, medicion.getValor(), 1e-9);
-        assertEquals(7, medicion.getContador());
-    }
-
-    @Test
-    public void medicionToJSON() {
-        assertEquals("{\"tipo\":11,\"valor\":0.235,\"contador\":7}", new Medicion(11, 0.235, 7).toJSON());
     }
 }

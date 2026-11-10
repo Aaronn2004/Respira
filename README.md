@@ -6,9 +6,19 @@ Producto de **Nodia** · Proyecto de Biometría y Medio Ambiente (GTI, UPV Gandi
 
 ```
 Respira/
+├── arduino/   Nodo sensor (SparkFun Pro nRF52840 Mini + SPEC O₃ + DHT11 + KY-037) → iBeacon
 ├── android/   Proyecto de Android Studio «Respira» (Java) → app móvil
+├── servidor/  API REST (PHP) + lógica + base de datos (MariaDB, Plesk)
 ├── web/       Proyecto de VS Code «respira» (HTML/CSS/JS) → web pública + panel municipal
+├── doc/       base_de_datos.md · servidor.md · arduino.md
 └── README.md
+
+Sensor ──iBeacon──▶ app Android ──POST /mediciones──▶ API (Plesk) ──▶ MariaDB
+                                                        │
+                    app (mapa, zona, Mi sensor) ◀──GET──┤──GET──▶ web (mapa, historial, comparar, flota)
+
+Cuentas, préstamos, puntos, regalos, canjes y percepciones: también en el servidor
+(app y web con sesión por token). Ver doc/servidor.md y doc/base_de_datos.md.
 ```
 
 ## Estado: qué es real y qué es demostración
@@ -16,27 +26,33 @@ Respira/
 | Parte | Estado |
 |---|---|
 | Mapa con Google Maps (app y web) | Real (necesita clave, ver abajo) |
-| Escaneo BLE del sensor y `POST /medicion` | Real: código del Sprint 0 (`ble/`) adaptado a servicio en primer plano |
-| Zonas, valores, cuentas, préstamos, puntos, regalos y canjes | **Demostración**: datos fijos del prototipo (app v25 / web v35), guardados en el móvil (`SharedPreferences`) o en memoria (web). Falta la API del servidor |
-| Zonas sobre Gandia | **Ficticias y aproximadas**: se reemplazarán por los polígonos que dé el servidor |
-| Alertas push | Simuladas en local (Más › Controles de la demo). Las reales irán por FCM desde el servidor |
+| Medidas del sensor (O₃, temperatura, ruido) | **Reales** (`arduino/`), sin valores simulados. Ruido en dB aproximados (KY-037 calibrado con el móvil) |
+| Sensor → app → servidor | **Real**: la app escucha el beacon de SU sensor, añade ubicación y lo envía a `POST /mediciones`; sin red, lo guarda y lo manda en lote después |
+| Zonas y sus valores (mapa, ficha de zona, historial, comparar) | **Reales** si la API responde (`GET /zonas`, `/serie`). Si no, datos de demostración **con aviso** |
+| Cuentas (app y panel), sesión y bloqueo | **Servidor**: contraseñas con hash, token de sesión, 5 fallos = 15 min de bloqueo, roles comprobados en el servidor |
+| Préstamos, sensores del panel, puntos, revisiones, regalos, canjes, trabajadores | **Servidor** (BD completa). Los puntos los calcula el servidor con las mediciones de quien lleva el sensor |
+| Percepciones (capa Comunidad) | **Servidor**: se ven en la app y en la web, 24 h, sin autor |
+| Datos de partida | Los del prototipo, cargados en la BD (`esquema.sql`, sección demo). Solo RSP-4F7K manda datos reales |
+| Zonas sobre Gandia | Las 9 de la demo (en la BD con sus coordenadas) + **Campus UPV** (rectángulo **aproximado**: compruébalo) |
+| Alertas | La app las comprueba con los datos reales al leer las zonas (con la app abierta). Sin push (FCM) no llegan con la app cerrada |
+| Favoritos y alertas | Se guardan en el móvil (no en el servidor) |
 
 ## App Android (`android/`)
 
 1. Android Studio › **Open** › `Respira/android`.
 2. Copia `android/local.properties.example` como `android/local.properties` y rellena:
    - `MAPS_API_KEY` = clave con **Maps SDK for Android** activada.
-   - `URL_SERVIDOR` = IP del PC con el servidor del Sprint 0 (misma WiFi que el móvil).
+   - `URL_SERVIDOR` = `https://ablabla.upv.edu.es/respira/api/index.php` (la API de este sprint en Plesk, ver `doc/servidor.md`).
 3. Sync Gradle y ejecuta en un móvil real (el emulador no tiene BLE).
 
 Configuración: AGP 9.4.1 · Gradle 9.6.0 · compileSdk/targetSdk 36 · minSdk 28 · Java 11. Si Android Studio pide instalar el SDK 36, acéptalo.
 
-Cuentas de prueba: `lucia@correo.es` / `Respira2026` (sensor `RSP-4F7K`) · `marcos@correo.es` / `Marcos2026`.
+Cuentas de prueba (en la BD de Plesk): `lucia@correo.es` / `Respira2026` (sensor `RSP-4F7K`) · `marcos@correo.es` / `Marcos2026` · trabajador `psanz@ayto.es` / `Trabajo2026!`. La app necesita la API: sin conexión se ve el mapa de demostración, pero no se puede entrar.
 
 Estructura del código (`app/src/main/java/com/nodia/respira/`):
 
-- `ble/` · Sprint 0: `ServicioEscuharBeacons`, `TramaIBeacon`, `Medicion`, `PeticionarioREST`, `LogicaFake`, `Utilidades`.
-- `datos/` · modelo y `Repositorio` (único punto de acceso a datos; al llegar la API solo cambia esta clase). `Reglas` es lógica pura (estados de zona, puntos, validaciones).
+- `ble/` · `ServicioEscuharBeacons` (escucha solo el UUID `RESPIRA-<código>` del sensor prestado, añade lat/lng, RSSI y portador, descarta repetidas por contador y guarda hasta 500 pendientes sin red), `TramaIBeacon`, `Medicion` (trama → JSON de la API), `LogicaFake` (`POST /mediciones`, una o en lote), `PeticionarioREST`, `Utilidades`.
+- `datos/` · modelo, `Repositorio` (único punto de acceso a datos: guarda una copia de lo del servidor y responde por callback a lo que cambia algo) y `ApiRespira` (cliente de toda la API con el token de la sesión). El mapa pide las zonas al abrirse y cada minuto (y comprueba las alertas); la ficha de zona pide su gráfica; «Mi sensor» pregunta al servidor si el sensor es tuyo y muestra el último valor de cada magnitud; Puntos, Regalos, Canjes y Mis percepciones son los del servidor. `Reglas` es lógica pura (estados de zona, validaciones).
 - `ui/` · `SplashActivity` (carga ~3 s, «Developed by Nodia»), `OnboardingActivity`, `MainActivity` con 5 pestañas (Mapa · Parques · Sensor · Puntos · Más) y el resto de pantallas.
   - `Tema` + `RespiraApp`: modo claro (por defecto) u oscuro, en Más › Modo oscuro. Colores en `values/colors.xml` y `values-night/colors.xml` (los mismos que la web). En oscuro, Google Maps usa `res/raw/mapa_oscuro.json`.
   - `TextoActivity` (guía «Qué significan los valores») y `EfectosActivity` («Efectos en la salud»), con las piezas de `Bloques` y los textos de `datos/Salud`.
@@ -47,16 +63,18 @@ Estructura del código (`app/src/main/java/com/nodia/respira/`):
 Páginas: portada (`#inicio`, con los ayuntamientos que usan Respira), mapa, comunidad, historial, comparar, cómo funciona, privacidad y panel municipal (`#acceso`).
 
 1. VS Code › **Open Folder** › `Respira/web` (o abre `respira.code-workspace`).
-2. Copia `web/js/config.example.js` como `web/js/config.js` y pon `MAPS_API_KEY` (clave con **Maps JavaScript API**). `MAP_ID` (opcional, mapa vectorial) activa el botón 3D: sin él, Google Maps no permite inclinar el mapa.
+2. Copia `web/js/config.example.js` como `web/js/config.js` y pon `MAPS_API_KEY` (clave con **Maps JavaScript API**) y `API_URL` (`https://ablabla.upv.edu.es/respira/api/index.php`). Con `API_URL`, `js/datos-api.js` pinta los datos reales; sin ella, la demo con un aviso. `MAP_ID` (opcional, mapa vectorial) activa el botón 3D: sin él, Google Maps no permite inclinar el mapa.
 3. Abre con **Live Server** (extensión recomendada) en `http://127.0.0.1:5500`, o `npm start`.
 
 Diseño: fondo blanco con botón de modo oscuro en la cabecera (se recuerda en el navegador). En la ficha de cada zona del mapa, el botón «?» de cada medición abre la guía «Qué significan los valores»; en «Cómo funciona» están también la guía y «Qué te puede pasar» (efectos en la salud).
 
 Sin `config.js`, o si la clave falla, la web usa el mapa SVG del prototipo (sin marca de Google) (y la consola muestra un 404 de `config.js`, que es esperado).
 
-Panel municipal (`#acceso`): `admin@ayto.es` / `Admin2026!` · `tecnico@ayto.es` / `Tecnico2026!` · `reparto@ayto.es` / `Reparto2026!`.
+Panel municipal (`#acceso`): `admin@ayto.es` / `Admin2026!` · `tecnico@ayto.es` / `Tecnico2026!` · `reparto@ayto.es` / `Reparto2026!`. Con `API_URL`, el panel funciona **solo** contra el servidor (sesión en `sessionStorage`, se cierra con el navegador); sin `API_URL`, es la demo de siempre.
 
-**Trabajadores municipales** (panel › Trabajadores, solo administración): alta con nombre, correo `@ayto.es`, nº de empleado y servicio (sin duplicados). La cuenta queda como *Trabajador municipal* (ID `T-0001…`), **sin acceso al panel**, y se activa con un enlace de un solo uso que caduca a las 48 h (`#activar/<token>`), donde el propio trabajador crea su contraseña. La asignación de sensor es otra operación (Sensores). Demo: `psanz@ayto.es` / `Trabajo2026!` (activo; el panel le deniega el acceso). El botón «Abrir correo de prueba» existe solo porque aún no hay servidor de correo: **quitarlo** cuando lo haya. Seguridad real pendiente de la API (WEB-05): contraseñas y tokens con hash en el servidor, sesión y permisos comprobados en el servidor.
+`js/app.js`, `js/mapa-google.js`, `css/styles.css` e `index.html` se generan desde el prototipo visual (los cambios de diseño se hacen allí). `js/datos-api.js` es la capa de datos: habla con la API.
+
+**Trabajadores municipales** (panel › Trabajadores, solo administración): alta con nombre, correo `@ayto.es`, nº de empleado y servicio (sin duplicados). La cuenta queda como *Trabajador municipal* (ID `T-0001…`), **sin acceso al panel**, y se activa con un enlace de un solo uso que caduca a las 48 h (`#activar/<token>`), donde el propio trabajador crea su contraseña. La asignación de sensor es otra operación (Sensores). Demo: `psanz@ayto.es` / `Trabajo2026!` (activo; el panel le deniega el acceso). El enlace se manda por correo (si Plesk puede enviarlo) y administración lo ve con «Abrir correo de prueba», por si hay que dárselo en mano. Contraseñas y tokens con hash en el servidor; sesión y permisos comprobados en el servidor (WEB-05).
 
 ## Claves de Google Maps
 
@@ -71,10 +89,27 @@ git remote add origin https://github.com/<tu-usuario>/Respira.git
 git push -u origin main
 ```
 
+## Servidor y base de datos (`servidor/`)
+
+Pasos para Plesk (BD y carpeta nuevas, sin tocar el Sprint 0) en **`doc/servidor.md`**; tablas y campos en **`doc/base_de_datos.md`**; montaje, librerías y calibración del sensor en **`doc/arduino.md`**.
+
+Resumen: BD `respira` → importar `servidor/bd/esquema.sql` (o `actualizar_v2.sql` para conservar mediciones) → subir `servidor/api`, `servidor/logica` y `web` a `httpdocs/respira/` → `api/config.php` (nunca a git) → probar `…/respira/api/index.php/estado`.
+
+## Tests
+
+| Parte | Cómo | Tests |
+|---|---|---|
+| Arduino | `g++ -std=c++17 -I arduino/tests/mocks -I arduino/NodoRespira -x c++ arduino/tests/NodoRespiraTest.cpp -o t && ./t` | 26 |
+| Lógica PHP | `LogicaTest`, `CuentasTest`, `PuntosTest`, `ComunidadFlotaTest` (`php servidor/tests/…`) | 15 + 12 + 11 + 11 |
+| API REST | `php servidor/tests/ApiTest.php` | 23 |
+| Simulación, huecos, alertas y picos | `php servidor/tests/SimuladorTest.php` | 5 |
+| Android (JUnit) | Android Studio › `app/src/test` › Run | 16 |
+
 ## Pendiente
 
-- API del servidor para zonas, cuentas, préstamos, puntos y canjes (hoy: demo).
-- Enviar lat/lng con cada medición (`POST /medicion` aún es el del Sprint 0).
-- Alertas push reales (FCM) y comprobación de umbrales en el servidor.
+- Comprobar el contorno del Campus UPV y calibrar el ruido y el cero del ozono con el sensor montado.
+- Alertas push reales (FCM): hoy las alertas solo saltan con la app abierta.
+- Correo: depende de que Plesk pueda enviar (recuperar contraseña, activar trabajadores).
+- Cambiar las contraseñas de demostración antes de un uso real.
 - Traducciones (valenciano, inglés).
-- Compilar y probar en Android Studio: el proyecto se ha escrito sin poder compilarlo.
+- Compilar con Gradle y probar en un móvil: el Java compila con `javac` contra `android.jar` 36 y las librerías del proyecto, pero no se ha hecho un build de Gradle completo (recursos y manifest) ni se ha probado en un móvil con el sensor.
