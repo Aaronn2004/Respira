@@ -320,7 +320,7 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
     }
 
     private Chip chip(String texto, boolean marcado) {
-        Chip c = new Chip(requireContext(), null, com.google.android.material.R.attr.chipChoiceStyle);
+        Chip c = new Chip(requireContext(), null, com.google.android.material.R.attr.chipStyle);
         c.setText(texto);
         c.setCheckable(true);
         c.setChecked(marcado);
