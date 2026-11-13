@@ -21,7 +21,10 @@ class Flota extends Base {
 
     const TIPOS = ['vol' => 'Voluntariado', 'trab' => 'Trabajador público', 'bici' => 'Bici o moto compartida', 'bus' => 'Autobús'];
     const MAGNITUDES = ['o3', 'temp', 'ruido'];
-    const ESTADOS_DEVOLUCION = ['Correcto', 'Batería baja', 'Dañado'];
+    const ESTADOS_DEVOLUCION = ['Correcto', 'Defectuoso'];   // «No devuelto» es el de un préstamo en curso
+    const PLAZO_PRESTAMO_MS = 10 * self::DIA_MS;           // 10 días desde la recogida
+    const NO_ASIGNADO = 'No asignado';
+    const SIN_INCIDENCIAS = 'Sin incidencias';
     const ROLES_PANEL = ['admin', 'tecnico', 'reparto'];
 
     // ---------- público ----------
@@ -42,7 +45,7 @@ class Flota extends Base {
     // ---------- panel: flota ----------
 
     // --------------------------------------------------------------
-    // nodosPanel() --> [{codigo, tipo, magnitudes, estado, asignado_a, bateria,
+    // nodosPanel() --> [{codigo, tipo, magnitudes, estado, asignado_a,
     //   ultima_min, motivo_mant, prestamo: {usuario, desde} | null}]
     // --------------------------------------------------------------
     public function nodosPanel(?array $quien): array {
@@ -50,14 +53,14 @@ class Flota extends Base {
         $ahora = $this->ahora();
         $out = [];
         foreach ($this->filas("SELECT * FROM {$this->p}nodo WHERE estado <> 'baja' ORDER BY codigo") as $n) {
-            $p = $this->fila("SELECT usuario_id, inicio FROM {$this->p}prestamo WHERE nodo = ? AND fin IS NULL", [$n['codigo']]);
+            $p = $this->fila("SELECT usuario_id, inicio, fecha_limite FROM {$this->p}prestamo WHERE nodo = ? AND estado_devolucion = 'No devuelto'", [$n['codigo']]);
             $out[] = ['codigo' => $n['codigo'], 'tipo' => $n['tipo'],
                 'magnitudes' => $n['magnitudes'] === '' ? [] : explode(',', $n['magnitudes']),
-                'estado' => $n['estado'], 'asignado_a' => $n['asignado_a'],
-                'bateria' => $n['bateria'] === null ? null : (int) $n['bateria'],
-                'ultima_min' => $n['ultima_medicion'] ? max(0, intdiv($ahora - self::msDeFechaBD($n['ultima_medicion']), 60000)) : null,
-                'motivo_mant' => $n['motivo_mant'],
-                'prestamo' => $p ? ['usuario' => $p['usuario_id'], 'desde' => self::isoDeBD($p['inicio'])] : null];
+                'estado' => $n['estado'], 'asignado_a' => $n['asignado_a'] === self::NO_ASIGNADO ? null : $n['asignado_a'],
+                'ultima_min' => $this->ultimaMin($n['codigo']),
+                'motivo_mant' => $n['estado'] === 'mant' ? $n['motivo'] : null,
+                'prestamo' => $p ? ['usuario' => $p['usuario_id'], 'desde' => self::isoDeBD($p['inicio']),
+                    'hasta' => self::isoDeBD($p['fecha_limite'])] : null];
         }
         return $out;
     }
@@ -108,16 +111,17 @@ class Flota extends Base {
         if ($e) {
             throw new ErroresDeCamposException($e);
         }
-        return [$codigo, $tipo, implode(',', $mags), $tipo === 'vol' ? null : $asig, $mant, $mant ? $motivo : null];
+        return [$codigo, $tipo, implode(',', $mags), $tipo === 'vol' ? self::NO_ASIGNADO : $asig, $mant,
+            $mant ? $motivo : self::SIN_INCIDENCIAS];
     }
 
     public function altaNodo(?array $quien, array $d): array {
         self::exigirRol($quien, ['admin', 'tecnico']);
         [$codigo, $tipo, $mags, $asig, $mant, $motivo] = $this->validarNodo($d, null);
         $estado = $mant ? 'mant' : ($tipo === 'vol' ? 'disponible' : 'activo');
-        $this->ejecutar("INSERT INTO {$this->p}nodo (codigo, uuid_beacon, tipo, magnitudes, estado, asignado_a, bateria, motivo_mant)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            [$codigo, 'RESPIRA-' . $codigo, $tipo, $mags, $estado, $asig, $tipo === 'bus' ? null : 100, $motivo]);
+        $this->ejecutar("INSERT INTO {$this->p}nodo (codigo, tipo, magnitudes, estado, asignado_a, motivo)
+            VALUES (?, ?, ?, ?, ?, ?)",
+            [$codigo, $tipo, $mags, $estado, $asig, $motivo]);
         return $this->nodoPanel($codigo);
     }
 
@@ -139,7 +143,7 @@ class Flota extends Base {
         } else {
             $estado = $tipo === 'vol' ? 'disponible' : 'activo';
         }
-        $this->ejecutar("UPDATE {$this->p}nodo SET tipo = ?, magnitudes = ?, asignado_a = ?, estado = ?, motivo_mant = ? WHERE codigo = ?",
+        $this->ejecutar("UPDATE {$this->p}nodo SET tipo = ?, magnitudes = ?, asignado_a = ?, estado = ?, motivo = ? WHERE codigo = ?",
             [$tipo, $mags, $asig, $estado, $motivo, $c]);
         return $this->nodoPanel($c);
     }
@@ -158,33 +162,37 @@ class Flota extends Base {
         if (trim($motivo) === '') {
             throw new DatosNoValidosException('Elige un motivo.', 'motivo');
         }
-        $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'baja', baja = ?, motivo_baja = ? WHERE codigo = ?",
-            [self::fechaBD($this->ahora()), mb_substr(trim($motivo), 0, 120), $c]);
+        $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'baja', motivo = ? WHERE codigo = ?",
+            [mb_substr(trim($motivo), 0, 120), $c]);
     }
 
     // ---------- panel: préstamos ----------
 
     // --------------------------------------------------------------
     // prestamos() --> {abiertos: [..], cerrados: [..]}
-    //   {id, nodo, usuario, punto, inicio, fin, estado_devolucion}
+    //   {id, nodo, usuario, punto, inicio, fecha_limite, estado_devolucion, fuera_de_plazo}
+    //   abiertos = «No devuelto»; fuera_de_plazo = ya pasó la fecha límite
     // --------------------------------------------------------------
     public function prestamos(?array $quien): array {
         self::exigirRol($quien, self::ROLES_PANEL);
         $sql = "SELECT p.*, r.nombre AS punto FROM {$this->p}prestamo p
-            LEFT JOIN {$this->p}punto_reparto r ON r.id = p.punto_reparto_id";
-        $map = function ($p) {
+            JOIN {$this->p}punto_reparto r ON r.id = p.punto_reparto_id";
+        $ahora = $this->ahora();
+        $map = function ($p) use ($ahora) {
             return ['id' => (int) $p['id'], 'nodo' => $p['nodo'], 'usuario' => $p['usuario_id'], 'punto' => $p['punto'],
-                'inicio' => self::isoDeBD($p['inicio']), 'fin' => self::isoDeBD($p['fin']),
-                'estado_devolucion' => $p['estado_devolucion']];
+                'inicio' => self::isoDeBD($p['inicio']), 'fecha_limite' => self::isoDeBD($p['fecha_limite']),
+                'estado_devolucion' => $p['estado_devolucion'],
+                'fuera_de_plazo' => $p['estado_devolucion'] === 'No devuelto' && self::msDeFechaBD($p['fecha_limite']) < $ahora];
         };
-        return ['abiertos' => array_map($map, $this->filas("$sql WHERE p.fin IS NULL ORDER BY p.inicio DESC")),
-            'cerrados' => array_map($map, $this->filas("$sql WHERE p.fin IS NOT NULL ORDER BY p.fin DESC LIMIT 50"))];
+        return ['abiertos' => array_map($map, $this->filas("$sql WHERE p.estado_devolucion = 'No devuelto' ORDER BY p.inicio DESC")),
+            'cerrados' => array_map($map, $this->filas("$sql WHERE p.estado_devolucion <> 'No devuelto' ORDER BY p.inicio DESC LIMIT 50"))];
     }
 
     // --------------------------------------------------------------
-    // usuarioId (U-XXXXX), codigo --> prestar() --> préstamo
+    // usuarioId (U-XXXXX), codigo, punto (id del punto de reparto) --> prestar() --> préstamo
+    // La fecha límite es la hora exacta de la recogida + 10 días.
     // --------------------------------------------------------------
-    public function prestar(?array $quien, string $usuarioId, string $codigo): array {
+    public function prestar(?array $quien, string $usuarioId, string $codigo, $punto = null): array {
         self::exigirRol($quien, self::ROLES_PANEL);
         $u = strtoupper(trim($usuarioId));
         $c = strtoupper(trim($codigo));
@@ -195,7 +203,7 @@ class Flota extends Base {
             $e['usuario'] = 'Formato no válido: U- y 5 cifras, por ejemplo U-48213.';
         } elseif (!$this->fila("SELECT id FROM {$this->p}usuario WHERE id = ? AND rol = 'vecino'", [$u])) {
             $e['usuario'] = "No existe ningún usuario $u. Pídele que lo compruebe en la app, en Mi cuenta.";
-        } elseif ($this->fila("SELECT id FROM {$this->p}prestamo WHERE usuario_id = ? AND fin IS NULL", [$u])) {
+        } elseif ($this->fila("SELECT id FROM {$this->p}prestamo WHERE usuario_id = ? AND estado_devolucion = 'No devuelto'", [$u])) {
             $e['usuario'] = "$u ya tiene un sensor prestado. Tiene que devolverlo antes de llevarse otro.";
         }
         $n = $c === '' ? null : $this->fila("SELECT * FROM {$this->p}nodo WHERE codigo = ? AND estado <> 'baja'", [$c]);
@@ -208,25 +216,30 @@ class Flota extends Base {
         } elseif ($n['tipo'] !== 'vol') {
             $e['codigo'] = "$c va asignado a " . mb_strtolower(self::TIPOS[$n['tipo']]) . ': no se presta.';
         } elseif ($n['estado'] === 'prestado') {
-            $quienLoTiene = $this->valor("SELECT usuario_id FROM {$this->p}prestamo WHERE nodo = ? AND fin IS NULL", [$c]);
+            $quienLoTiene = $this->valor("SELECT usuario_id FROM {$this->p}prestamo WHERE nodo = ? AND estado_devolucion = 'No devuelto'", [$c]);
             $e['codigo'] = "$c ya está prestado" . ($quienLoTiene ? " a $quienLoTiene" : '') . '.';
         } elseif ($n['estado'] === 'mant') {
             $e['codigo'] = "$c está en mantenimiento.";
+        }
+        if ($punto === null || $punto === '' || !$this->fila("SELECT id FROM {$this->p}punto_reparto WHERE id = ? AND activo = 1", [(int) $punto])) {
+            $e['punto'] = 'Elige el punto de reparto donde se recoge.';
         }
         if ($e) {
             throw new ErroresDeCamposException($e);
         }
         $ahora = $this->ahora();
-        return $this->transaccion(function () use ($quien, $u, $c, $ahora) {
-            $this->ejecutar("INSERT INTO {$this->p}prestamo (nodo, usuario_id, punto_reparto_id, inicio, prestado_por) VALUES (?, ?, ?, ?, ?)",
-                [$c, $u, $quien['punto_reparto_id'] ?? null, self::fechaBD($ahora), $quien['id']]);
+        return $this->transaccion(function () use ($u, $c, $ahora, $punto) {
+            $this->ejecutar("INSERT INTO {$this->p}prestamo (nodo, usuario_id, punto_reparto_id, inicio, fecha_limite, estado_devolucion)
+                VALUES (?, ?, ?, ?, ?, 'No devuelto')",
+                [$c, $u, (int) $punto, self::fechaBD($ahora), self::fechaBD($ahora + self::PLAZO_PRESTAMO_MS)]);
             $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'prestado' WHERE codigo = ?", [$c]);
-            return $this->prestamos($quien)['abiertos'][0];
+            return $this->prestamos(['rol' => 'admin'])['abiertos'][0];
         });
     }
 
     // --------------------------------------------------------------
-    // codigo, estado ('Correcto' | 'Batería baja' | 'Dañado') --> devolver()
+    // codigo, estado ('Correcto' | 'Defectuoso') --> devolver()
+    // Se puede devolver en cualquier punto de reparto, también fuera de plazo.
     // --------------------------------------------------------------
     public function devolver(?array $quien, string $codigo, string $estado): array {
         self::exigirRol($quien, self::ROLES_PANEL);
@@ -240,21 +253,19 @@ class Flota extends Base {
         if (!$this->fila("SELECT codigo FROM {$this->p}nodo WHERE codigo = ?", [$c])) {
             throw new DatosNoValidosException("No existe ningún sensor $c.", 'codigo');
         }
-        $p = $this->fila("SELECT * FROM {$this->p}prestamo WHERE nodo = ? AND fin IS NULL", [$c]);
+        $p = $this->fila("SELECT * FROM {$this->p}prestamo WHERE nodo = ? AND estado_devolucion = 'No devuelto'", [$c]);
         if (!$p) {
             throw new DatosNoValidosException("$c no figura como prestado.", 'codigo');
         }
         if (!in_array($estado, self::ESTADOS_DEVOLUCION, true)) {
             throw new DatosNoValidosException('Elige cómo llega el sensor.', 'estado');
         }
-        $ahora = $this->ahora();
-        $this->transaccion(function () use ($quien, $p, $c, $estado, $ahora) {
-            $this->ejecutar("UPDATE {$this->p}prestamo SET fin = ?, estado_devolucion = ?, recibido_por = ? WHERE id = ?",
-                [self::fechaBD($ahora), $estado, $quien['id'], $p['id']]);
-            if ($estado === 'Dañado') {
-                $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'mant', motivo_mant = 'Dañado al devolverlo' WHERE codigo = ?", [$c]);
+        $this->transaccion(function () use ($p, $c, $estado) {
+            $this->ejecutar("UPDATE {$this->p}prestamo SET estado_devolucion = ? WHERE id = ?", [$estado, $p['id']]);
+            if ($estado === 'Defectuoso') {
+                $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'mant', motivo = 'No se ha entregado en buenas condiciones' WHERE codigo = ?", [$c]);
             } else {
-                $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'disponible' WHERE codigo = ?", [$c]);
+                $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'disponible', motivo = ? WHERE codigo = ?", [self::SIN_INCIDENCIAS, $c]);
             }
         });
         return $this->nodoPanel($c);
@@ -284,11 +295,12 @@ class Flota extends Base {
             if ($n['tipo'] !== 'trab' || $n['estado'] !== 'activo') {
                 throw new ConflictoException("El sensor $c no está asignado a un servicio municipal. Pide a tu servicio el código correcto.", 'codigo');
             }
-            return ['codigo' => $c, 'magnitudes' => $mags, 'desde' => null];
+            return ['codigo' => $c, 'magnitudes' => $mags, 'desde' => null, 'hasta' => null];
         }
-        $p = $this->fila("SELECT * FROM {$this->p}prestamo WHERE nodo = ? AND fin IS NULL", [$c]);
+        $p = $this->fila("SELECT * FROM {$this->p}prestamo WHERE nodo = ? AND estado_devolucion = 'No devuelto'", [$c]);
         if ($p && $p['usuario_id'] === $quien['id']) {
-            return ['codigo' => $c, 'magnitudes' => $mags, 'desde' => self::isoDeBD($p['inicio'])];
+            return ['codigo' => $c, 'magnitudes' => $mags, 'desde' => self::isoDeBD($p['inicio']),
+                'hasta' => self::isoDeBD($p['fecha_limite'])];
         }
         if ($p) {
             throw new ConflictoException("El sensor $c está prestado a otra persona. Comprueba el código o pregunta en el punto de reparto.", 'codigo');
@@ -300,9 +312,10 @@ class Flota extends Base {
         throw new ConflictoException("El sensor $c no está prestado a nadie. Pide en el punto de reparto que lo registren con tu ID {$quien['id']}.", 'codigo');
     }
 
-    // préstamo en curso de un vecino (para «Mi sensor») --> {codigo, desde} | null
+    // préstamo en curso de un vecino (para «Mi sensor») --> {codigo, desde, hasta} | null
+    // hasta = fecha límite para devolverlo (10 días desde la recogida)
     public function prestamoDe(string $usuarioId): ?array {
-        $p = $this->fila("SELECT nodo, inicio FROM {$this->p}prestamo WHERE usuario_id = ? AND fin IS NULL", [$usuarioId]);
-        return $p ? ['codigo' => $p['nodo'], 'desde' => self::isoDeBD($p['inicio'])] : null;
+        $p = $this->fila("SELECT nodo, inicio, fecha_limite FROM {$this->p}prestamo WHERE usuario_id = ? AND estado_devolucion = 'No devuelto'", [$usuarioId]);
+        return $p ? ['codigo' => $p['nodo'], 'desde' => self::isoDeBD($p['inicio']), 'hasta' => self::isoDeBD($p['fecha_limite'])] : null;
     }
 }

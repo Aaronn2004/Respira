@@ -22,6 +22,8 @@
   const NORTE = 38.9815, SUR = 38.9540, OESTE = -0.2050, ESTE = -0.1610;
   const geo = (x, y) => ({ lat: NORTE - y / 560 * (NORTE - SUR), lng: OESTE + x / 900 * (ESTE - OESTE) });
   const CENTRO = geo(450, 280);
+  // Zoom para que quepan todas las zonas: el mapa estrecho (móvil, panel lateral) se aleja un nivel o dos
+  const zoomInicial = () => { const w = (contenedor && contenedor.clientWidth) || window.innerWidth; return w < 820 ? 14 : 15; };
 
   let estado = CLAVE && !/pon_aqui/i.test(CLAVE) ? 'pendiente' : 'off'; // pendiente | cargando | listo | error | off
   let mapa = null;
@@ -59,7 +61,7 @@
   function crear() {
     const opciones = {
       center: CENTRO,
-      zoom: 15,
+      zoom: zoomInicial(),
       minZoom: 12,
       gestureHandling: 'greedy',
       clickableIcons: false,
@@ -142,13 +144,13 @@
   }
 
   function dibujarZonas() {
-    const { S, ZONAS, MAG, nivel, est, fmt, hace, esc } = R();
+    const { S, ZONAS, MAG, nivel, est, fmt, hace, esc, zonaMapa } = R();
     const ordenadas = ZONAS.filter(z => z.tipo === 'barrio').concat(ZONAS.filter(z => z.tipo === 'parque'));
     ordenadas.forEach(z => {
       const parque = z.tipo === 'parque';
       const e = est(z);
-      const v = z[S.mag];
-      const l = e === 'none' || v == null ? 'none' : nivel(S.mag, v);
+      const zm = zonaMapa(z);       // estado general o la magnitud elegida
+      const l = zm.l;
       const col = colorNivel(l);
       const sinDatos = l === 'none', antiguo = e === 'old';
       const discontinuo = sinDatos || antiguo || !parque;
@@ -176,9 +178,9 @@
       }
 
       const pos = parque ? geo(z.x, z.y) : geo(z.lx + 40, z.ly);
-      const valor = sinDatos ? '–' : fmt(v, S.mag);
+      const valor = zm.valor;
       const html = `<span class="v${sinDatos ? ' none' : ''}" style="${sinDatos ? '' : 'background:' + col}">${valor}</span>${esc(z.n)}${antiguo ? '<span class="reloj" title="Dato antiguo">🕒</span>' : ''}`;
-      const titulo = `${z.n}: ${sinDatos ? 'sin datos' : fmt(v, S.mag) + ' ' + MAG[S.mag].u} · ${hace(z.hace)}`;
+      const titulo = `${z.n}: ${zm.texto} · ${hace(z.hace)}`;
       const et = new Etiqueta(pos, html, 'gm-etq' + (parque ? '' : ' barrio') + (S.sel === z.id ? ' sel' : ''),
         () => { S.sel = z.id; R().render(); }, titulo);
       et.div.setAttribute('aria-label', titulo);
@@ -203,7 +205,7 @@
 
   function dibujar() {
     const { S } = R();
-    const tema = document.documentElement.getAttribute('data-theme') || '';
+    const tema = document.documentElement.getAttribute('data-tema') || '';
     const datos = window.RespiraDatos ? window.RespiraDatos.version : 0;   // se repinta al llegar datos nuevos
     const firma = [S.layer, S.mag, S.sel, S.avt, S.avf, tema, datos].join('|');
     if (firma !== ultimaFirma) {
@@ -246,7 +248,7 @@
       if (!mapa) return;
       if (a === 'reset') {
         R().S.sel = null;
-        mapa.moveCamera({ center: CENTRO, zoom: 15, tilt: 0, heading: 0 });
+        mapa.moveCamera({ center: CENTRO, zoom: zoomInicial(), tilt: 0, heading: 0 });
         R().render();
       } else {
         mapa.setZoom(mapa.getZoom() + (a === 'in' ? 1 : -1));

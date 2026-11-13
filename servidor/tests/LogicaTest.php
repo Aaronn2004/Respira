@@ -29,12 +29,12 @@ function igual($esperado, $real, string $que = ''): void {
         throw new Exception("$que: esperaba " . var_export($esperado, true) . ' y salió ' . var_export($real, true));
     }
 }
-function lanza(string $clase, callable $f): void {
+function lanza(string $clase, callable $f): Throwable {
     try {
         $f();
     } catch (Throwable $e) {
         if ($e instanceof $clase) {
-            return;
+            return $e;
         }
         throw new Exception("esperaba $clase y salió " . get_class($e) . ': ' . $e->getMessage());
     }
@@ -72,9 +72,11 @@ prueba('un punto de un barrio fuera de los parques cuenta para el barrio', funct
     igual('centro', $r['zona'], 'zona');
 });
 
-prueba('sin ubicación se guarda pero sin zona', function () {
-    $r = nueva()->guardarMedicion(med(['lat' => null, 'lng' => null]));
-    igual(null, $r['zona'], 'zona');
+prueba('sin ubicación o fuera de las zonas no se guarda', function () {
+    $l = nueva();
+    lanza('DatosNoValidosException', fn() => $l->guardarMedicion(med(['lat' => null, 'lng' => null])));
+    $e = lanza('DatosNoValidosException', fn() => $l->guardarMedicion(med(['lat' => 40.4168, 'lng' => -3.7038])));
+    igual(true, strpos($e->getMessage(), 'fuera de los parques y barrios') !== false, 'Madrid');
 });
 
 prueba('el tipo del beacon (12) se traduce a temperatura', function () {
@@ -84,22 +86,20 @@ prueba('el tipo del beacon (12) se traduce a temperatura', function () {
     igual('temp', nueva()->guardarMedicion($d)['magnitud'], 'magnitud');
 });
 
-prueba('el mismo anuncio oído dos veces (o por dos móviles) se guarda una sola vez', function () {
+prueba('repetida: mismo sensor, tipo y valor con menos de 10 s (dos móviles oyen el mismo anuncio)', function () {
     global $AHORA;
     $l = nueva();
     igual(true, $l->guardarMedicion(med()) !== null, 'primera');
-    igual(null, $l->guardarMedicion(med(['medida_en' => $AHORA - 30000])), 'segunda');
-    // el contador da la vuelta (0..255): el mismo número 10 min después es otra medición
-    igual(true, $l->guardarMedicion(med(['medida_en' => $AHORA])) === null, 'mismo minuto');
-    igual(true, $l->guardarMedicion(med(['medida_en' => $AHORA - 11 * 60000])) !== null, '10 min antes');
-    // otra magnitud con el mismo contador no es repetida
-    igual(true, $l->guardarMedicion(med(['magnitud' => 'temp', 'valor' => 20.0])) !== null, 'otra magnitud');
+    igual(null, $l->guardarMedicion(med(['medida_en' => $AHORA - 60000 + 4000])), 'otro móvil, 4 s después');
+    igual(true, $l->guardarMedicion(med(['medida_en' => $AHORA - 60000 + 3000, 'valor' => 0.043])) !== null, 'otro valor');
+    igual(true, $l->guardarMedicion(med(['medida_en' => $AHORA - 60000 + 30000])) !== null, '30 s después: otra lectura');
+    igual(true, $l->guardarMedicion(med(['magnitud' => 'temp', 'valor' => 20.0])) !== null, 'otro tipo');
 });
 
-prueba('un valor fuera del rango del sensor se guarda como no válido y no cuenta en la media', function () {
+prueba('un valor fuera del rango del sensor no se guarda', function () {
     $l = nueva();
-    $r = $l->guardarMedicion(med(['valor' => 9.0]));
-    igual(false, $r['valida'], 'valida');
+    $e = lanza('DatosNoValidosException', fn() => $l->guardarMedicion(med(['valor' => 9.0])));
+    igual(true, strpos($e->getMessage(), 'fuera del rango') !== false, 'motivo');
     $central = array_values(array_filter($l->zonas(), fn($z) => $z['id'] === 'central'))[0];
     igual(null, $central['o3'], 'media');
 });
@@ -109,7 +109,6 @@ prueba('rechaza datos mal formados', function () {
     lanza('DatosNoValidosException', fn() => $l->guardarMedicion(med(['nodo' => 'XX-1'])));
     lanza('DatosNoValidosException', fn() => $l->guardarMedicion(med(['magnitud' => 'co2'])));
     lanza('DatosNoValidosException', fn() => $l->guardarMedicion(med(['valor' => 'abc'])));
-    lanza('DatosNoValidosException', fn() => $l->guardarMedicion(med(['contador' => 300])));
     lanza('DatosNoValidosException', fn() => $l->guardarMedicion(med(['lng' => null])));
     lanza('DatosNoValidosException', fn() => $l->guardarMedicion(med(['lat' => 120])));
 });
@@ -193,7 +192,7 @@ prueba('nodos(): último valor de cada magnitud y minutos desde el último dato'
 });
 
 prueba('lote: cuenta guardadas, repetidas y errores sin pararse', function () {
-    $r = nueva()->guardarMediciones([med(), med(), med(['nodo' => 'mal']), 'no es objeto', med(['contador' => 8])]);
+    $r = nueva()->guardarMediciones([med(), med(), med(['nodo' => 'mal']), 'no es objeto', med(['valor' => 0.05])]);
     igual(2, $r['guardadas'], 'guardadas');
     igual(1, $r['repetidas'], 'repetidas');
     igual(2, count($r['errores']), 'errores');

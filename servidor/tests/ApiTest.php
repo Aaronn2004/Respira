@@ -17,7 +17,7 @@ $fichero = sys_get_temp_dir() . '/respira_api_test.sqlite';
 $bdp = crearBDPrueba('sqlite:' . $fichero);
 crearUsuario($bdp, 'U-48213', 'vecino', 'lucia@correo.es', 'Respira2026', ['nombre' => 'lucia']);
 crearUsuario($bdp, 'A-0001', 'admin', 'admin@ayto.es', 'Admin2026!', ['nombre' => 'Ana García']);
-crearUsuario($bdp, 'A-0003', 'reparto', 'reparto@ayto.es', 'Reparto2026!', ['nombre' => 'Marta Ruiz', 'punto_reparto_id' => 1]);
+crearUsuario($bdp, 'A-0003', 'reparto', 'reparto@ayto.es', 'Reparto2026!', ['nombre' => 'Marta Ruiz']);
 $bdp = null;
 $correo = sys_get_temp_dir() . '/respira_api_correo.txt';
 @unlink($correo);
@@ -93,7 +93,8 @@ try {
         igual(409, $c, 'código');
     });
     prueba('datos no válidos dan 400 y JSON roto también', function () use ($m) {
-        igual(400, pedir('POST', '/mediciones', array_merge($m, ['contador' => -1]))[0], 'contador');
+        igual(400, pedir('POST', '/mediciones', array_merge($m, ['valor' => 9]))[0], 'fuera de rango');
+        igual(400, pedir('POST', '/mediciones', array_merge($m, ['lat' => 40.4168, 'lng' => -3.7038]))[0], 'fuera de las zonas');
         igual(400, pedir('POST', '/mediciones', '{roto')[0], 'json');
     });
     prueba('un sensor que no existe da 404', function () use ($m) {
@@ -140,13 +141,13 @@ try {
 
     // ---------------- cuentas, sesiones y permisos ----------------
     $TOK = [];
-    prueba('POST /sesiones: 201 con token; 401 con los intentos que quedan', function () use (&$TOK) {
+    prueba('POST /sesiones: 201 con token; 401 si la contraseña no es', function () use (&$TOK) {
         [$c, $j] = pedir('POST', '/sesiones', ['email' => 'lucia@correo.es', 'clave' => 'Respira2026', 'cliente' => 'app']);
         igual(201, $c, 'código');
         igual('U-48213', $j['usuario']['id']);
         $TOK['lucia'] = $j['token'];
         [$c, $j] = pedir('POST', '/sesiones', ['email' => 'admin@ayto.es', 'clave' => 'mal', 'cliente' => 'web']);
-        igual([401, 4], [$c, $j['quedan']]);
+        igual([401, 'Correo o contraseña incorrectos.'], [$c, $j['error']]);
         [, $j] = pedir('POST', '/sesiones', ['email' => 'admin@ayto.es', 'clave' => 'Admin2026!', 'cliente' => 'web']);
         $TOK['admin'] = $j['token'];
         [, $j] = pedir('POST', '/sesiones', ['email' => 'reparto@ayto.es', 'clave' => 'Reparto2026!', 'cliente' => 'web']);
@@ -168,19 +169,20 @@ try {
     });
     prueba('panel: préstamo desde reparto y la app de Lucía ya lo ve', function () use (&$TOK) {
         igual(403, pedir('GET', '/panel/trabajadores', null, $TOK['reparto'])[0], 'reparto no ve trabajadores');
-        [$c, $j] = pedir('POST', '/panel/prestamos', ['usuario' => 'U-48213', 'codigo' => 'RSP-4F7K'], $TOK['reparto']);
-        igual([201, 'Biblioteca Central'], [$c, $j['punto']]);
+        [$c, $j] = pedir('POST', '/panel/prestamos', ['usuario' => 'U-48213', 'codigo' => 'RSP-4F7K', 'punto' => 1], $TOK['reparto']);
+        igual([201, 'Biblioteca Central', 'No devuelto'], [$c, $j['punto'], $j['estado_devolucion']]);
         [$c, $j] = pedir('POST', '/yo/sensor', ['codigo' => 'rsp-4f7k'], $TOK['lucia']);
         igual([200, 'RSP-4F7K'], [$c, $j['codigo']]);
         [, $j] = pedir('GET', '/yo', null, $TOK['lucia']);
         igual('RSP-4F7K', $j['prestamo']['codigo']);
+        cierto(strtotime($j['prestamo']['hasta']) - strtotime($j['prestamo']['desde']) === 10 * 86400, 'plazo de 10 días');
         igual(400, pedir('POST', '/panel/prestamos', ['usuario' => 'U-48213', 'codigo' => 'RSP-4F7K'], $TOK['reparto'])[0], 'repetido');
     });
     prueba('POST /mediciones con sesión: el portador es quien lleva el sensor', function () use (&$TOK, $m) {
         global $fichero;
-        pedir('POST', '/mediciones', array_merge($m, ['contador' => 77, 'medida_en' => $m['medida_en'] + 2000]), $TOK['lucia']);
+        pedir('POST', '/mediciones', array_merge($m, ['valor' => 0.077, 'medida_en' => $m['medida_en'] + 2000]), $TOK['lucia']);
         $bd = new PDO('sqlite:' . $fichero);
-        igual('U-48213', $bd->query('SELECT portador_id FROM medicion WHERE contador = 77')->fetchColumn());
+        igual('U-48213', $bd->query('SELECT portador_id FROM medicion WHERE valor = 0.077')->fetchColumn());
     });
     prueba('percepciones: publicar, editar (PUT), borrar (DELETE) y 403 para otros', function () use (&$TOK) {
         [$c, $p] = pedir('POST', '/percepciones', ['tipo' => 'ruido', 'nivel' => 2, 'lat' => 38.9637, 'lng' => -0.1865, 'direccion' => 'C/ Mayor, 43'], $TOK['lucia']);

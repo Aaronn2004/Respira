@@ -60,7 +60,7 @@ prueba('simulador: todas las zonas con datos salvo oeste (Sin datos) y estacion 
     for ($i = 0; $i < 7; $i++) {
         $s->alDia(true);        // el historial se rellena de 5 en 5 días
     }
-    $min = $bd->query("SELECT MIN(medida_en) FROM medicion WHERE origen = 'simulado'")->fetchColumn();
+    $min = $bd->query("SELECT MIN(fecha_medicion) FROM medicion WHERE origen = 'simulado'")->fetchColumn();
     cierto(Logica::msDeFechaBD($min) <= $T - 29 * 86400000, '30 días de historial');
     $zonas = [];
     foreach ((new Logica($bd, '', $reloj))->zonas() as $z) {
@@ -70,6 +70,7 @@ prueba('simulador: todas las zonas con datos salvo oeste (Sin datos) y estacion 
     cierto($zonas['estacion']['hace_min'] >= 180 && $zonas['estacion']['hace_min'] < 200, 'estacion antiguo');
     foreach (['central', 'centro', 'campus', 'norte'] as $id) {
         cierto($zonas[$id]['o3'] !== null && $zonas[$id]['ruido'] !== null && $zonas[$id]['media_24h']['temp'] !== null, $id);
+        cierto($zonas[$id]['mejor']['o3'] !== null && $zonas[$id]['mejor']['o3'] <= $zonas[$id]['o3'], $id . ': la mejor medida no puede pasar de la media');
         igual(true, $zonas[$id]['simulado'], "$id simulado");
     }
     $n = (int) $bd->query('SELECT COUNT(*) FROM medicion')->fetchColumn();
@@ -88,7 +89,7 @@ prueba('los datos reales mandan sobre los simulados', function () use ($reloj) {
     (new Simulador($bd, '', $reloj))->alDia(true);
     $l = new Logica($bd, '', $reloj);
     $Z = json_decode(file_get_contents(__DIR__ . '/zonas_prueba.json'), true);
-    $l->guardarMedicion(['nodo' => 'RSP-4F7K', 'magnitud' => 'o3', 'valor' => 0.111, 'contador' => 1,
+    $l->guardarMedicion(['nodo' => 'RSP-4F7K', 'magnitud' => 'o3', 'valor' => 0.111,
         'medida_en' => $T - 60000, 'lat' => $Z['central'][0], 'lng' => $Z['central'][1]]);
     foreach ($l->zonas() as $z) {
         if ($z['id'] === 'central') {

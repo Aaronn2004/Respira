@@ -169,6 +169,22 @@ abstract class Base {
     }
 
     // Comprueba el rol de quien hace la petición (sesión ya validada)
+    // --------------------------------------------------------------
+    // codigo --> ultimaMin() --> minutos desde el último dato del sensor | null
+    // (no se guarda en nodo: sale de medicion; con el índice
+    //  (nodo, magnitud, medida_en) son tres lecturas directas)
+    // --------------------------------------------------------------
+    protected function ultimaMin(string $codigo): ?int {
+        $ultima = null;
+        foreach (['o3', 'temp', 'ruido'] as $m) {
+            $f = $this->valor("SELECT MAX(fecha_medicion) FROM {$this->p}medicion WHERE id_nodo = ? AND tipo = ?", [$codigo, $m]);
+            if ($f) {
+                $ultima = max($ultima ?? 0, self::msDeFechaBD($f));
+            }
+        }
+        return $ultima === null ? null : max(0, intdiv($this->ahora() - $ultima, 60000));
+    }
+
     protected static function exigirRol(?array $usuario, array $roles): void {
         if ($usuario === null) {
             throw new NoAutorizadoException('Inicia sesión para continuar.');

@@ -1,7 +1,7 @@
 <?php
 // ==============================================================
 // Fichero:     CuentasTest.php
-// Descripción: Tests de Cuentas: registro, inicio de sesión y bloqueo,
+// Descripción: Tests de Cuentas: registro, inicio de sesión,
 //              sesiones, enlaces de un solo uso, trabajadores y borrar
 //              la cuenta. BD SQLite en memoria y reloj fijo.
 //              Ejecutar:  php servidor/tests/CuentasTest.php
@@ -59,19 +59,13 @@ prueba('login: correo en mayúsculas vale y devuelve token y perfil', function (
     igual(64, strlen($r['token']));
 });
 
-prueba('login: avisa de los intentos que quedan y bloquea 15 min al 5º fallo', function () {
-    global $T;
+prueba('login: sin bloqueo por intentos (decisión del sprint): tras fallos, la buena entra', function () {
     [, $c] = nuevas();
-    for ($i = 1; $i <= 4; $i++) {
+    for ($i = 1; $i <= 6; $i++) {
         $e = lanza(NoAutorizadoException::class, function () use ($c) { $c->iniciarSesion('lucia@correo.es', 'mal', 'app'); });
-        igual(5 - $i, $e->quedan, "intento $i");
+        igual(null, $e->quedan, "intento $i");
     }
-    lanza(BloqueadoException::class, function () use ($c) { $c->iniciarSesion('lucia@correo.es', 'mal', 'app'); });
-    // bloqueada aunque ahora ponga bien la contraseña
-    lanza(BloqueadoException::class, function () use ($c) { $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app'); });
-    $T += 16 * 60000;
-    igual('U-48213', $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app')['usuario']['id'], 'tras 15 min');
-    $T -= 16 * 60000;
+    igual('U-48213', $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app')['usuario']['id']);
 });
 
 prueba('login: un correo que no existe no dice si existe', function () {
@@ -95,7 +89,7 @@ prueba('sesión: el token se guarda con hash, caduca y se puede cerrar', functio
     global $T;
     [$bd, $c] = nuevas();
     $r = $c->iniciarSesion('admin@ayto.es', 'Admin2026!', 'web');
-    igual(0, (int) $bd->query("SELECT COUNT(*) FROM sesion WHERE token_hash = " . $bd->quote($r['token']))->fetchColumn(), 'no en claro');
+    igual(0, (int) $bd->query("SELECT COUNT(*) FROM token WHERE token_hash = " . $bd->quote($r['token']))->fetchColumn(), 'no en claro');
     $T += 13 * 3600000;
     igual(null, $c->usuarioDeSesion($r['token']), 'web caduca a las 12 h');
     $T -= 13 * 3600000;
@@ -111,6 +105,8 @@ prueba('trabajador: alta pendiente con enlace de 48 h que solo sirve una vez', f
     $r = $c->altaTrabajador($admin, 'Pablo  Sanz Gil', 'PSanz@ayto.es', '104233', 'Limpieza viaria');
     igual('T-0001', $r['trabajador']['id']);
     igual('pendiente', $r['trabajador']['estado']);
+    igual([0, 1], [(int) $bd->query("SELECT COUNT(*) FROM usuario WHERE id = 'T-0001'")->fetchColumn(),
+        (int) $bd->query("SELECT COUNT(*) FROM invitacion")->fetchColumn()], 'aún no es usuario: es una invitación');
     $v = $c->verEnlace($r['token']);
     igual(['valido', 'activar', 'Pablo Sanz Gil'], [$v['estado'], $v['tipo'], $v['nombre']]);
     $e = lanza(DatosNoValidosException::class, function () use ($c, $r) { $c->usarEnlace($r['token'], 'psanz12345'); });
@@ -118,6 +114,8 @@ prueba('trabajador: alta pendiente con enlace de 48 h que solo sirve una vez', f
     lanza(DatosNoValidosException::class, function () use ($c, $r) { $c->usarEnlace($r['token'], 'solotexto'); });
     igual('psanz@ayto.es', $c->usarEnlace($r['token'], 'Trabajo2026!'));
     igual('activo', $c->trabajadores($admin)[0]['estado']);
+    igual(['104233', 'Limpieza viaria'], array_values($bd->query("SELECT num_empleado, servicio FROM empleado WHERE usuario_id = 'T-0001'")->fetch(PDO::FETCH_ASSOC)));
+    igual(0, (int) $bd->query("SELECT COUNT(*) FROM invitacion")->fetchColumn(), 'la invitación se borra');
     igual('no_valido', $c->verEnlace($r['token'])['estado'], 'ya usado');
     igual('trabajador', $c->iniciarSesion('psanz@ayto.es', 'Trabajo2026!', 'app')['usuario']['rol']);
 });
@@ -165,9 +163,10 @@ prueba('recuperar: manda el enlace por correo, cambia la contraseña y cierra la
 prueba('borrar cuenta: no con un sensor prestado; después borra sus datos', function () {
     [$bd, $c] = nuevas();
     $u = $c->usuarioPorId('U-48213');
-    $bd->exec("INSERT INTO prestamo (nodo, usuario_id, inicio) VALUES ('RSP-4F7K', 'U-48213', '2026-11-09 08:00:00.000')");
+    $bd->exec("INSERT INTO prestamo (nodo, usuario_id, punto_reparto_id, inicio, fecha_limite, estado_devolucion)
+        VALUES ('RSP-4F7K', 'U-48213', 1, '2026-11-09 08:00:00.000', '2026-11-19 08:00:00.000', 'No devuelto')");
     lanza(ConflictoException::class, function () use ($c, $u) { $c->borrarCuenta($u); });
-    $bd->exec("UPDATE prestamo SET fin = '2026-11-09 09:00:00.000'");
+    $bd->exec("UPDATE prestamo SET estado_devolucion = 'Correcto'");
     $bd->exec("INSERT INTO percepcion (usuario_id, tipo, nivel, lat, lng, direccion, creada) VALUES ('U-48213', 'ruido', 2, 38.96, -0.18, 'C/ Mayor', '2026-11-09 09:00:00.000')");
     $c->borrarCuenta($u);
     igual(null, $c->usuarioPorId('U-48213'));

@@ -29,7 +29,7 @@ Cuentas, préstamos, puntos, regalos, canjes y percepciones: también en el serv
 | Medidas del sensor (O₃, temperatura, ruido) | **Reales** (`arduino/`), sin valores simulados. Ruido en dB aproximados (KY-037 calibrado con el móvil) |
 | Sensor → app → servidor | **Real**: la app escucha el beacon de SU sensor, añade ubicación y lo envía a `POST /mediciones`; sin red, lo guarda y lo manda en lote después |
 | Zonas y sus valores (mapa, ficha de zona, historial, comparar) | **Reales** si la API responde (`GET /zonas`, `/serie`). Si no, datos de demostración **con aviso** |
-| Cuentas (app y panel), sesión y bloqueo | **Servidor**: contraseñas con hash, token de sesión, 5 fallos = 15 min de bloqueo, roles comprobados en el servidor |
+| Cuentas (app y panel) y sesión | **Servidor**: contraseñas con hash, token de sesión, roles comprobados en el servidor |
 | Préstamos, sensores del panel, puntos, revisiones, regalos, canjes, trabajadores | **Servidor** (BD completa). Los puntos los calcula el servidor con las mediciones de quien lleva el sensor |
 | Percepciones (capa Comunidad) | **Servidor**: se ven en la app y en la web, 24 h, sin autor |
 | Datos de partida | Los del prototipo, cargados en la BD (`esquema.sql`, sección demo). Solo RSP-4F7K manda datos reales |
@@ -70,12 +70,6 @@ Diseño: fondo blanco con botón de modo oscuro en la cabecera (se recuerda en e
 
 Sin `config.js`, o si la clave falla, la web usa el mapa SVG del prototipo (sin marca de Google) (y la consola muestra un 404 de `config.js`, que es esperado).
 
-Panel municipal (`#acceso`): `admin@ayto.es` / `Admin2026!` · `tecnico@ayto.es` / `Tecnico2026!` · `reparto@ayto.es` / `Reparto2026!`. Con `API_URL`, el panel funciona **solo** contra el servidor (sesión en `sessionStorage`, se cierra con el navegador); sin `API_URL`, es la demo de siempre.
-
-`js/app.js`, `js/mapa-google.js`, `css/styles.css` e `index.html` se generan desde el prototipo visual (los cambios de diseño se hacen allí). `js/datos-api.js` es la capa de datos: habla con la API.
-
-**Trabajadores municipales** (panel › Trabajadores, solo administración): alta con nombre, correo `@ayto.es`, nº de empleado y servicio (sin duplicados). La cuenta queda como *Trabajador municipal* (ID `T-0001…`), **sin acceso al panel**, y se activa con un enlace de un solo uso que caduca a las 48 h (`#activar/<token>`), donde el propio trabajador crea su contraseña. La asignación de sensor es otra operación (Sensores). Demo: `psanz@ayto.es` / `Trabajo2026!` (activo; el panel le deniega el acceso). El enlace se manda por correo (si Plesk puede enviarlo) y administración lo ve con «Abrir correo de prueba», por si hay que dárselo en mano. Contraseñas y tokens con hash en el servidor; sesión y permisos comprobados en el servidor (WEB-05).
-
 ## Claves de Google Maps
 
 - **Nunca** se suben a git: `android/local.properties` y `web/js/config.js` están en `.gitignore`.
@@ -93,14 +87,14 @@ git push -u origin main
 
 Pasos para Plesk (BD y carpeta nuevas, sin tocar el Sprint 0) en **`doc/servidor.md`**; tablas y campos en **`doc/base_de_datos.md`**; montaje, librerías y calibración del sensor en **`doc/arduino.md`**.
 
-Resumen: BD `respira` → importar `servidor/bd/esquema.sql` (o `actualizar_v2.sql` para conservar mediciones) → subir `servidor/api`, `servidor/logica` y `web` a `httpdocs/respira/` → `api/config.php` (nunca a git) → probar `…/respira/api/index.php/estado`.
+Resumen: BD `respira` → importar `servidor/bd/esquema.sql` (o `actualizar_desde_v1.sql` para conservar mediciones) → subir `servidor/api`, `servidor/logica` y `web` a `httpdocs/respira/` → `api/config.php` (nunca a git) → probar `…/respira/api/index.php/estado`.
 
 ## Tests
 
 | Parte | Cómo | Tests |
 |---|---|---|
 | Arduino | `g++ -std=c++17 -I arduino/tests/mocks -I arduino/NodoRespira -x c++ arduino/tests/NodoRespiraTest.cpp -o t && ./t` | 26 |
-| Lógica PHP | `LogicaTest`, `CuentasTest`, `PuntosTest`, `ComunidadFlotaTest` (`php servidor/tests/…`) | 15 + 12 + 11 + 11 |
+| Lógica PHP | `LogicaTest`, `CuentasTest`, `PuntosTest`, `ComunidadFlotaTest` (`php servidor/tests/…`) | 15 + 12 + 11 + 13 |
 | API REST | `php servidor/tests/ApiTest.php` | 23 |
 | Simulación, huecos, alertas y picos | `php servidor/tests/SimuladorTest.php` | 5 |
 | Android (JUnit) | Android Studio › `app/src/test` › Run | 16 |

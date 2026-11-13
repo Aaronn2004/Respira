@@ -103,8 +103,8 @@ class Comunidad extends Base {
     public function editar(?array $quien, int $id, string $tipo, $nivel): array {
         $this->propia($quien, $id);
         self::validar($tipo, $nivel);
-        $this->ejecutar("UPDATE {$this->p}percepcion SET tipo = ?, nivel = ?, editada = ? WHERE id = ?",
-            [$tipo, (int) $nivel, self::fechaBD($this->ahora()), $id]);
+        $this->ejecutar("UPDATE {$this->p}percepcion SET tipo = ?, nivel = ? WHERE id = ?",
+            [$tipo, (int) $nivel, $id]);
         return $this->json($this->fila("SELECT * FROM {$this->p}percepcion WHERE id = ?", [$id]), $quien);
     }
 

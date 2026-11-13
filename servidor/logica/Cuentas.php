@@ -2,10 +2,10 @@
 // ==============================================================
 // Fichero:     Cuentas.php
 // Descripción: Cuentas y seguridad: registro de vecinos (app), inicio y
-//              cierre de sesión (app y web), bloqueo tras 5 fallos,
-//              enlaces de un solo uso (activar la cuenta de un
-//              trabajador, recuperar la contraseña) y alta de
-//              trabajadores municipales desde administración.
+//              cierre de sesión (app y web), enlaces de un solo uso
+//              (recuperar la contraseña) y alta de trabajadores
+//              municipales desde administración: quedan como
+//              «invitación» hasta que activan su cuenta con el enlace.
 //
 //   - Las contraseñas se guardan con password_hash (bcrypt).
 //   - Los tokens de sesión y de los enlaces son 32 bytes aleatorios; en
@@ -20,8 +20,6 @@ require_once __DIR__ . '/Base.php';
 
 class Cuentas extends Base {
 
-    const MAX_INTENTOS = 5;
-    const BLOQUEO_MS = 15 * 60000;
     const SESION_APP_MS = 90 * Base::DIA_MS;   // la app no pide la contraseña cada día
     const SESION_WEB_MS = 12 * Base::HORA_MS;  // el panel caduca en una jornada
     const ACTIVAR_MS = 48 * Base::HORA_MS;
@@ -56,15 +54,10 @@ class Cuentas extends Base {
     // fila: usuario (BD) --> perfil() --> lo que ve el propio usuario
     // --------------------------------------------------------------
     public function perfil(array $u): array {
-        $punto = null;
-        if ($u['punto_reparto_id'] !== null) {
-            $punto = $this->fila("SELECT id, nombre FROM {$this->p}punto_reparto WHERE id = ?", [$u['punto_reparto_id']]);
-            if ($punto) {
-                $punto['id'] = (int) $punto['id'];
-            }
-        }
+        $servicio = $u['rol'] === 'trabajador'
+            ? $this->valor("SELECT servicio FROM {$this->p}empleado WHERE usuario_id = ?", [$u['id']]) : null;
         return ['id' => $u['id'], 'rol' => $u['rol'], 'nombre' => $u['nombre'], 'email' => $u['email'],
-            'servicio' => $u['servicio'], 'punto' => $punto];
+            'servicio' => $servicio, 'punto' => null];
     }
 
     public function usuarioPorId(string $id): ?array {
@@ -134,9 +127,10 @@ class Cuentas extends Base {
             do {
                 $id = 'U-' . random_int(10000, 99999);
             } while ($this->usuarioPorId($id));
-            $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, estado, acepta_condiciones, alta)
-                VALUES (?, 'vecino', ?, ?, ?, 'activo', ?, ?)",
-                [$id, $n, $m, password_hash($clave, PASSWORD_DEFAULT), self::fechaBD($ahora), self::fechaBD($ahora)]);
+            // sin aceptar las condiciones no se llega aquí: «alta» es también el momento en que las aceptó
+            $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, alta)
+                VALUES (?, 'vecino', ?, ?, ?, ?)",
+                [$id, $n, $m, password_hash($clave, PASSWORD_DEFAULT), self::fechaBD($ahora)]);
             $u = $this->usuarioPorId($id);
             return ['token' => $this->abrirSesion($u, 'app'), 'usuario' => $this->perfil($u)];
         });
@@ -146,45 +140,25 @@ class Cuentas extends Base {
         $token = self::tokenNuevo();
         $ahora = $this->ahora();
         $dura = $cliente === 'web' ? self::SESION_WEB_MS : self::SESION_APP_MS;
-        $this->ejecutar("INSERT INTO {$this->p}sesion (token_hash, usuario_id, cliente, creada, caduca) VALUES (?, ?, ?, ?, ?)",
-            [self::hashToken($token), $u['id'], $cliente, self::fechaBD($ahora), self::fechaBD($ahora + $dura)]);
-        // limpieza de sesiones caducadas (de paso)
-        $this->ejecutar("DELETE FROM {$this->p}sesion WHERE caduca < ?", [self::fechaBD($ahora)]);
+        $this->ejecutar("INSERT INTO {$this->p}token (token_hash, usuario_id, tipo, caduca) VALUES (?, ?, ?, ?)",
+            [self::hashToken($token), $u['id'], $cliente, self::fechaBD($ahora + $dura)]);
+        // limpieza de sesiones caducadas (de paso). Los enlaces caducados se
+        // quedan hasta que se pide otro, para poder decir «ha caducado».
+        $this->ejecutar("DELETE FROM {$this->p}token WHERE tipo IN ('app', 'web') AND caduca < ?", [self::fechaBD($ahora)]);
         return $token;
     }
 
     // --------------------------------------------------------------
     // email, clave, cliente ('app' | 'web') --> iniciarSesion() --> {token, usuario}
-    //   401 correo o contraseña mal (con los intentos que quedan)
-    //   423 bloqueada 15 min tras 5 fallos
+    //   401 correo o contraseña mal
     //   403 cuenta que no corresponde a ese cliente
     // --------------------------------------------------------------
     public function iniciarSesion(string $email, string $clave, string $cliente): array {
         $m = strtolower(trim($email));
-        $ahora = $this->ahora();
         $u = $this->fila("SELECT * FROM {$this->p}usuario WHERE email = ?", [$m]);
-        if ($u && $u['bloqueado_hasta'] !== null && self::msDeFechaBD($u['bloqueado_hasta']) > $ahora) {
-            throw new BloqueadoException('Has fallado ' . self::MAX_INTENTOS
-                . ' veces. Por seguridad, el acceso queda bloqueado 15 minutos.');
+        if (!$u || !password_verify($clave, $u['clave_hash'])) {
+            throw new NoAutorizadoException('Correo o contraseña incorrectos.');
         }
-        $bien = $u && $u['clave_hash'] !== null && password_verify($clave, $u['clave_hash']);
-        if (!$bien) {
-            if (!$u) {
-                throw new NoAutorizadoException('Correo o contraseña incorrectos.');
-            }
-            $intentos = (int) $u['intentos_fallidos'] + 1;
-            if ($intentos >= self::MAX_INTENTOS) {
-                $this->ejecutar("UPDATE {$this->p}usuario SET intentos_fallidos = 0, bloqueado_hasta = ? WHERE id = ?",
-                    [self::fechaBD($ahora + self::BLOQUEO_MS), $u['id']]);
-                throw new BloqueadoException('Has fallado ' . self::MAX_INTENTOS
-                    . ' veces. Por seguridad, el acceso queda bloqueado 15 minutos.');
-            }
-            $this->ejecutar("UPDATE {$this->p}usuario SET intentos_fallidos = ? WHERE id = ?", [$intentos, $u['id']]);
-            $quedan = self::MAX_INTENTOS - $intentos;
-            throw new NoAutorizadoException('Correo o contraseña incorrectos. Te quedan ' . $quedan
-                . ($quedan === 1 ? ' intento.' : ' intentos.'), $quedan);
-        }
-        $this->ejecutar("UPDATE {$this->p}usuario SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?", [$u['id']]);
         if ($cliente === 'web' && !in_array($u['rol'], self::ROLES_PANEL, true)) {
             throw new ProhibidoException($u['rol'] === 'trabajador'
                 ? 'Tu cuenta es de trabajador municipal. No tiene acceso al panel de gestión: entra en la app Respira con este correo.'
@@ -203,12 +177,12 @@ class Cuentas extends Base {
         if ($token === null || $token === '') {
             return null;
         }
-        return $this->fila("SELECT u.* FROM {$this->p}sesion s JOIN {$this->p}usuario u ON u.id = s.usuario_id
-            WHERE s.token_hash = ? AND s.caduca > ?", [self::hashToken($token), self::fechaBD($this->ahora())]);
+        return $this->fila("SELECT u.* FROM {$this->p}token s JOIN {$this->p}usuario u ON u.id = s.usuario_id
+            WHERE s.token_hash = ? AND s.tipo IN ('app', 'web') AND s.caduca > ?", [self::hashToken($token), self::fechaBD($this->ahora())]);
     }
 
     public function cerrarSesion(string $token): void {
-        $this->ejecutar("DELETE FROM {$this->p}sesion WHERE token_hash = ?", [self::hashToken($token)]);
+        $this->ejecutar("DELETE FROM {$this->p}token WHERE token_hash = ? AND tipo IN ('app', 'web')", [self::hashToken($token)]);
     }
 
     // --------------------------------------------------------------
@@ -217,13 +191,13 @@ class Cuentas extends Base {
     // --------------------------------------------------------------
     public function borrarCuenta(?array $u): void {
         self::exigirRol($u, ['vecino']);
-        $abierto = $this->valor("SELECT nodo FROM {$this->p}prestamo WHERE usuario_id = ? AND fin IS NULL", [$u['id']]);
+        $abierto = $this->valor("SELECT nodo FROM {$this->p}prestamo WHERE usuario_id = ? AND estado_devolucion = 'No devuelto'", [$u['id']]);
         if ($abierto) {
             throw new ConflictoException("Antes de borrar la cuenta, devuelve el sensor $abierto en un punto de reparto.");
         }
         $this->transaccion(function () use ($u) {
             // (SQLite no aplica ON DELETE si no se activan las FK: se hace a mano)
-            foreach (['sesion', 'token_cuenta', 'percepcion', 'jornada'] as $t) {
+            foreach (['token', 'percepcion', 'revision'] as $t) {
                 $this->ejecutar("DELETE FROM {$this->p}$t WHERE usuario_id = ?", [$u['id']]);
             }
             $this->ejecutar("UPDATE {$this->p}medicion SET portador_id = NULL WHERE portador_id = ?", [$u['id']]);
@@ -235,35 +209,34 @@ class Cuentas extends Base {
 
     // ==============================================================
     // Enlaces de un solo uso
+    //   recuperar  fila en «token» (1 h), para cuentas que ya existen
+    //   activar    la propia «invitacion» del trabajador (48 h)
     // ==============================================================
 
-    private function crearEnlace(string $usuarioId, string $tipo): string {
+    private function crearEnlaceRecuperar(string $usuarioId): string {
         $token = self::tokenNuevo();
-        $ahora = $this->ahora();
-        // un enlace nuevo invalida los anteriores del mismo tipo
-        $this->ejecutar("DELETE FROM {$this->p}token_cuenta WHERE usuario_id = ? AND tipo = ? AND usado IS NULL",
-            [$usuarioId, $tipo]);
-        $this->ejecutar("INSERT INTO {$this->p}token_cuenta (token_hash, usuario_id, tipo, creado, caduca) VALUES (?, ?, ?, ?, ?)",
-            [self::hashToken($token), $usuarioId, $tipo, self::fechaBD($ahora),
-                self::fechaBD($ahora + ($tipo === 'activar' ? self::ACTIVAR_MS : self::RECUPERAR_MS))]);
+        // un enlace nuevo invalida el anterior
+        $this->ejecutar("DELETE FROM {$this->p}token WHERE usuario_id = ? AND tipo = 'recuperar'", [$usuarioId]);
+        $this->ejecutar("INSERT INTO {$this->p}token (token_hash, usuario_id, tipo, caduca) VALUES (?, ?, 'recuperar', ?)",
+            [self::hashToken($token), $usuarioId, self::fechaBD($this->ahora() + self::RECUPERAR_MS)]);
         return $token;
     }
 
     // --------------------------------------------------------------
     // email, urlWeb --> solicitarRecuperacion()
     // Siempre responde igual (no revela qué correos existen). Si la cuenta
-    // existe y está activa, envía un correo con el enlace (válido 1 h).
+    // existe, envía un correo con el enlace (válido 1 h).
     // --------------------------------------------------------------
     public function solicitarRecuperacion(string $email, string $urlWeb): void {
         $m = strtolower(trim($email));
         if (!self::esEmail($m)) {
             throw new DatosNoValidosException('El correo no tiene un formato válido.', 'email');
         }
-        $u = $this->fila("SELECT * FROM {$this->p}usuario WHERE email = ? AND estado = 'activo'", [$m]);
+        $u = $this->fila("SELECT * FROM {$this->p}usuario WHERE email = ?", [$m]);
         if (!$u) {
             return;
         }
-        $token = $this->crearEnlace($u['id'], 'recuperar');
+        $token = $this->crearEnlaceRecuperar($u['id']);
         $enlace = rtrim($urlWeb, '/') . '/#activar/' . $token;
         call_user_func($this->correo, $m, 'Respira: crea una contraseña nueva',
             "Hola, {$u['nombre']}:\n\nPara crear una contraseña nueva, abre este enlace (caduca en 1 hora y solo sirve una vez):\n\n$enlace\n\n"
@@ -271,13 +244,17 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // token --> verEnlace() --> {estado: valido|caducado|no_valido, tipo, id, nombre, email, rol}
+    // token --> verEnlace() --> {estado: valido|caducado|no_valido, tipo, id, nombre, email, rol, horas}
+    // Un enlace usado ya no existe: se borra al usarlo.
     // --------------------------------------------------------------
     public function verEnlace(string $token): array {
-        $f = $this->fila("SELECT t.tipo, t.caduca, t.usado, u.id, u.nombre, u.email, u.rol
-            FROM {$this->p}token_cuenta t JOIN {$this->p}usuario u ON u.id = t.usuario_id WHERE t.token_hash = ?",
-            [self::hashToken($token)]);
-        if (!$f || $f['usado'] !== null) {
+        $h = self::hashToken($token);
+        $f = $this->fila("SELECT 'recuperar' AS tipo, t.caduca, u.id, u.nombre, u.email, u.rol
+            FROM {$this->p}token t JOIN {$this->p}usuario u ON u.id = t.usuario_id
+            WHERE t.token_hash = ? AND t.tipo = 'recuperar'", [$h])
+            ?? $this->fila("SELECT 'activar' AS tipo, caduca, id, nombre, email, 'trabajador' AS rol
+            FROM {$this->p}invitacion WHERE token_hash = ?", [$h]);
+        if (!$f) {
             return ['estado' => 'no_valido'];
         }
         $estado = self::msDeFechaBD($f['caduca']) < $this->ahora() ? 'caducado' : 'valido';
@@ -287,8 +264,8 @@ class Cuentas extends Base {
 
     // --------------------------------------------------------------
     // token, clave --> usarEnlace() --> email
-    // Crea la contraseña (activar) o la cambia (recuperar). Cierra las
-    // sesiones abiertas de esa cuenta.
+    //   activar:   crea la cuenta (usuario + empleado) y borra la invitación
+    //   recuperar: cambia la contraseña y cierra las sesiones abiertas
     // --------------------------------------------------------------
     public function usarEnlace(string $token, string $clave): string {
         $v = $this->verEnlace($token);
@@ -302,13 +279,21 @@ class Cuentas extends Base {
         if ($e) {
             throw new DatosNoValidosException($e, 'clave');
         }
+        $hash = password_hash($clave, PASSWORD_DEFAULT);
         $ahora = $this->ahora();
-        $this->transaccion(function () use ($token, $clave, $v, $ahora) {
-            $this->ejecutar("UPDATE {$this->p}usuario SET clave_hash = ?, estado = 'activo', intentos_fallidos = 0,
-                bloqueado_hasta = NULL WHERE id = ?", [password_hash($clave, PASSWORD_DEFAULT), $v['id']]);
-            $this->ejecutar("UPDATE {$this->p}token_cuenta SET usado = ? WHERE token_hash = ?",
-                [self::fechaBD($ahora), self::hashToken($token)]);
-            $this->ejecutar("DELETE FROM {$this->p}sesion WHERE usuario_id = ?", [$v['id']]);
+        $this->transaccion(function () use ($v, $hash, $ahora) {
+            if ($v['tipo'] === 'activar') {
+                $inv = $this->fila("SELECT * FROM {$this->p}invitacion WHERE id = ?", [$v['id']]);
+                $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, alta) VALUES (?, 'trabajador', ?, ?, ?, ?)",
+                    [$inv['id'], $inv['nombre'], $inv['email'], $hash, self::fechaBD($ahora)]);
+                $this->ejecutar("INSERT INTO {$this->p}empleado (usuario_id, num_empleado, servicio) VALUES (?, ?, ?)",
+                    [$inv['id'], $inv['num_empleado'], $inv['servicio']]);
+                $this->ejecutar("DELETE FROM {$this->p}invitacion WHERE id = ?", [$inv['id']]);
+            } else {
+                $this->ejecutar("UPDATE {$this->p}usuario SET clave_hash = ? WHERE id = ?", [$hash, $v['id']]);
+                // el enlace ya no sirve y las sesiones abiertas se cierran
+                $this->ejecutar("DELETE FROM {$this->p}token WHERE usuario_id = ?", [$v['id']]);
+            }
         });
         return $v['email'];
     }
@@ -320,27 +305,34 @@ class Cuentas extends Base {
     // --------------------------------------------------------------
     // trabajadores() --> [{id, nombre, email, num_empleado, servicio, alta,
     //                      estado: activo|pendiente|caducado}]
+    //   activos: usuario + empleado · pendientes: invitaciones
     // --------------------------------------------------------------
     public function trabajadores(?array $quien): array {
         self::exigirRol($quien, ['admin']);
         $ahora = $this->ahora();
         $out = [];
-        foreach ($this->filas("SELECT * FROM {$this->p}usuario WHERE rol = 'trabajador' ORDER BY id") as $t) {
-            $estado = $t['estado'];
-            if ($estado === 'pendiente') {
-                $cad = $this->valor("SELECT MAX(caduca) FROM {$this->p}token_cuenta WHERE usuario_id = ? AND tipo = 'activar' AND usado IS NULL", [$t['id']]);
-                if (!$cad || self::msDeFechaBD($cad) < $ahora) {
-                    $estado = 'caducado';
-                }
-            }
+        foreach ($this->filas("SELECT u.id, u.nombre, u.email, u.alta, e.num_empleado, e.servicio
+            FROM {$this->p}usuario u JOIN {$this->p}empleado e ON e.usuario_id = u.id
+            WHERE u.rol = 'trabajador'") as $t) {
             $out[] = ['id' => $t['id'], 'nombre' => $t['nombre'], 'email' => $t['email'], 'num_empleado' => $t['num_empleado'],
-                'servicio' => $t['servicio'], 'alta' => self::isoDeBD($t['alta']), 'estado' => $estado];
+                'servicio' => $t['servicio'], 'alta' => self::isoDeBD($t['alta']), 'estado' => 'activo'];
         }
+        foreach ($this->filas("SELECT * FROM {$this->p}invitacion") as $t) {
+            $cad = self::msDeFechaBD($t['caduca']);
+            $out[] = ['id' => $t['id'], 'nombre' => $t['nombre'], 'email' => $t['email'], 'num_empleado' => $t['num_empleado'],
+                'servicio' => $t['servicio'], 'alta' => self::fechaISO($cad - self::ACTIVAR_MS),
+                'estado' => $cad < $ahora ? 'caducado' : 'pendiente'];
+        }
+        usort($out, function ($a, $b) { return strcmp($a['id'], $b['id']); });
         return $out;
     }
 
+    private function trabajador(?array $quien, string $id): array {
+        return array_values(array_filter($this->trabajadores($quien), function ($x) use ($id) { return $x['id'] === $id; }))[0];
+    }
+
     // --------------------------------------------------------------
-    // Alta de un trabajador: la cuenta queda pendiente hasta que él mismo
+    // Alta de un trabajador: queda como invitación hasta que él mismo
     // crea su contraseña con el enlace (48 h). --> {trabajador, token}
     // --------------------------------------------------------------
     public function altaTrabajador(?array $quien, string $nombre, string $email, string $numEmpleado, string $servicio): array {
@@ -360,14 +352,16 @@ class Cuentas extends Base {
             $e['email'] = 'El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';
         } elseif (substr($m, -8) !== '@ayto.es') {
             $e['email'] = 'Tiene que ser un correo municipal (termina en @ayto.es).';
-        } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE email = ?", [$m])) {
+        } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE email = ?", [$m])
+            || $this->fila("SELECT id FROM {$this->p}invitacion WHERE email = ?", [$m])) {
             $e['email'] = 'Ya hay una cuenta con este correo.';
         }
         if ($emp === '') {
             $e['num_empleado'] = 'Escribe el número de empleado.';
         } elseif (!preg_match('/^\d{6}$/', $emp)) {
             $e['num_empleado'] = 'Son 6 cifras, por ejemplo 104233.';
-        } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE num_empleado = ?", [$emp])) {
+        } elseif ($this->fila("SELECT usuario_id FROM {$this->p}empleado WHERE num_empleado = ?", [$emp])
+            || $this->fila("SELECT id FROM {$this->p}invitacion WHERE num_empleado = ?", [$emp])) {
             $e['num_empleado'] = 'Este número de empleado ya tiene una cuenta.';
         }
         if (!in_array($servicio, self::SERVICIOS, true)) {
@@ -376,16 +370,15 @@ class Cuentas extends Base {
         if ($e) {
             throw new ErroresDeCamposException($e);
         }
-        $ahora = $this->ahora();
-        return $this->transaccion(function () use ($quien, $n, $m, $emp, $servicio, $ahora) {
-            $max = $this->valor("SELECT MAX(id) FROM {$this->p}usuario WHERE rol = 'trabajador'");
-            $id = 'T-' . str_pad((string) ($max ? ((int) substr($max, 2)) + 1 : 1), 4, '0', STR_PAD_LEFT);
-            $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, estado, num_empleado, servicio, alta, alta_por)
-                VALUES (?, 'trabajador', ?, ?, NULL, 'pendiente', ?, ?, ?, ?)",
-                [$id, $n, $m, $emp, $servicio, self::fechaBD($ahora), $quien['id']]);
-            $token = $this->crearEnlace($id, 'activar');
-            $t = array_values(array_filter($this->trabajadores($quien), function ($x) use ($id) { return $x['id'] === $id; }))[0];
-            return ['trabajador' => $t, 'token' => $token];
+        return $this->transaccion(function () use ($quien, $n, $m, $emp, $servicio) {
+            $max = max((int) substr((string) $this->valor("SELECT MAX(id) FROM {$this->p}usuario WHERE rol = 'trabajador'"), 2),
+                (int) substr((string) $this->valor("SELECT MAX(id) FROM {$this->p}invitacion"), 2));
+            $id = 'T-' . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+            $token = self::tokenNuevo();
+            $this->ejecutar("INSERT INTO {$this->p}invitacion (id, nombre, email, num_empleado, servicio, token_hash, caduca)
+                VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [$id, $n, $m, $emp, $servicio, self::hashToken($token), self::fechaBD($this->ahora() + self::ACTIVAR_MS)]);
+            return ['trabajador' => $this->trabajador($quien, $id), 'token' => $token];
         });
     }
 
@@ -394,16 +387,16 @@ class Cuentas extends Base {
     // --------------------------------------------------------------
     public function reenviarActivacion(?array $quien, string $id): array {
         self::exigirRol($quien, ['admin']);
-        $t = $this->fila("SELECT * FROM {$this->p}usuario WHERE id = ? AND rol = 'trabajador'", [$id]);
-        if (!$t) {
+        if (!$this->fila("SELECT id FROM {$this->p}invitacion WHERE id = ?", [$id])) {
+            if ($this->fila("SELECT id FROM {$this->p}usuario WHERE id = ? AND rol = 'trabajador'", [$id])) {
+                throw new ConflictoException('Esta cuenta ya está activada.');
+            }
             throw new NoEncontradoException("No existe el trabajador $id.");
         }
-        if ($t['estado'] !== 'pendiente') {
-            throw new ConflictoException('Esta cuenta ya está activada.');
-        }
-        $token = $this->crearEnlace($id, 'activar');
-        $tr = array_values(array_filter($this->trabajadores($quien), function ($x) use ($id) { return $x['id'] === $id; }))[0];
-        return ['trabajador' => $tr, 'token' => $token];
+        $token = self::tokenNuevo();
+        $this->ejecutar("UPDATE {$this->p}invitacion SET token_hash = ?, caduca = ? WHERE id = ?",
+            [self::hashToken($token), self::fechaBD($this->ahora() + self::ACTIVAR_MS), $id]);
+        return ['trabajador' => $this->trabajador($quien, $id), 'token' => $token];
     }
 
     // --------------------------------------------------------------

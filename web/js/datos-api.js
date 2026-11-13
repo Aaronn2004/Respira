@@ -147,12 +147,13 @@
         z.nm = s.n;
         z.o3 = s.o3; z.temp = s.temp; z.ruido = s.ruido;
         z.m24 = s.media_24h;
+        z.mejor = s.mejor || null;   // mejor medida (la más baja) de la última hora
       });
       // Zonas de la demo que el servidor no tiene: sin datos
       ZONAS.forEach(z => {
         if (!lista.some(s => s.id === z.id)) { z.hace = null; z.nm = 0; z.o3 = z.temp = z.ruido = null; }
       });
-      ZONAS.forEach(z => { if (!lista.some(s => s.id === z.id)) z.m24 = null; });
+      ZONAS.forEach(z => { if (!lista.some(s => s.id === z.id)) { z.m24 = null; z.mejor = null; } });
       const huella = huellaZonas(lista);
       if (D.estado !== 'ok' || huella !== ultimaHuella) {
         ultimaHuella = huella;
@@ -186,6 +187,7 @@
   }
 
   let fijosCargados = false;
+  let idsPuntos = {};
   async function cargarFijos() {
     if (fijosCargados) return;
     try {
@@ -196,6 +198,7 @@
         return { id: a.id, n: a.nombre, zona: a.comarca, desde: MES_LARGO[d.getMonth()] + ' ' + d.getFullYear(), activo: a.activo };
       }));
       PUNTOS_REPARTO.splice(0, PUNTOS_REPARTO.length, ...puntos.map(p => [p.nombre, p.direccion, p.horario]));
+      idsPuntos = Object.fromEntries(puntos.map(p => [p.nombre, p.id]));   // nombre --> id (para prestar)
       fijosCargados = true;
       D.version++;
     } catch (e) {
@@ -279,9 +282,11 @@
   // ---------- traducir los datos del servidor a los de app.js ----------
   const aSensor = n => ({ code: n.codigo, tipo: n.tipo, mags: n.magnitudes, est: n.estado, asig: n.asignado_a || '',
     user: n.prestamo ? n.prestamo.usuario : null, desde: n.prestamo ? fechaHora(n.prestamo.desde) : null,
-    ult: n.ultima_min, bat: n.bateria, motivo: n.motivo_mant });
+    ult: n.ultima_min, motivo: n.motivo_mant });
+  // «No devuelto» = en curso; lim = fecha límite (10 días desde la recogida)
   const aPrestamo = p => ({ id: p.id, code: p.nodo, user: p.usuario || '(cuenta borrada)', ini: fechaHora(p.inicio),
-    iniMs: Date.parse(p.inicio), fin: p.fin ? fechaHora(p.fin) : null, punto: p.punto || '—', estDev: p.estado_devolucion });
+    iniMs: Date.parse(p.inicio), lim: fechaHora(p.fecha_limite), limMs: Date.parse(p.fecha_limite),
+    fin: p.estado_devolucion === 'No devuelto' ? null : fechaHora(p.fecha_limite), punto: p.punto || '—', estDev: p.estado_devolucion });
   const aTrabajador = t => ({ n: t.nombre, e: t.email, p: null, r: 'trabajador', id: t.id, emp: t.num_empleado,
     serv: t.servicio, estado: t.estado === 'activo' ? 'activo' : 'pendiente', alta: fechaDia(t.alta),
     caduca: t.estado === 'caducado' ? 0 : Date.now() + 48 * 36e5, token: null });
@@ -357,7 +362,7 @@
 
   // ---------- errores del servidor --> campos del formulario ----------
   const CAMPOS = {
-    prestar: { usuario: 'puser', codigo: 'pcode' }, devolver: { codigo: 'dcode' },
+    prestar: { usuario: 'puser', codigo: 'pcode', punto: 'ppunto' }, devolver: { codigo: 'dcode' },
     sensor: { codigo: 'code', magnitudes: 'mags', asignado_a: 'asig', motivo: 'motivo' },
     baja: { motivo: 'bmot' }, reglas: { min: 'rmin', mult: 'rmult', max: 'rmax' }, anular: { razon: 'amot' },
     regalo: { nombre: 'gn', coste: 'gc', stock: 'gs' }, comprobarCanje: { codigo: 'ccode' }, entregar: { codigo: 'ccode' },
@@ -442,10 +447,11 @@
       } catch (e) { mostrarError('baja', e); }
     },
 
-    async prestar({ usuario, codigo }) {
+    async prestar({ usuario, codigo, punto }) {
       const S = R().S;
       try {
-        await pedir('/panel/prestamos', 'POST', { usuario, codigo });
+        await cargarFijos();
+        await pedir('/panel/prestamos', 'POST', { usuario, codigo, punto: idsPuntos[punto] ?? null });
         S.f.puser = ''; S.f.pcode = ''; await cargarPanel(); R().render();
         R().toast(`${codigo} prestado a ${usuario}. Ya puede escribir el código en su app.`);
       } catch (e) { mostrarError('prestar', e); }
@@ -456,8 +462,7 @@
       try {
         await pedir('/panel/devoluciones', 'POST', { codigo, estado });
         S.f.dcode = ''; S.f.dest = 'Correcto'; await cargarPanel(); R().render();
-        R().toast(estado === 'Dañado' ? `${codigo} devuelto y en mantenimiento`
-          : `${codigo} devuelto${estado === 'Batería baja' ? ': ponlo a cargar' : ''}`);
+        R().toast(estado === 'Defectuoso' ? `${codigo} devuelto y en mantenimiento` : `${codigo} devuelto`);
       } catch (e) { mostrarError('devolver', e, 'dcode'); }
     },
 

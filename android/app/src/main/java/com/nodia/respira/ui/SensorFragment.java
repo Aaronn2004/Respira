@@ -58,6 +58,16 @@ public class SensorFragment extends Pestana {
                     "El sensor se presta en un punto de reparto con tu ID de usuario. Así sabemos a quién darle los puntos.");
             return;
         }
+        // plazo del préstamo: 10 días desde la recogida, en cualquier punto de reparto
+        long hasta = repo.prestamoHasta();
+        if (hasta > 0) {
+            String cuando = ZonaActivity.hora(hasta, true);
+            if (hasta < System.currentTimeMillis()) {
+                Ui.aviso(c, "Se ha pasado el plazo para devolver el sensor (" + cuando + "). Llévalo cuanto antes a cualquier punto de reparto.", Nivel.ALTO);
+            } else {
+                Ui.nota(c, "Devuelve el sensor antes del " + cuando + " en cualquier punto de reparto.");
+            }
+        }
         Recorrido r = repo.recorrido();
         if (r != null && r.enCurso()) {
             pintarRecorrido(c, r);

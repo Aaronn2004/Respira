@@ -152,13 +152,12 @@ class Simulador extends Base {
             return (bool) $this->fila("SELECT codigo FROM {$this->p}nodo WHERE codigo = ?", [$c]);
         }));
         if (!$nodos) {
-            $this->ejecutar("INSERT INTO {$this->p}nodo (codigo, uuid_beacon, tipo, magnitudes, estado, asignado_a)
-                VALUES ('RSP-SIM0', 'RESPIRA-RSP-SIM0', 'trab', 'o3,temp,ruido', 'activo', 'Datos simulados')");
+            $this->ejecutar("INSERT INTO {$this->p}nodo (codigo, tipo, magnitudes, estado, asignado_a, motivo)
+                VALUES ('RSP-SIM0', 'trab', 'o3,temp,ruido', 'activo', 'Datos simulados', 'Sin incidencias')");
             $nodos = ['RSP-SIM0'];
         }
         $ruido = array_values(array_intersect($nodos, self::NODOS_RUIDO)) ?: [$nodos[0]];
         $total = 0;
-        $ultimo = 0;
         $zonas = $this->filas("SELECT id, tipo, etiqueta_lat, etiqueta_lng FROM {$this->p}zona");
         foreach ($zonas as $z) {
             if (in_array($z['id'], self::SIN_DATOS, true)) {
@@ -166,8 +165,8 @@ class Simulador extends Base {
             }
             $hasta = $ahora - (self::RETRASO[$z['id']] ?? 0);
             $tope = $ahora - self::DIAS * self::DIA_MS;
-            $ult = $this->valor("SELECT MAX(medida_en) FROM {$this->p}medicion WHERE zona_id = ? AND magnitud = 'o3' AND origen = 'simulado'", [$z['id']]);
-            $pri = $this->valor("SELECT MIN(medida_en) FROM {$this->p}medicion WHERE zona_id = ? AND magnitud = 'o3' AND origen = 'simulado'", [$z['id']]);
+            $ult = $this->valor("SELECT MAX(fecha_medicion) FROM {$this->p}medicion WHERE zona_id = ? AND tipo = 'o3' AND origen = 'simulado'", [$z['id']]);
+            $pri = $this->valor("SELECT MIN(fecha_medicion) FROM {$this->p}medicion WHERE zona_id = ? AND tipo = 'o3' AND origen = 'simulado'", [$z['id']]);
             // tramos que faltan: [desde, hasta] hacia delante y, si falta historial, hacia atrás
             $tramos = [];
             if (!$ult) {
@@ -192,20 +191,14 @@ class Simulador extends Base {
                     $lat = (float) $z['etiqueta_lat'] + (self::azar("la|$k|{$z['id']}") - 0.5) * 0.0006;
                     $lng = (float) $z['etiqueta_lng'] + (self::azar("ln|$k|{$z['id']}") - 0.5) * 0.0006;
                     $f = self::fechaBD($t);
-                    $filas[] = [$nodo, $m, self::medida($z, $m, $t), $k % 256, $f, $f, round($lat, 6), round($lng, 6), $z['id']];
+                    $filas[] = [$nodo, $m, self::medida($z, $m, $t), $f, round($lat, 6), round($lng, 6), $z['id']];
                 }
-                $ultimo = max($ultimo, $t);
             }
             }
             if ((count($tramos) > 1 && $tramos[1][0] > $tope) || (!$ult && $tramos[0][0] > $tope)) {
                 $completo = false;      // aún falta historial: la próxima petición sigue
             }
             $total += $this->insertar($filas);
-        }
-        if ($ultimo) {
-            $this->ejecutar("UPDATE {$this->p}nodo SET ultima_medicion = ? WHERE codigo IN ("
-                . implode(',', array_fill(0, count($nodos), '?')) . ") AND (ultima_medicion IS NULL OR ultima_medicion < ?)",
-                array_merge([self::fechaBD($ultimo)], $nodos, [self::fechaBD($ultimo)]));
         }
         $this->percepciones($ahora);
         if ($this->marca) {
@@ -217,8 +210,8 @@ class Simulador extends Base {
     // Inserta en bloques de 300 filas (rápido también en Plesk)
     private function insertar(array $filas): int {
         foreach (array_chunk($filas, 300) as $bloque) {
-            $sql = "INSERT INTO {$this->p}medicion (nodo, magnitud, valor, contador, medida_en, recibida_en, lat, lng, zona_id, origen, valida)
-                VALUES " . implode(',', array_fill(0, count($bloque), "(?, ?, ?, ?, ?, ?, ?, ?, ?, 'simulado', 1)"));
+            $sql = "INSERT INTO {$this->p}medicion (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, origen)
+                VALUES " . implode(',', array_fill(0, count($bloque), "(?, ?, ?, ?, ?, ?, ?, 'simulado')"));
             $this->ejecutar($sql, array_merge(...$bloque));
         }
         return count($filas);

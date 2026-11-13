@@ -276,7 +276,7 @@ try {
         }
         if ($s === 'prestamos') {
             if ($metodo === 'GET' && $n === 2) responder(200, $flota->prestamos($yo));
-            if ($metodo === 'POST' && $n === 2) responder(201, $flota->prestar($yo, (string) ($c['usuario'] ?? ''), (string) ($c['codigo'] ?? '')));
+            if ($metodo === 'POST' && $n === 2) responder(201, $flota->prestar($yo, (string) ($c['usuario'] ?? ''), (string) ($c['codigo'] ?? ''), $c['punto'] ?? null));
         }
         if ($s === 'devoluciones' && $metodo === 'POST' && $n === 2) {
             responder(200, $flota->devolver($yo, (string) ($c['codigo'] ?? ''), (string) ($c['estado'] ?? 'Correcto')));

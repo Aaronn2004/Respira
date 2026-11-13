@@ -13,6 +13,7 @@ Este documento recoge **solo lo que cambia o se añade** en este sprint respecto
 | Los trabajadores los registra administración | — | Panel › Trabajadores (enlace de activación por correo y en pantalla) | `POST /panel/trabajadores` (solo admin) |
 | Interpolar (aproximado) | Gráfica: línea de puntos | Gráfica: línea de puntos | `serie` › `aprox` |
 | Promedio de las mediciones en la info de cada zona | «Media de las últimas 24 h» | «Media de las últimas 24 h» | `GET /zonas` › `media_24h` |
+| Portada: parques de mejor a peor, mejor medida | — | Portada › «Los parques ahora» | `GET /zonas` › `mejor` |
 | Datos para probarlo todo | — | — | `Simulador.php` (ver `doc/servidor.md`) |
 
 ## Efectos en la salud
@@ -42,6 +43,19 @@ Si todo está en Bajo, no se enseña nada (no hay nada de lo que avisar).
 **WEB-02 (historial).** Se añade la tarjeta «Alertas y picos» con los mismos datos que la app.
 
 **WEB-04.3.** Se quita el recuadro «Descarga la app». El criterio pasa a ser: la portada explica qué es Respira y lleva al mapa y a «Cómo funciona»; no enlaza a ninguna descarga mientras la app no esté publicada.
+
+**Inicio de sesión (app y panel).** Se quita el bloqueo de 15 minutos tras 5 contraseñas mal: ahora solo se avisa de «Correo o contraseña incorrectos».
+
+**Préstamos (panel).** Al prestar se elige el punto de recogida. El plazo para devolver el sensor es de 10 días desde la hora exacta de la recogida (por ejemplo, del 10 de enero a las 12:00 al 20 de enero a las 12:00), en cualquier punto de reparto. La devolución se registra como «Correcto» o «Defectuoso» (no se ha entregado en buenas condiciones: el sensor pasa a mantenimiento). Pasada la fecha límite, el panel lo marca «Fuera de plazo» y la app avisa a la persona.
+
+**WEB-04 (portada).** La portada se centra en los parques:
+- Sección «Los parques ahora, de mejor a peor»: todos los parques con datos de la última hora, ordenados por su estado general (ver abajo). Cada tarjeta lleva la silueta real del parque (su polígono) con el color del estado general y la **mejor medida** (la más baja) de la última hora de ozono, temperatura y ruido, cada una en verde, amarillo o rojo según su nivel. Al tocarla se abre el parque en el mapa.
+- «Qué significa cada color»: pestañas Ozono / Calor / Ruido con la escala, la media de la ciudad, los efectos y qué hacer.
+- Sin enlaces a descargas (WEB-04.3).
+
+**WEB-01 (mapa): estado general.** El selector del mapa tiene «General» (por defecto) además de Ozono, Temperatura y Ruido. El estado general de una zona es la media de los niveles de sus medidas (Bajo 0, Medio 1, Alto 2), redondeada: si ninguna medida está en Bajo, la zona no sale en verde; un empate Bajo/Medio sale Medio. Con «General», la etiqueta de la zona dice Bajo, Medio o Alto en lugar de un número.
+
+**Mediciones.** Solo se guardan las que traen ubicación, caen dentro de un parque o barrio y están dentro del rango del sensor; el resto se rechazan.
 
 ## Datos simulados
 

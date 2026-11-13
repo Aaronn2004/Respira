@@ -77,8 +77,7 @@ function crearBDPrueba(string $dsn = 'sqlite::memory:'): PDO {
 // --------------------------------------------------------------
 function crearUsuario(PDO $bd, string $id, string $rol, string $email, ?string $clave, array $extra = []): void {
     $c = array_merge(['id' => $id, 'rol' => $rol, 'nombre' => explode('@', $email)[0], 'email' => $email,
-        'clave_hash' => $clave === null ? null : password_hash($clave, PASSWORD_DEFAULT),
-        'estado' => $clave === null ? 'pendiente' : 'activo', 'alta' => '2026-11-01 10:00:00.000'], $extra);
+        'clave_hash' => $clave === null ? null : password_hash($clave, PASSWORD_DEFAULT), 'alta' => '2026-11-01 10:00:00.000'], $extra);
     $st = $bd->prepare('INSERT INTO usuario (' . implode(', ', array_keys($c)) . ') VALUES ('
         . implode(', ', array_fill(0, count($c), '?')) . ')');
     $st->execute(array_values($c));

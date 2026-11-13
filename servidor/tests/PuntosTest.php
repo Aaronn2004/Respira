@@ -25,19 +25,32 @@ function entorno(): array {
     $reloj = function () use (&$T) { return $T; };
     crearUsuario($bd, 'U-48213', 'vecino', 'lucia@correo.es', 'Respira2026');
     crearUsuario($bd, 'A-0001', 'admin', 'admin@ayto.es', 'Admin2026!');
-    $bd->exec("INSERT INTO prestamo (nodo, usuario_id, inicio) VALUES ('RSP-4F7K', 'U-48213', '2026-11-01 08:00:00.000')");
+    $bd->exec("INSERT INTO prestamo (nodo, usuario_id, punto_reparto_id, inicio, fecha_limite, estado_devolucion)
+        VALUES ('RSP-4F7K', 'U-48213', 1, '2026-11-01 08:00:00.000', '2026-11-11 08:00:00.000', 'No devuelto')");
     $bd->exec("UPDATE nodo SET estado = 'prestado'");
     return [$bd, new Logica($bd, '', $reloj), new Puntos($bd, '', $reloj)];
 }
 
+// Un día andando por el barrio Centro (fuera de los parques): una lectura por
+// minuto desde las 9:00 UTC, unos 60 m cada minuto. Puntos = minutos / 5 (máx. 100)
+function andar(PDO $bd, string $dia, int $minutos): void {
+    $st = $bd->prepare("INSERT INTO medicion (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, portador_id, origen)
+        VALUES ('RSP-4F7K', 'temp', ?, ?, 38.9628, ?, 'centro', 'U-48213', 'real')");
+    $ini = strtotime("$dia 09:00:00 UTC") * 1000;
+    for ($k = 0; $k <= $minutos; $k++) {
+        $paso = $k % 120 < 60 ? $k % 120 : 120 - $k % 120;
+        $st->execute([20 + ($k % 30) / 10, Base::fechaBD($ini + $k * 60000), round(-0.204 + 0.000693 * $paso, 6)]);
+    }
+}
+
 // Recorrido: n mediciones cada «cada» min desde «desde», moviéndose dlat por paso
-function paseo(Logica $l, int $desde, int $n, int $cada, array $ini, float $dlat, int &$cont): void {
+function paseo(Logica $l, int $desde, int $n, int $cada, array $ini, float $dlat, int &$cont, float $dlng = 0): void {
     $u = ['id' => 'U-48213', 'rol' => 'vecino'];
     for ($i = 0; $i < $n; $i++) {
         $t = $desde + $i * $cada * 60000;
         foreach (['o3' => 0.04, 'temp' => 20.0, 'ruido' => 55.0] as $m => $v) {
-            $l->guardarMedicion(['nodo' => 'RSP-4F7K', 'magnitud' => $m, 'valor' => $v, 'contador' => $cont % 256,
-                'medida_en' => $t, 'lat' => $ini[0] + $i * $dlat, 'lng' => $ini[1]], $u);
+            $l->guardarMedicion(['nodo' => 'RSP-4F7K', 'magnitud' => $m, 'valor' => $v,
+                'medida_en' => $t, 'lat' => $ini[0] + $i * $dlat, 'lng' => $ini[1] + $i * $dlng], $u);
         }
         $cont++;
     }
@@ -54,13 +67,15 @@ prueba('fórmula: ⌊min/N⌋ + ⌊parque/N⌋·(mult−1), con máximo', functi
 prueba('portador: solo quien tiene el sensor prestado; sin sesión, sin portador', function () {
     global $T;
     [$bd, $l] = entorno();
-    $m = ['nodo' => 'RSP-4F7K', 'magnitud' => 'o3', 'valor' => 0.04, 'contador' => 1, 'medida_en' => $T - 1000];
+    global $Z;
+    $m = ['nodo' => 'RSP-4F7K', 'magnitud' => 'o3', 'valor' => 0.041, 'medida_en' => $T - 1000,
+        'lat' => $Z['central'][0], 'lng' => $Z['central'][1]];
     $l->guardarMedicion($m, ['id' => 'U-48213', 'rol' => 'vecino']);
-    $l->guardarMedicion(array_merge($m, ['contador' => 2]), ['id' => 'U-99999', 'rol' => 'vecino']);
-    $l->guardarMedicion(array_merge($m, ['contador' => 3]), null);
-    $l->guardarMedicion(array_merge($m, ['contador' => 4, 'portador' => 'U-48213']), null);   // el móvil no lo decide
+    $l->guardarMedicion(array_merge($m, ['valor' => 0.042]), ['id' => 'U-99999', 'rol' => 'vecino']);
+    $l->guardarMedicion(array_merge($m, ['valor' => 0.043]), null);
+    $l->guardarMedicion(array_merge($m, ['valor' => 0.044, 'portador' => 'U-48213']), null);   // el móvil no lo decide
     igual(['U-48213', null, null, null], array_map(function ($f) { return $f['portador_id']; },
-        $bd->query('SELECT portador_id FROM medicion ORDER BY contador')->fetchAll(PDO::FETCH_ASSOC)));
+        $bd->query('SELECT portador_id FROM medicion ORDER BY valor')->fetchAll(PDO::FETCH_ASSOC)));
 });
 
 prueba('día: andando por un parque cuentan los minutos y valen el doble', function () {
@@ -83,13 +98,13 @@ prueba('día: huecos de más de 15 min y velocidad de vehículo no cuentan', fun
     $b = [$Z['centro_barrio'][0], $Z['centro_barrio'][1]];
     paseo($l, $T - 6 * 3600000, 11, 2, $b, 0.00005, $cont);                    // 20 min andando
     paseo($l, $T - 5 * 3600000, 11, 2, $b, 0.00005, $cont);                    // hueco de 40 min antes
-    paseo($l, $T - 4 * 3600000, 6, 2, [$b[0] - 0.02, $b[1]], 0.002, $cont);    // ~ 220 m/2 min = 6,7 km/h...
+    paseo($l, $T - 4 * 3600000, 6, 2, [$b[0], -0.2045], 0, $cont, 0.0025);      // ~ 215 m/2 min = 6,5 km/h
     $d = $pu->calcularDia('U-48213', '2026-11-08', $T);
     igual(50, $d['minutos'], '20 + 20 + 10');
-    // en autobús: ~ 1 km en 2 min = 30 km/h
+    // en autobús: ~ 475 m en 1 min = 28 km/h
     [, $l, $pu] = entorno();
     $cont = 0;
-    paseo($l, $T - 6 * 3600000, 6, 2, $b, 0.009, $cont);
+    paseo($l, $T - 6 * 3600000, 6, 1, [$b[0], -0.2045], 0, $cont, 0.0055);
     igual(0, $pu->calcularDia('U-48213', '2026-11-08', $T)['minutos'], 'vehículo');
 });
 
@@ -106,17 +121,17 @@ prueba('día: parado más de 15 min seguidos no cuenta (y se marca si es mucho)'
     cierto(strpos((string) $d['motivo'], 'sin moverse') !== false, 'motivo');
 });
 
-prueba('cierre: los días acabados se guardan una vez; hoy no', function () {
+prueba('días: los acabados suman al saldo (sin guardarse); hoy va aparte; nada que revisar', function () {
     global $T, $Z;
     [$bd, $l, $pu] = entorno();
     $cont = 0;
     paseo($l, $T - 30 * 3600000, 31, 2, [$Z['central'][0] - 0.0015, $Z['central'][1]], 0.00005, $cont); // ayer
     paseo($l, $T - 2 * 3600000, 16, 2, [$Z['central'][0] - 0.0015, $Z['central'][1]], 0.00005, $cont);  // hoy
-    $pu->cerrarDias('U-48213');
     $pu->cerrarDias(null);
-    $j = $bd->query('SELECT fecha, minutos, puntos, revision FROM jornada')->fetchAll(PDO::FETCH_ASSOC);
-    igual(1, count($j));
-    igual(['2026-11-07', '60', '24', 'auto'], array_values(array_map('strval', $j[0])));
+    $d = $pu->dias('U-48213');
+    igual(['2026-11-07'], array_keys($d));
+    igual([60, 24], [$d['2026-11-07']['minutos'], $d['2026-11-07']['puntos']]);
+    igual(0, (int) $bd->query('SELECT COUNT(*) FROM revision')->fetchColumn(), 'sin días sospechosos');
     $c = $pu->cuenta(['id' => 'U-48213']);
     igual(24, $c['puntos']);
     igual(30, $c['hoy']['minutos'], 'hoy en directo');
@@ -125,7 +140,11 @@ prueba('cierre: los días acabados se guardan una vez; hoy no', function () {
 prueba('canje: resta puntos y stock; sin saldo o agotado, no', function () {
     global $T;
     [$bd, , $pu] = entorno();
-    $bd->exec("INSERT INTO jornada (usuario_id, fecha, minutos, minutos_parque, descartados, puntos, calculada) VALUES ('U-48213', '2026-11-01', 400, 0, 0, 200, '2026-11-02 00:00:00')");
+    andar($bd, '2026-11-01', 450);      // 90 puntos
+    andar($bd, '2026-11-02', 550);      // 100 (máximo diario)
+    $bd->exec("INSERT INTO medicion (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, portador_id, origen)
+        VALUES ('RSP-4F7K', 'temp', 20, '2026-11-03 09:00:00.000', 38.9628, -0.2, 'centro', 'U-48213', 'real')");
+    andar($bd, '2026-11-04', 50);       // 10 → 200 en total
     $u = ['id' => 'U-48213', 'rol' => 'vecino'];
     $c = $pu->canjear($u, 'g2');
     cierto((bool) preg_match('/^CJ-[A-Z0-9]{4}$/', $c['codigo']), 'código');
@@ -141,7 +160,11 @@ prueba('canje: resta puntos y stock; sin saldo o agotado, no', function () {
 prueba('canje: sin recoger en 7 días caduca, devuelve puntos y unidad', function () {
     global $T;
     [$bd, , $pu] = entorno();
-    $bd->exec("INSERT INTO jornada (usuario_id, fecha, minutos, minutos_parque, descartados, puntos, calculada) VALUES ('U-48213', '2026-11-01', 400, 0, 0, 200, '2026-11-02 00:00:00')");
+    andar($bd, '2026-11-01', 450);      // 90 puntos
+    andar($bd, '2026-11-02', 550);      // 100 (máximo diario)
+    $bd->exec("INSERT INTO medicion (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, portador_id, origen)
+        VALUES ('RSP-4F7K', 'temp', 20, '2026-11-03 09:00:00.000', 38.9628, -0.2, 'centro', 'U-48213', 'real')");
+    andar($bd, '2026-11-04', 50);       // 10 → 200 en total
     $c = $pu->canjear(['id' => 'U-48213', 'rol' => 'vecino'], 'g2');
     $T += 9 * 86400000;
     $admin = ['id' => 'A-0001', 'rol' => 'admin'];
@@ -154,7 +177,11 @@ prueba('canje: sin recoger en 7 días caduca, devuelve puntos y unidad', functio
 
 prueba('entrega: reparto la marca; no se puede entregar dos veces', function () {
     [$bd, , $pu] = entorno();
-    $bd->exec("INSERT INTO jornada (usuario_id, fecha, minutos, minutos_parque, descartados, puntos, calculada) VALUES ('U-48213', '2026-11-01', 400, 0, 0, 200, '2026-11-02 00:00:00')");
+    andar($bd, '2026-11-01', 450);      // 90 puntos
+    andar($bd, '2026-11-02', 550);      // 100 (máximo diario)
+    $bd->exec("INSERT INTO medicion (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, portador_id, origen)
+        VALUES ('RSP-4F7K', 'temp', 20, '2026-11-03 09:00:00.000', 38.9628, -0.2, 'centro', 'U-48213', 'real')");
+    andar($bd, '2026-11-04', 50);       // 10 → 200 en total
     $c = $pu->canjear(['id' => 'U-48213', 'rol' => 'vecino'], 'g2');
     $rep = ['id' => 'A-0003', 'rol' => 'reparto'];
     igual('Gorra Respira', $pu->comprobarCanje($rep, strtolower($c['codigo']))['regalo']);
@@ -166,9 +193,8 @@ prueba('entrega: reparto la marca; no se puede entregar dos veces', function () 
 
 prueba('revisión: aprobar mantiene los puntos; anular los quita y guarda el motivo', function () {
     [$bd, , $pu] = entorno();
-    $bd->exec("INSERT INTO jornada (usuario_id, fecha, minutos, minutos_parque, descartados, puntos, revision, motivo_revision, calculada) VALUES
-        ('U-48213', '2026-11-05', 520, 0, 0, 100, 'pend', 'Llega al máximo diario', '2026-11-06 00:00:00'),
-        ('U-48213', '2026-11-06', 300, 0, 0, 60, 'pend', 'Llega al 90 % del máximo diario', '2026-11-07 00:00:00')");
+    andar($bd, '2026-11-05', 520);      // 100: «Llega al máximo diario»
+    andar($bd, '2026-11-06', 450);      // 90: «Llega al 90 % del máximo diario»
     $admin = ['id' => 'A-0001', 'rol' => 'admin'];
     igual(2, count($pu->revisiones($admin)));
     $ids = array_column($pu->revisiones($admin), 'id', 'fecha');

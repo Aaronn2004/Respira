@@ -88,6 +88,7 @@ public final class Repositorio {
     private Usuario usuario;
     private Cuenta cuenta;
     private String sensorPrestado;            // código del préstamo en curso (o null)
+    private long prestamoHasta;               // fecha límite para devolverlo (ms; 0 = sin préstamo)
     private final List<Regalo> regalos = new ArrayList<>();
     private final List<Percepcion> percepciones = new ArrayList<>();
     private final List<Percepcion> mias = new ArrayList<>();
@@ -406,6 +407,7 @@ public final class Repositorio {
             usuario = null;
             cuenta = null;
             sensorPrestado = null;
+            prestamoHasta = 0;
             mias.clear();
         }
         cambio();
@@ -640,6 +642,7 @@ public final class Repositorio {
                         usuario = u;
                         cuenta = c;
                         sensorPrestado = p == null ? null : p.optString("codigo", null);
+                        prestamoHasta = p == null || p.isNull("hasta") ? 0 : msDeISO(p.optString("hasta"));
                     }
                     cambio();
                 } catch (JSONException e) {
@@ -751,6 +754,19 @@ public final class Repositorio {
     // código del préstamo en curso de la cuenta (o null)
     public synchronized String sensorPrestado() {
         return sensorPrestado;
+    }
+
+    // fecha límite para devolver el sensor prestado (ms) o 0: 10 días desde la recogida
+    public synchronized long prestamoHasta() {
+        return prestamoHasta;
+    }
+
+    private static long msDeISO(String iso) {
+        try {
+            return java.time.Instant.parse(iso).toEpochMilli();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     // --------------------------------------------------------------
@@ -1061,6 +1077,7 @@ public final class Repositorio {
                         .put("reglas", new JSONArray().put(cuenta.minPorPunto).put(cuenta.multParque).put(cuenta.maxDia)));
             }
             o.put("sensor", sensorPrestado == null ? JSONObject.NULL : sensorPrestado);
+            o.put("sensorHasta", prestamoHasta);
             JSONArray rg = new JSONArray();
             for (Regalo g : regalos) {
                 rg.put(new JSONObject().put("id", g.id).put("nombre", g.nombre).put("coste", g.coste).put("stock", g.stock));
@@ -1125,6 +1142,7 @@ public final class Repositorio {
             cuenta.maxDia = r.getInt(2);
         }
         sensorPrestado = o.isNull("sensor") ? null : o.getString("sensor");
+        prestamoHasta = o.optLong("sensorHasta", 0);
         JSONArray rg = o.getJSONArray("regalos");
         for (int i = 0; i < rg.length(); i++) {
             JSONObject g = rg.getJSONObject(i);

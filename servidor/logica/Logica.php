@@ -28,7 +28,7 @@ class Logica extends Base {
 
     // Dos mensajes con el mismo nodo, magnitud y contador en menos de
     // este tiempo son el MISMO anuncio (lo han oído varios móviles).
-    const VENTANA_REPETIDA_MS = 120000;
+    const VENTANA_REPETIDA_MS = 10000;      // repetida: mismo sensor, tipo y valor en ±10 s
     // Una zona muestra la media de la hora anterior a su último dato;
     // si el último dato tiene más de 24 h, la zona queda «Sin datos».
 
@@ -82,7 +82,7 @@ class Logica extends Base {
 
     private function leerZonas(): array {
         if ($this->cacheZonas === null) {
-            $filas = $this->bd->query("SELECT id, nombre, tipo, municipio, poligono, etiqueta_lat, etiqueta_lng
+            $filas = $this->bd->query("SELECT id, nombre, tipo, poligono, etiqueta_lat, etiqueta_lng
                 FROM {$this->p}zona ORDER BY orden, id")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($filas as &$f) {
                 $f['poligono'] = json_decode($f['poligono'], true);
@@ -93,15 +93,16 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // d: {nodo, magnitud | tipo, valor, contador, medida_en?, lat?, lng?,
-    //     precision?, rssi?}, quien: usuario con sesión | null
+    // d: {nodo, magnitud | tipo, valor, medida_en?, lat, lng}, quien: usuario con sesión | null
+    // (la app manda también contador, precision y rssi: se aceptan y no se guardan)
     // El «portador» (para los puntos) NO lo dice el móvil: es quien tiene
     // la sesión, y solo si de verdad lleva ese sensor (préstamo en curso
     // o sensor de su servicio). Si no, la medición se guarda sin portador.
     //   --> guardarMedicion()
     //   --> {id, nodo, magnitud, valor, zona, valida, motivo, medida_en}
-    // Lanza DatosNoValidosException (400), NoEncontradoException (404),
-    // y devuelve null si es repetida.
+    // Solo se guardan mediciones válidas: con ubicación, dentro de una zona
+    // y dentro del rango del sensor. Si no, DatosNoValidosException (400).
+    // NoEncontradoException (404) si el sensor no existe; null si es repetida.
     // --------------------------------------------------------------
     public function guardarMedicion(array $d, ?array $quien = null): ?array {
         $ahora = $this->ahora();
@@ -118,11 +119,10 @@ class Logica extends Base {
             throw new DatosNoValidosException('valor: tiene que ser un número');
         }
         $valor = (float) $d['valor'];
-        if (!isset($d['contador']) || filter_var($d['contador'], FILTER_VALIDATE_INT) === false
-            || $d['contador'] < 0 || $d['contador'] > 255) {
-            throw new DatosNoValidosException('contador: tiene que ser un entero de 0 a 255');
+        [$min, $max] = self::RANGO[$magnitud];
+        if ($valor < $min || $valor > $max) {
+            throw new DatosNoValidosException(sprintf('valor: fuera del rango del sensor (%s a %s)', $min, $max));
         }
-        $contador = (int) $d['contador'];
 
         $medidaEn = isset($d['medida_en']) ? $d['medida_en'] : $ahora;
         if (!is_numeric($medidaEn)) {
@@ -138,11 +138,13 @@ class Logica extends Base {
 
         $lat = self::numeroOpcional($d, 'lat', -90, 90);
         $lng = self::numeroOpcional($d, 'lng', -180, 180);
-        if (($lat === null) !== ($lng === null)) {
-            throw new DatosNoValidosException('lat y lng van juntas: o las dos o ninguna');
+        if ($lat === null || $lng === null) {
+            throw new DatosNoValidosException('lat y lng: la medición necesita la ubicación del móvil');
         }
-        $precision = self::numeroOpcional($d, 'precision', 0, 65535);
-        $rssi = self::numeroOpcional($d, 'rssi', -127, 20);
+        $zona = $this->zonaDe($lat, $lng);
+        if ($zona === null) {
+            throw new DatosNoValidosException('ubicación: está fuera de los parques y barrios de Respira');
+        }
 
         $st = $this->bd->prepare("SELECT estado, magnitudes FROM {$this->p}nodo WHERE codigo = ?");
         $st->execute([$nodo]);
@@ -155,37 +157,27 @@ class Logica extends Base {
         }
         $portador = $this->portadorDe($quien, $nodo);
 
-        // ¿Repetida? mismo nodo, magnitud y contador en menos de 2 minutos
+        // ¿Repetida? mismo sensor, tipo y valor con menos de 10 s de diferencia
+        // (el mismo anuncio oído por dos móviles, o el móvil que lo reenvía)
         $st = $this->bd->prepare("SELECT COUNT(*) FROM {$this->p}medicion
-            WHERE nodo = ? AND magnitud = ? AND contador = ? AND medida_en BETWEEN ? AND ?");
-        $st->execute([$nodo, $magnitud, $contador,
+            WHERE id_nodo = ? AND tipo = ? AND valor = ? AND fecha_medicion BETWEEN ? AND ?");
+        $st->execute([$nodo, $magnitud, $valor,
             self::fechaBD($medidaEn - self::VENTANA_REPETIDA_MS), self::fechaBD($medidaEn + self::VENTANA_REPETIDA_MS)]);
         if ((int) $st->fetchColumn() > 0) {
             return null;
         }
 
-        [$min, $max] = self::RANGO[$magnitud];
-        $valida = $valor >= $min && $valor <= $max;
-        $motivo = $valida ? null : sprintf('fuera del rango del sensor (%s a %s)', $min, $max);
-        $zona = $this->zonaDe($lat, $lng);
-
         try {
             $st = $this->bd->prepare("INSERT INTO {$this->p}medicion
-                (nodo, magnitud, valor, contador, medida_en, recibida_en, lat, lng, precision_m, zona_id,
-                 portador_id, rssi, origen, valida, motivo_descarte)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'real', ?, ?)");
-            $st->execute([$nodo, $magnitud, $valor, $contador, self::fechaBD($medidaEn), self::fechaBD($ahora),
-                $lat, $lng, $precision === null ? null : (int) $precision, $zona, $portador,
-                $rssi === null ? null : (int) $rssi, $valida ? 1 : 0, $motivo]);
+                (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, portador_id, origen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'real')");
+            $st->execute([$nodo, $magnitud, $valor, self::fechaBD($medidaEn), $lat, $lng, $zona, $portador]);
             $id = (int) $this->bd->lastInsertId();
-            $st = $this->bd->prepare("UPDATE {$this->p}nodo SET ultima_medicion = ?
-                WHERE codigo = ? AND (ultima_medicion IS NULL OR ultima_medicion < ?)");
-            $st->execute([self::fechaBD($medidaEn), $nodo, self::fechaBD($medidaEn)]);
         } catch (PDOException $e) {
             throw new ErrorDeAlmacenamientoException('No se pudo guardar la medición');
         }
         return ['id' => $id, 'nodo' => $nodo, 'magnitud' => $magnitud, 'valor' => $valor, 'zona' => $zona,
-            'valida' => $valida, 'motivo' => $motivo, 'medida_en' => self::fechaISO($medidaEn)];
+            'valida' => true, 'motivo' => null, 'medida_en' => self::fechaISO($medidaEn)];
     }
 
     // --------------------------------------------------------------
@@ -198,7 +190,7 @@ class Logica extends Base {
             return null;
         }
         if ($quien['rol'] === 'vecino') {
-            $ok = $this->valor("SELECT COUNT(*) FROM {$this->p}prestamo WHERE nodo = ? AND usuario_id = ? AND fin IS NULL",
+            $ok = $this->valor("SELECT COUNT(*) FROM {$this->p}prestamo WHERE nodo = ? AND usuario_id = ? AND estado_devolucion = 'No devuelto'",
                 [$nodo, $quien['id']]);
             return (int) $ok > 0 ? $quien['id'] : null;
         }
@@ -239,22 +231,24 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // zonas() --> [{id, nombre, tipo, municipio, poligono, etiqueta,
-    //              hace_min | null, n, o3, temp, ruido}]
-    // Valores = media de la hora anterior al último dato de la zona.
+    // zonas() --> [{id, nombre, tipo, poligono, etiqueta,
+    //              hace_min | null, n, o3, temp, ruido, media_24h, mejor}]
+    // Valores = media de la hora anterior al último dato de la zona;
+    // mejor = la medida más baja de esa misma hora.
     // --------------------------------------------------------------
     public function zonas(): array {
         $ahora = $this->ahora();
         $out = [];
-        $stUlt = $this->bd->prepare("SELECT MAX(medida_en) FROM {$this->p}medicion
-            WHERE zona_id = ? AND valida = 1 AND origen = ? AND medida_en >= ?");
-        $stMed = $this->bd->prepare("SELECT magnitud, AVG(valor) AS media, COUNT(*) AS n FROM {$this->p}medicion
-            WHERE zona_id = ? AND valida = 1 AND origen = ? AND medida_en BETWEEN ? AND ? GROUP BY magnitud");
+        $stUlt = $this->bd->prepare("SELECT MAX(fecha_medicion) FROM {$this->p}medicion
+            WHERE zona_id = ? AND origen = ? AND fecha_medicion >= ?");
+        $stMed = $this->bd->prepare("SELECT tipo AS magnitud, AVG(valor) AS media, MIN(valor) AS minimo, COUNT(*) AS n FROM {$this->p}medicion
+            WHERE zona_id = ? AND origen = ? AND fecha_medicion BETWEEN ? AND ? GROUP BY tipo");
         foreach ($this->leerZonas() as $z) {
-            $fila = ['id' => $z['id'], 'nombre' => $z['nombre'], 'tipo' => $z['tipo'], 'municipio' => $z['municipio'],
+            $fila = ['id' => $z['id'], 'nombre' => $z['nombre'], 'tipo' => $z['tipo'],
                 'poligono' => $z['poligono'], 'etiqueta' => [(float) $z['etiqueta_lat'], (float) $z['etiqueta_lng']],
                 'hace_min' => null, 'n' => 0, 'o3' => null, 'temp' => null, 'ruido' => null,
-                'media_24h' => ['o3' => null, 'temp' => null, 'ruido' => null], 'simulado' => false];
+                'media_24h' => ['o3' => null, 'temp' => null, 'ruido' => null],
+                'mejor' => ['o3' => null, 'temp' => null, 'ruido' => null], 'simulado' => false];
             // Si la zona tiene datos REALES en las últimas 24 h, se usan solo esos;
             // si no, los simulados (Simulador.php)
             foreach (['real', 'simulado'] as $origen) {
@@ -270,6 +264,8 @@ class Logica extends Base {
                 foreach ($stMed->fetchAll(PDO::FETCH_ASSOC) as $m) {
                     $fila[$m['magnitud']] = round((float) $m['media'], $m['magnitud'] === 'o3' ? 3 : 1);
                     $fila['n'] = max($fila['n'], (int) $m['n']);
+                    // mejor medida (la más baja) de esa hora: la portada la enseña en los parques
+                    $fila['mejor'][$m['magnitud']] = round((float) $m['minimo'], $m['magnitud'] === 'o3' ? 3 : 1);
                 }
                 // promedio de las últimas 24 h (para la ficha de la zona)
                 $stMed->execute([$z['id'], $origen, self::fechaBD($ahora - self::DIA_MS), self::fechaBD($ahora)]);
@@ -320,8 +316,8 @@ class Logica extends Base {
             throw new DatosNoValidosException('periodo: 24h, 7d, 30d o rango');
         }
         $inicio = $fin - $n * $paso;
-        $st = $this->bd->prepare("SELECT medida_en, valor, origen FROM {$this->p}medicion
-            WHERE zona_id = ? AND magnitud = ? AND valida = 1 AND medida_en > ? AND medida_en <= ?");
+        $st = $this->bd->prepare("SELECT fecha_medicion AS medida_en, valor, origen FROM {$this->p}medicion
+            WHERE zona_id = ? AND tipo = ? AND fecha_medicion > ? AND fecha_medicion <= ?");
         $st->execute([$zonaId, $magnitud, self::fechaBD($inicio), self::fechaBD($fin)]);
         // por tramo, real y simulado por separado: si hay real, manda el real
         $suma = ['real' => array_fill(0, $n, 0.0), 'simulado' => array_fill(0, $n, 0.0)];
@@ -442,21 +438,21 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // nodos() --> [{codigo, tipo, magnitudes, estado, asignado_a, bateria,
+    // nodos() --> [{codigo, tipo, magnitudes, estado, asignado_a,
     //              ultima_min | null, ultima: {o3, temp, ruido}}]
     // ultima = último valor válido de cada magnitud (para el panel y «Mi sensor»)
     // --------------------------------------------------------------
     public function nodos(?string $codigo = null): array {
         $ahora = $this->ahora();
-        $sql = "SELECT codigo, tipo, magnitudes, estado, asignado_a, bateria, ultima_medicion FROM {$this->p}nodo";
+        $sql = "SELECT codigo, tipo, magnitudes, estado, asignado_a FROM {$this->p}nodo";
         $st = $this->bd->prepare($sql . ($codigo ? " WHERE codigo = ? AND estado <> 'baja'" : " WHERE estado <> 'baja' ORDER BY codigo"));
         $st->execute($codigo ? [strtoupper($codigo)] : []);
         $filas = $st->fetchAll(PDO::FETCH_ASSOC);
         if ($codigo && !$filas) {
             throw new NoEncontradoException("No existe el sensor $codigo");
         }
-        $stUlt = $this->bd->prepare("SELECT valor, medida_en FROM {$this->p}medicion
-            WHERE nodo = ? AND magnitud = ? AND valida = 1 ORDER BY medida_en DESC LIMIT 1");
+        $stUlt = $this->bd->prepare("SELECT valor FROM {$this->p}medicion
+            WHERE id_nodo = ? AND tipo = ? ORDER BY fecha_medicion DESC LIMIT 1");
         $out = [];
         foreach ($filas as $f) {
             $ultima = [];
@@ -467,9 +463,8 @@ class Logica extends Base {
             }
             $out[] = ['codigo' => $f['codigo'], 'tipo' => $f['tipo'],
                 'magnitudes' => $f['magnitudes'] === '' ? [] : explode(',', $f['magnitudes']),
-                'estado' => $f['estado'], 'asignado_a' => $f['asignado_a'],
-                'bateria' => $f['bateria'] === null ? null : (int) $f['bateria'],
-                'ultima_min' => $f['ultima_medicion'] ? max(0, intdiv($ahora - self::msDeFechaBD($f['ultima_medicion']), 60000)) : null,
+                'estado' => $f['estado'], 'asignado_a' => $f['asignado_a'] === 'No asignado' ? null : $f['asignado_a'],
+                'ultima_min' => $this->ultimaMin($f['codigo']),
                 'ultima' => $ultima];
         }
         return $out;
