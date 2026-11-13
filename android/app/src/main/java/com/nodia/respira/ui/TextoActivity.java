@@ -78,7 +78,7 @@ public class TextoActivity extends AppCompatActivity {
         Ui.parrafo(c, "Qué guardamos y para qué:");
         LinearLayout card = Ui.tarjeta(c);
         Ui.fila(card, "Sin cuenta", "Tus parques y alertas se guardan solo en este móvil.", null);
-        Ui.fila(card, "Con cuenta", "Nombre de usuario, correo e ID. Sirven para el préstamo del sensor y para tus puntos.", null);
+        Ui.fila(card, "Con cuenta", "Nombre de usuario, correo e ID, para el préstamo del sensor y tus puntos. Los parques que sigues y sus alertas se guardan en tu cuenta.", null);
         Ui.fila(card, "Mediciones", "Cada dato se envía con su ubicación, pero el mapa solo publica medias por zona. Tu recorrido no se publica nunca.", null);
         Ui.fila(card, "Percepciones", "Se muestran 24 h en el mapa sin tu nombre. Puedes borrarlas cuando quieras.", null);
         Ui.fila(card, "Borrar todo", "Más › Mi cuenta › Borrar mi cuenta.", null);

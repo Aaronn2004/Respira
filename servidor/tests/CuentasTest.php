@@ -175,4 +175,41 @@ prueba('borrar cuenta: no con un sensor prestado; después borra sus datos', fun
     lanza(ProhibidoException::class, function () use ($c) { $c->borrarCuenta($c->usuarioPorId('A-0001')); });
 });
 
+prueba('seguimiento: favoritos y alertas se guardan en la cuenta y se recuperan', function () {
+    [$bd, $c] = nuevas();
+    $u = $c->usuarioPorId('U-48213');
+    igual(['favoritos' => [], 'alertas' => []], $c->seguimiento($u));
+    $s = $c->guardarSeguimiento($u, ['favoritos' => ['ribera'],
+        'alertas' => [['zona' => 'central', 'magnitud' => 'ruido', 'condicion' => 'custom', 'valor' => 60]]]);
+    igual(['central', 'ribera'], $s['favoritos'], 'un parque con alerta se sigue aunque no venga en la lista (orden: fecha y nombre)');
+    igual([['zona' => 'central', 'magnitud' => 'ruido', 'condicion' => 'custom', 'valor' => 60.0]], $s['alertas']);
+    // otra sesión (otro móvil) ve lo mismo; guardar otra vez sustituye
+    igual($s, $c->seguimiento($c->usuarioPorId('U-48213')));
+    $s = $c->guardarSeguimiento($u, ['favoritos' => ['molino'], 'alertas' => []]);
+    igual(['molino'], $s['favoritos']);
+    igual([], $s['alertas']);
+});
+
+prueba('seguimiento: zona inexistente, alerta mal hecha o límite fuera de rango, error', function () {
+    [, $c] = nuevas();
+    $u = $c->usuarioPorId('U-48213');
+    lanza(DatosNoValidosException::class, function () use ($c, $u) { $c->guardarSeguimiento($u, ['favoritos' => ['luna']]); });
+    lanza(DatosNoValidosException::class, function () use ($c, $u) {
+        $c->guardarSeguimiento($u, ['alertas' => [['zona' => 'ribera', 'magnitud' => 'co2', 'condicion' => 'alto']]]); });
+    $e = lanza(DatosNoValidosException::class, function () use ($c, $u) {
+        $c->guardarSeguimiento($u, ['alertas' => [['zona' => 'ribera', 'magnitud' => 'ruido', 'condicion' => 'custom', 'valor' => 'x']]]); });
+    igual('valor', $e->campo);
+    igual(['favoritos' => [], 'alertas' => []], $c->seguimiento($u), 'si hay error no se guarda nada');
+    lanza(ProhibidoException::class, function () use ($c) { $c->guardarSeguimiento($c->usuarioPorId('A-0001'), []); });
+});
+
+prueba('seguimiento: al borrar la cuenta se borran sus favoritos y alertas', function () {
+    [$bd, $c] = nuevas();
+    $u = $c->usuarioPorId('U-48213');
+    $c->guardarSeguimiento($u, ['favoritos' => ['ribera'], 'alertas' => [['zona' => 'ribera', 'magnitud' => 'o3', 'condicion' => 'alto']]]);
+    $c->borrarCuenta($u);
+    igual(0, (int) $bd->query("SELECT COUNT(*) FROM favorito")->fetchColumn());
+    igual(0, (int) $bd->query("SELECT COUNT(*) FROM alerta")->fetchColumn());
+});
+
 resumen();

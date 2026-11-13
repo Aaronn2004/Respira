@@ -32,8 +32,10 @@ import java.util.Set;
 // percepciones y zonas. Aquí se guarda una copia (caché) para que
 // la app se abra al momento y se vea algo sin conexión.
 //
-// Solo en este móvil: favoritos, alertas, la bienvenida y el
-// recorrido en curso.
+// Parques seguidos (favoritos) y sus alertas: con sesión se guardan en la
+// CUENTA (PUT /yo/seguimiento) y se recuperan en cualquier móvil; sin
+// sesión, solo en este móvil, y se suman a la cuenta al iniciar sesión.
+// Solo en este móvil: la bienvenida y el recorrido en curso.
 //
 //   - Las lecturas (usuario(), cuenta(), regalos()…) devuelven la caché.
 //   - refrescar() la pone al día y avisa a las pantallas (observar).
@@ -48,6 +50,7 @@ public final class Repositorio {
         public final List<Movimiento> historial = new ArrayList<>();
         public final List<Canje> canjes = new ArrayList<>();
         public int hoyMin, hoyMinParque, hoyDescartados, hoyPuntos;
+        public ResumenRecorrido hoyRecorrido;   // distancia, duración… de hoy (null si no hay)
         // reglas de hoy (para el texto «Cómo se ganan»)
         public int minPorPunto = 5, multParque = 2, maxDia = 100;
     }
@@ -94,7 +97,9 @@ public final class Repositorio {
     private final List<Percepcion> mias = new ArrayList<>();
     private long ultimoRefresco;
 
-    // ---------- solo en este móvil ----------
+    // ---------- seguimiento (en la cuenta si hay sesión) ----------
+    private boolean seguimientoPendiente;   // cambios aún sin subir a la cuenta
+    private boolean fusionarSeguimiento;    // recién iniciada la sesión: sumar lo del móvil a la cuenta
     private final Set<String> favoritos = new LinkedHashSet<>();
     private final Map<String, Alerta> alertas = new LinkedHashMap<>();
     private final Map<String, Long> alertaAvisada = new HashMap<>();
@@ -324,9 +329,13 @@ public final class Repositorio {
         synchronized (this) {
             if (!favoritos.remove(id)) {
                 favoritos.add(id);
+            } else {
+                alertas.remove(id);      // sin seguir el parque, su alerta no tiene sentido
             }
+            seguimientoPendiente = token != null;
         }
         cambio();
+        subirSeguimiento();
     }
 
     public synchronized Alerta alerta(String zonaId) {
@@ -343,16 +352,133 @@ public final class Repositorio {
             alertaAvisada.remove(a.zonaId);
             // Una alerta solo tiene sentido en un parque que sigues
             favoritos.add(a.zonaId);
+            seguimientoPendiente = token != null;
         }
         comprobarAlertas();
         cambio();
+        subirSeguimiento();
     }
 
     public void borrarAlerta(String zonaId) {
         synchronized (this) {
             alertas.remove(zonaId);
+            seguimientoPendiente = token != null;
         }
         cambio();
+        subirSeguimiento();
+    }
+
+    // --------------------------------------------------------------
+    // Sube a la cuenta los parques seguidos y sus alertas (lista completa).
+    // Sin red se queda pendiente y se reintenta en el siguiente refresco.
+    // --------------------------------------------------------------
+    private void subirSeguimiento() {
+        final String t;
+        final JSONObject c = new JSONObject();
+        synchronized (this) {
+            t = token;
+            if (t == null || !seguimientoPendiente) {
+                return;
+            }
+            try {
+                JSONArray al = new JSONArray();
+                for (Alerta a : alertas.values()) {
+                    JSONObject x = new JSONObject().put("zona", a.zonaId).put("magnitud", a.magnitud.id).put("condicion", a.condicion);
+                    if ("custom".equals(a.condicion)) {
+                        x.put("valor", Double.parseDouble(a.valor.replace(',', '.')));
+                    }
+                    al.put(x);
+                }
+                c.put("favoritos", new JSONArray(favoritos)).put("alertas", al);
+            } catch (JSONException | NumberFormatException | NullPointerException e) {
+                Log.w("Respira", "seguimiento: " + e);
+                return;
+            }
+        }
+        api.pedir("PUT", "/yo/seguimiento", c, t, new ApiRespira.Respuesta() {
+            @Override
+            public void ok(String cuerpo) {
+                synchronized (Repositorio.this) {
+                    if (t.equals(token)) {
+                        seguimientoPendiente = false;
+                    }
+                }
+                guardar();
+            }
+
+            @Override
+            public void error(ApiRespira.Error e) {
+                if (e.codigo == 401) {
+                    sesionCaducada();
+                } else if (e.codigo == 400) {
+                    // algo que el servidor no admite (p. ej. una zona que ya no existe): manda la cuenta
+                    synchronized (Repositorio.this) {
+                        seguimientoPendiente = false;
+                    }
+                    refrescar(true);
+                }
+                // sin red: sigue pendiente
+            }
+        });
+    }
+
+    // --------------------------------------------------------------
+    // {favoritos: [id], alertas: [{zona, magnitud, condicion, valor}]} --> aplicarSeguimiento()
+    //   --> true si hay que subir lo del móvil a la cuenta
+    // Recién iniciada la sesión se suman los dos (en una misma zona, manda
+    // la alerta del móvil); con cambios sin subir manda el móvil; si no, la cuenta.
+    // (llamar con el monitor de this)
+    // --------------------------------------------------------------
+    private boolean aplicarSeguimiento(JSONObject s) throws JSONException {
+        Set<String> fav = new LinkedHashSet<>();
+        Map<String, Alerta> al = new LinkedHashMap<>();
+        JSONArray f = s.optJSONArray("favoritos");
+        for (int i = 0; f != null && i < f.length(); i++) {
+            fav.add(f.getString(i));
+        }
+        JSONArray a = s.optJSONArray("alertas");
+        for (int i = 0; a != null && i < a.length(); i++) {
+            JSONObject x = a.getJSONObject(i);
+            String v = x.isNull("valor") ? "" : numero(x.getDouble("valor"));
+            al.put(x.getString("zona"), new Alerta(x.getString("zona"), Magnitud.desdeId(x.getString("magnitud")),
+                    x.getString("condicion"), v));
+        }
+        boolean subir;
+        if (fusionarSeguimiento) {
+            Set<String> antes = new LinkedHashSet<>(fav);
+            int alertasAntes = al.size();
+            fav.addAll(favoritos);
+            al.putAll(alertas);
+            subir = !fav.equals(antes) || al.size() != alertasAntes || !alertas.isEmpty();
+        } else if (seguimientoPendiente) {
+            return true;                       // lo del móvil es lo último: se sube tal cual
+        } else {
+            subir = false;
+        }
+        favoritos.clear();
+        favoritos.addAll(fav);
+        alertas.clear();
+        alertas.putAll(al);
+        alertaAvisada.keySet().retainAll(alertas.keySet());
+        fusionarSeguimiento = false;
+        seguimientoPendiente = subir;
+        return subir;
+    }
+
+    // 60.0 --> "60"; 0.075 --> "0.075"
+    static String numero(double v) {
+        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
+    }
+
+    // Al cerrar sesión los parques seguidos se quedan en la cuenta, no en el móvil
+    private void olvidarSeguimiento() {
+        synchronized (this) {
+            favoritos.clear();
+            alertas.clear();
+            alertaAvisada.clear();
+            seguimientoPendiente = false;
+            fusionarSeguimiento = false;
+        }
     }
 
     // ==============================================================
@@ -428,6 +554,7 @@ public final class Repositorio {
             bloqueoHasta = 0;
             recorrido = null;
             ultimoRefresco = 0;
+            fusionarSeguimiento = true;
         }
         refrescar(true);
         return u;
@@ -528,6 +655,7 @@ public final class Repositorio {
             t = token;
             recorrido = null;
         }
+        olvidarSeguimiento();
         if (t != null) {
             api.pedir("DELETE", "/sesiones", null, t, new ApiRespira.Respuesta() {
                 @Override
@@ -549,6 +677,7 @@ public final class Repositorio {
         api.pedir("DELETE", "/yo", null, token(), new ApiRespira.Respuesta() {
             @Override
             public void ok(String cuerpo) {
+                olvidarSeguimiento();
                 sesionCaducada();
                 enPrincipal(hecho, null);
             }
@@ -635,6 +764,8 @@ public final class Repositorio {
                     Usuario u = usuarioDeJSON(o.getJSONObject("usuario"));
                     Cuenta c = o.has("cuenta") ? cuentaDeJSON(o.getJSONObject("cuenta")) : new Cuenta();
                     JSONObject p = o.optJSONObject("prestamo");
+                    JSONObject seg = o.optJSONObject("seguimiento");
+                    boolean subir = false;
                     synchronized (Repositorio.this) {
                         if (!t.equals(token)) {
                             return;           // mientras tanto se cerró la sesión
@@ -643,8 +774,14 @@ public final class Repositorio {
                         cuenta = c;
                         sensorPrestado = p == null ? null : p.optString("codigo", null);
                         prestamoHasta = p == null || p.isNull("hasta") ? 0 : msDeISO(p.optString("hasta"));
+                        if (seg != null) {
+                            subir = aplicarSeguimiento(seg);
+                        }
                     }
                     cambio();
+                    if (subir) {
+                        subirSeguimiento();
+                    }
                 } catch (JSONException e) {
                     Log.w("Respira", "yo: " + e);
                 }
@@ -700,6 +837,7 @@ public final class Repositorio {
         c.hoyMinParque = h.getInt("minutos_parque");
         c.hoyDescartados = h.getInt("descartados");
         c.hoyPuntos = h.getInt("puntos");
+        c.hoyRecorrido = ResumenRecorrido.deJSON(h.optJSONObject("recorrido"));
         JSONObject r = o.optJSONObject("reglas");
         if (r != null) {
             c.minPorPunto = r.getInt("min");
@@ -715,7 +853,8 @@ public final class Repositorio {
                     : "pend".equals(rev) ? "En revisión: el ayuntamiento lo está comprobando" : razon;
             c.historial.add(new Movimiento(fechaCorta(m.getString("fecha")), m.getInt("minutos"),
                     m.getInt("minutos_parque"), m.getInt("descartados"), m.getInt("puntos"),
-                    m.isNull("canje") ? null : m.getString("canje"), nota));
+                    m.isNull("canje") ? null : m.getString("canje"), nota,
+                    ResumenRecorrido.deJSON(m.optJSONObject("recorrido"))));
         }
         JSONArray cj = o.getJSONArray("canjes");
         for (int i = 0; i < cj.length(); i++) {
@@ -1064,7 +1203,8 @@ public final class Repositorio {
                     h.put(new JSONObject().put("fecha", m.fecha).put("min", m.minutos).put("minParque", m.minutosParque)
                             .put("desc", m.descartados).put("pts", m.puntos)
                             .put("canje", m.canje == null ? JSONObject.NULL : m.canje)
-                            .put("nota", m.nota == null ? JSONObject.NULL : m.nota));
+                            .put("nota", m.nota == null ? JSONObject.NULL : m.nota)
+                            .put("rec", m.recorrido == null ? JSONObject.NULL : m.recorrido.json()));
                 }
                 JSONArray cj = new JSONArray();
                 for (Canje k : cuenta.canjes) {
@@ -1074,7 +1214,8 @@ public final class Repositorio {
                 o.put("cuenta", new JSONObject().put("puntos", cuenta.puntos).put("historial", h).put("canjes", cj)
                         .put("hoy", new JSONArray().put(cuenta.hoyMin).put(cuenta.hoyMinParque)
                                 .put(cuenta.hoyDescartados).put(cuenta.hoyPuntos))
-                        .put("reglas", new JSONArray().put(cuenta.minPorPunto).put(cuenta.multParque).put(cuenta.maxDia)));
+                        .put("reglas", new JSONArray().put(cuenta.minPorPunto).put(cuenta.multParque).put(cuenta.maxDia))
+                        .put("hoyRec", cuenta.hoyRecorrido == null ? JSONObject.NULL : cuenta.hoyRecorrido.json()));
             }
             o.put("sensor", sensorPrestado == null ? JSONObject.NULL : sensorPrestado);
             o.put("sensorHasta", prestamoHasta);
@@ -1097,6 +1238,8 @@ public final class Repositorio {
             o.put("alertaAvisada", av);
             o.put("onboarding", onboardingVisto);
             o.put("bloqueo", bloqueoHasta);
+            o.put("segPendiente", seguimientoPendiente);
+            o.put("segFusionar", fusionarSeguimiento);
             if (recorrido != null) {
                 o.put("recorrido", new JSONObject().put("codigo", recorrido.codigo).put("inicio", recorrido.inicio)
                         .put("estado", recorrido.estado).put("enviadas", recorrido.enviadas)
@@ -1123,7 +1266,8 @@ public final class Repositorio {
                 JSONObject m = h.getJSONObject(i);
                 cuenta.historial.add(new Movimiento(m.getString("fecha"), m.getInt("min"), m.getInt("minParque"),
                         m.getInt("desc"), m.getInt("pts"), m.isNull("canje") ? null : m.getString("canje"),
-                        m.isNull("nota") ? null : m.getString("nota")));
+                        m.isNull("nota") ? null : m.getString("nota"),
+                        ResumenRecorrido.deJSON(m.optJSONObject("rec"))));
             }
             JSONArray cj = c.getJSONArray("canjes");
             for (int i = 0; i < cj.length(); i++) {
@@ -1136,6 +1280,7 @@ public final class Repositorio {
             cuenta.hoyMinParque = hoy.getInt(1);
             cuenta.hoyDescartados = hoy.getInt(2);
             cuenta.hoyPuntos = hoy.getInt(3);
+            cuenta.hoyRecorrido = ResumenRecorrido.deJSON(c.optJSONObject("hoyRec"));
             JSONArray r = c.getJSONArray("reglas");
             cuenta.minPorPunto = r.getInt(0);
             cuenta.multParque = r.getInt(1);
@@ -1157,6 +1302,8 @@ public final class Repositorio {
             }
         }
         bloqueoHasta = o.optLong("bloqueo", 0);
+        seguimientoPendiente = o.optBoolean("segPendiente", false);
+        fusionarSeguimiento = o.optBoolean("segFusionar", false);
         if (o.has("recorrido")) {
             JSONObject r = o.getJSONObject("recorrido");
             recorrido = new Recorrido(r.getString("codigo"), r.getString("inicio"));

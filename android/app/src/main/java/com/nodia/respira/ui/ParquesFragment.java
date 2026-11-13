@@ -41,6 +41,8 @@ public class ParquesFragment extends Pestana {
         }
         Ui.boton(c, "+ Añadir desde el mapa", Ui.BOTON_BORDE, v -> irA(R.id.tab_mapa));
         Ui.boton(c, "Mis alertas", Ui.BOTON_TEXTO, v -> startActivity(new Intent(requireContext(), MisAlertasActivity.class)));
-        Ui.nota(c, "Tus parques se guardan solo en este móvil. No necesitas cuenta.");
+        Ui.nota(c, repo.usuario() != null
+                ? "Tus parques y alertas se guardan en tu cuenta: los verás en cualquier móvil en el que entres."
+                : "Sin cuenta, tus parques se guardan solo en este móvil. Si inicias sesión, pasan a tu cuenta.");
     }
 }

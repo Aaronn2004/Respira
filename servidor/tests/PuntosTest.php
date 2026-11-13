@@ -91,6 +91,29 @@ prueba('día: andando por un parque cuentan los minutos y valen el doble', funct
     igual(null, $d['motivo']);
 });
 
+prueba('recorrido: inicio, fin, duración, distancia, lecturas y parques del día', function () {
+    global $T, $Z;
+    [, $l, $pu] = entorno();
+    $cont = 0;
+    // 61 puntos cada 2 min (120 min) avanzando 0,00005° de latitud por paso (~5,6 m)
+    paseo($l, $T - 6 * 3600000, 61, 2, [$Z['central'][0] - 0.0015, $Z['central'][1]], 0.00005, $cont);
+    $d = $pu->calcularDia('U-48213', '2026-11-08', $T);
+    igual(Base::fechaISO($T - 6 * 3600000), $d['inicio']);
+    igual(Base::fechaISO($T - 6 * 3600000 + 120 * 60000), $d['fin']);
+    igual(120, $d['duracion_min']);
+    igual(61, $d['lecturas'], 'una por anuncio (las 3 magnitudes juntas)');
+    cierto(abs($d['distancia_m'] - 334) <= 3, 'unos 60 × 5,56 m = 334 m; da ' . $d['distancia_m']);
+    igual(['Parque Central'], $d['parques']);
+    // en vehículo no suma distancia
+    [, $l, $pu] = entorno();
+    $cont = 0;
+    paseo($l, $T - 6 * 3600000, 6, 1, [$Z['centro_barrio'][0], -0.2045], 0, $cont, 0.0055);
+    igual(0, $pu->calcularDia('U-48213', '2026-11-08', $T)['distancia_m'], 'vehículo');
+    // día sin datos
+    $v = $pu->calcularDia('U-48213', '2026-11-01', null);
+    igual([null, null, 0, 0, 0, []], [$v['inicio'], $v['fin'], $v['duracion_min'], $v['distancia_m'], $v['lecturas'], $v['parques']]);
+});
+
 prueba('día: huecos de más de 15 min y velocidad de vehículo no cuentan', function () {
     global $T, $Z;
     [, $l, $pu] = entorno();

@@ -11,12 +11,18 @@ public class Movimiento {
     public final int puntos;       // negativo si es un canje
     public final String canje;     // null si es un día con sensor
     public final String nota;      // «En revisión», «Anulado: …», «Caducado…» | null
+    public final ResumenRecorrido recorrido;  // estadísticas del día con sensor | null (canjes)
 
     public Movimiento(String fecha, int minutos, int minutosParque, int descartados, int puntos, String canje) {
         this(fecha, minutos, minutosParque, descartados, puntos, canje, null);
     }
 
     public Movimiento(String fecha, int minutos, int minutosParque, int descartados, int puntos, String canje, String nota) {
+        this(fecha, minutos, minutosParque, descartados, puntos, canje, nota, null);
+    }
+
+    public Movimiento(String fecha, int minutos, int minutosParque, int descartados, int puntos, String canje, String nota,
+                      ResumenRecorrido recorrido) {
         this.fecha = fecha;
         this.minutos = minutos;
         this.minutosParque = minutosParque;
@@ -24,5 +30,6 @@ public class Movimiento {
         this.puntos = puntos;
         this.canje = canje;
         this.nota = nota;
+        this.recorrido = recorrido;
     }
 }

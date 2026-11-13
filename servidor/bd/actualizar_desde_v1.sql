@@ -163,6 +163,29 @@ CREATE TABLE percepcion (
   CONSTRAINT percepcion_nivel CHECK (nivel BETWEEN 1 AND 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---- Seguimiento de parques (app): favoritos y alertas de la cuenta ----
+-- Antes vivían solo en el móvil; ahora se guardan en la cuenta y se
+-- recuperan al iniciar sesión en otro móvil.
+CREATE TABLE favorito (
+  usuario_id VARCHAR(8)  NOT NULL,
+  zona_id    VARCHAR(32) NOT NULL,
+  creado     DATETIME(3) NOT NULL,
+  PRIMARY KEY (usuario_id, zona_id),
+  CONSTRAINT favorito_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE,
+  CONSTRAINT favorito_zona_fk FOREIGN KEY (zona_id) REFERENCES zona (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Una alerta por parque seguido (el móvil la comprueba y avisa)
+CREATE TABLE alerta (
+  usuario_id VARCHAR(8)  NOT NULL,
+  zona_id    VARCHAR(32) NOT NULL,
+  magnitud   ENUM('o3','temp','ruido') NOT NULL,
+  condicion  ENUM('bajo','medio','alto','custom') NOT NULL,
+  valor      DECIMAL(8,3) NOT NULL DEFAULT 0 COMMENT 'límite; solo cuenta si condicion = custom',
+  PRIMARY KEY (usuario_id, zona_id),
+  CONSTRAINT alerta_favorito_fk FOREIGN KEY (usuario_id, zona_id) REFERENCES favorito (usuario_id, zona_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- cambios en las tablas de la versión 1 ----
 -- zona: el municipio no lo usa nadie (todas son de Gandia)
 ALTER TABLE zona DROP COLUMN municipio;

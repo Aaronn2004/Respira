@@ -17,6 +17,7 @@
 // ==============================================================
 
 require_once __DIR__ . '/Base.php';
+require_once __DIR__ . '/Logica.php';   // MAGNITUDES y RANGO (alertas)
 
 class Cuentas extends Base {
 
@@ -197,7 +198,7 @@ class Cuentas extends Base {
         }
         $this->transaccion(function () use ($u) {
             // (SQLite no aplica ON DELETE si no se activan las FK: se hace a mano)
-            foreach (['token', 'percepcion', 'revision'] as $t) {
+            foreach (['alerta', 'favorito', 'token', 'percepcion', 'revision'] as $t) {
                 $this->ejecutar("DELETE FROM {$this->p}$t WHERE usuario_id = ?", [$u['id']]);
             }
             $this->ejecutar("UPDATE {$this->p}medicion SET portador_id = NULL WHERE portador_id = ?", [$u['id']]);
@@ -205,6 +206,93 @@ class Cuentas extends Base {
             $this->ejecutar("UPDATE {$this->p}canje SET usuario_id = NULL WHERE usuario_id = ?", [$u['id']]);
             $this->ejecutar("DELETE FROM {$this->p}usuario WHERE id = ?", [$u['id']]);
         });
+    }
+
+    // ==============================================================
+    // Seguimiento de parques (app): favoritos y alertas de la cuenta
+    // ==============================================================
+    const MAX_FAVORITOS = 50;
+    const CONDICIONES = ['bajo', 'medio', 'alto', 'custom'];
+
+    // --------------------------------------------------------------
+    // usuario --> seguimiento() --> {favoritos: [zonaId], alertas: [{zona, magnitud, condicion, valor | null}]}
+    // --------------------------------------------------------------
+    public function seguimiento(array $u): array {
+        $fav = array_column($this->filas("SELECT zona_id FROM {$this->p}favorito WHERE usuario_id = ? ORDER BY creado, zona_id",
+            [$u['id']]), 'zona_id');
+        $al = [];
+        foreach ($this->filas("SELECT zona_id, magnitud, condicion, valor FROM {$this->p}alerta WHERE usuario_id = ? ORDER BY zona_id",
+            [$u['id']]) as $a) {
+            $al[] = ['zona' => $a['zona_id'], 'magnitud' => $a['magnitud'], 'condicion' => $a['condicion'],
+                'valor' => $a['condicion'] === 'custom' ? (float) $a['valor'] : null];
+        }
+        return ['favoritos' => $fav, 'alertas' => $al];
+    }
+
+    // --------------------------------------------------------------
+    // usuario, {favoritos, alertas} --> guardarSeguimiento() --> seguimiento()
+    // Sustituye todo lo guardado (el móvil manda siempre la lista completa).
+    // Un parque con alerta se sigue aunque no venga en «favoritos».
+    // --------------------------------------------------------------
+    public function guardarSeguimiento(?array $u, array $c): array {
+        self::exigirRol($u, ['vecino', 'trabajador']);
+        $zonas = array_column($this->filas("SELECT id FROM {$this->p}zona"), 'id');
+        $fav = $c['favoritos'] ?? [];
+        $al = $c['alertas'] ?? [];
+        if (!is_array($fav) || !is_array($al)) {
+            throw new DatosNoValidosException('Formato no válido: favoritos y alertas son listas.');
+        }
+        $limpias = [];
+        foreach ($al as $a) {
+            $z = (string) ($a['zona'] ?? '');
+            $m = (string) ($a['magnitud'] ?? '');
+            $cond = (string) ($a['condicion'] ?? '');
+            if (!in_array($z, $zonas, true)) {
+                throw new DatosNoValidosException("La zona «{$z}» no existe.", 'zona');
+            }
+            if (!in_array($m, Logica::MAGNITUDES, true) || !in_array($cond, self::CONDICIONES, true)) {
+                throw new DatosNoValidosException('Alerta no válida: elige ozono, temperatura o ruido y un nivel o un límite.', 'alerta');
+            }
+            $v = 0.0;
+            if ($cond === 'custom') {
+                [$min, $max] = Logica::RANGO[$m];
+                if (!is_numeric($a['valor'] ?? null) || $a['valor'] <= $min || $a['valor'] > $max) {
+                    throw new DatosNoValidosException("El límite de la alerta debe ser un número entre $min y $max.", 'valor');
+                }
+                $v = (float) $a['valor'];
+            }
+            $limpias[$z] = [$z, $m, $cond, $v];
+        }
+        $ids = [];
+        foreach (array_merge($fav, array_keys($limpias)) as $z) {
+            $z = (string) $z;
+            if (!in_array($z, $zonas, true)) {
+                throw new DatosNoValidosException("La zona «{$z}» no existe.", 'zona');
+            }
+            $ids[$z] = true;
+        }
+        if (count($ids) > self::MAX_FAVORITOS) {
+            throw new DatosNoValidosException('Puedes seguir como mucho ' . self::MAX_FAVORITOS . ' parques.', 'favoritos');
+        }
+        $ahora = self::fechaBD($this->ahora());
+        $this->transaccion(function () use ($u, $ids, $limpias, $ahora) {
+            // se conserva la fecha en que se empezó a seguir cada parque
+            $antes = [];
+            foreach ($this->filas("SELECT zona_id, creado FROM {$this->p}favorito WHERE usuario_id = ?", [$u['id']]) as $f) {
+                $antes[$f['zona_id']] = $f['creado'];
+            }
+            $this->ejecutar("DELETE FROM {$this->p}alerta WHERE usuario_id = ?", [$u['id']]);
+            $this->ejecutar("DELETE FROM {$this->p}favorito WHERE usuario_id = ?", [$u['id']]);
+            foreach (array_keys($ids) as $z) {
+                $this->ejecutar("INSERT INTO {$this->p}favorito (usuario_id, zona_id, creado) VALUES (?, ?, ?)",
+                    [$u['id'], $z, $antes[$z] ?? $ahora]);
+            }
+            foreach ($limpias as [$z, $m, $cond, $v]) {
+                $this->ejecutar("INSERT INTO {$this->p}alerta (usuario_id, zona_id, magnitud, condicion, valor) VALUES (?, ?, ?, ?, ?)",
+                    [$u['id'], $z, $m, $cond, $v]);
+            }
+        });
+        return $this->seguimiento($u);
     }
 
     // ==============================================================

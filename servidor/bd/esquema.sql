@@ -23,6 +23,8 @@ SET NAMES utf8mb4;
 SET time_zone = '+00:00';   -- todas las fechas se guardan en UTC
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS alerta;
+DROP TABLE IF EXISTS favorito;
 DROP TABLE IF EXISTS canje;
 DROP TABLE IF EXISTS regalo;
 DROP TABLE IF EXISTS revision;
@@ -302,6 +304,29 @@ CREATE TABLE percepcion (
   CONSTRAINT percepcion_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE,
   CONSTRAINT percepcion_nivel CHECK (nivel BETWEEN 1 AND 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Seguimiento de parques (app): favoritos y alertas de la cuenta ----
+-- Antes vivían solo en el móvil; ahora se guardan en la cuenta y se
+-- recuperan al iniciar sesión en otro móvil.
+CREATE TABLE favorito (
+  usuario_id VARCHAR(8)  NOT NULL,
+  zona_id    VARCHAR(32) NOT NULL,
+  creado     DATETIME(3) NOT NULL,
+  PRIMARY KEY (usuario_id, zona_id),
+  CONSTRAINT favorito_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE,
+  CONSTRAINT favorito_zona_fk FOREIGN KEY (zona_id) REFERENCES zona (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Una alerta por parque seguido (el móvil la comprueba y avisa)
+CREATE TABLE alerta (
+  usuario_id VARCHAR(8)  NOT NULL,
+  zona_id    VARCHAR(32) NOT NULL,
+  magnitud   ENUM('o3','temp','ruido') NOT NULL,
+  condicion  ENUM('bajo','medio','alto','custom') NOT NULL,
+  valor      DECIMAL(8,3) NOT NULL DEFAULT 0 COMMENT 'límite; solo cuenta si condicion = custom',
+  PRIMARY KEY (usuario_id, zona_id),
+  CONSTRAINT alerta_favorito_fk FOREIGN KEY (usuario_id, zona_id) REFERENCES favorito (usuario_id, zona_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- @@TABLAS:FIN
 
 -- ==============================================================
@@ -448,4 +473,11 @@ INSERT INTO percepcion (usuario_id, tipo, nivel, lat, lng, direccion, creada) VA
   ('U-30577', 'aire',  2, 38.977080, -0.192289, 'C/ Alta, 30',       UTC_TIMESTAMP(3) - INTERVAL 900 MINUTE),
   ('U-11902', 'ruido', 1, 38.958420, -0.182022, 'C/ Poniente, 12',   UTC_TIMESTAMP(3) - INTERVAL 60 MINUTE),
   ('U-48213', 'ruido', 2, 38.963700, -0.186500, 'C/ Mayor, 43',      UTC_TIMESTAMP(3) - INTERVAL 40 MINUTE);
+-- Lucía sigue dos parques y tiene una alerta de ruido en el Central
+INSERT INTO favorito (usuario_id, zona_id, creado) VALUES
+  ('U-48213', 'ribera',  UTC_TIMESTAMP(3) - INTERVAL 20 DAY),
+  ('U-48213', 'central', UTC_TIMESTAMP(3) - INTERVAL 12 DAY);
+INSERT INTO alerta (usuario_id, zona_id, magnitud, condicion, valor) VALUES
+  ('U-48213', 'central', 'ruido', 'alto', 0);
+
 -- @@DEMO:FIN

@@ -26,7 +26,9 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.nodia.respira.ble.ServicioEscuharBeacons;
 import com.nodia.respira.datos.Magnitud;
 import com.nodia.respira.datos.Nivel;
+import com.nodia.respira.datos.Movimiento;
 import com.nodia.respira.datos.Recorrido;
+import com.nodia.respira.datos.ResumenRecorrido;
 import com.nodia.respira.datos.Repositorio;
 import com.nodia.respira.datos.Usuario;
 
@@ -99,6 +101,16 @@ public class SensorFragment extends Pestana {
             Ui.valor(datos, m.nombre + " (último dato)", v == null ? "—" : m.formatear(v) + " " + m.unidad);
         }
         Ui.valor(datos, "Minutos válidos hoy", hoy[0] + " (" + hoy[1] + " en parques)");
+        Repositorio.Cuenta cuentaHoy = repo.cuenta();
+        ResumenRecorrido rh = cuentaHoy == null ? null : cuentaHoy.hoyRecorrido;
+        if (rh != null && !rh.vacio()) {
+            Ui.valor(datos, "Distancia andada hoy", ResumenRecorrido.distanciaTexto(rh.distanciaM));
+            Ui.valor(datos, "Tiempo con el sensor hoy", ResumenRecorrido.duracionTexto(rh.duracionMin)
+                    + " (" + rh.inicio + " a " + rh.fin + ")");
+            if (!rh.parques.isEmpty()) {
+                Ui.valor(datos, "Parques por los que has pasado", String.join(", ", rh.parques));
+            }
+        }
         if (r.pendientes > 0) {
             Ui.valor(datos, "Pendientes de enviar", String.valueOf(r.pendientes));
         }
@@ -115,11 +127,64 @@ public class SensorFragment extends Pestana {
                 }));
     }
 
+    // ---------- resumen al terminar y recorridos de otros días ----------
+    // Datos del servidor (Puntos.php): lo que cuenta es lo que llegó al servidor
+    private void pintarResumen(LinearLayout c, Recorrido terminado) {
+        Repositorio.Cuenta cu = repo.cuenta();
+        ResumenRecorrido rh = cu == null ? null : cu.hoyRecorrido;
+        long hasta = repo.prestamoHasta();
+        Ui.aviso(c, "Recorrido terminado. Devuelve el sensor " + terminado.codigo + " en cualquier punto de reparto"
+                + (hasta > 0 ? " antes del " + ZonaActivity.hora(hasta, true) : "") + ".", Nivel.BAJO);
+        LinearLayout card = Ui.tarjeta(c);
+        Ui.etiqueta(card, "Resumen de hoy");
+        if (rh == null || rh.vacio()) {
+            Ui.valor(card, "Mediciones enviadas", String.valueOf(terminado.enviadas));
+            Ui.nota(card, "El resto del resumen aparece cuando las mediciones llegan al servidor.");
+            return;
+        }
+        int[] hoy = repo.hoy();
+        Ui.valor(card, "Tiempo con el sensor", ResumenRecorrido.duracionTexto(rh.duracionMin) + " (" + rh.inicio + " a " + rh.fin + ")");
+        Ui.valor(card, "Distancia andada", ResumenRecorrido.distanciaTexto(rh.distanciaM));
+        Ui.valor(card, "Lecturas recibidas", String.valueOf(rh.lecturas));
+        Ui.valor(card, "Minutos válidos", hoy[0] + " (" + hoy[1] + " en parques)");
+        if (hoy[2] > 0) {
+            Ui.valor(card, "Minutos descartados", hoy[2] + " (parado, sin datos o en vehículo)");
+        }
+        Ui.valor(card, "Puntos de hoy (se suman al acabar el día)", "~" + cu.hoyPuntos);
+        if (!rh.parques.isEmpty()) {
+            Ui.valor(card, "Parques por los que has pasado", String.join(", ", rh.parques));
+        }
+    }
+
+    private void pintarRecorridosAnteriores(LinearLayout c) {
+        Repositorio.Cuenta cu = repo.cuenta();
+        if (cu == null) {
+            return;
+        }
+        int n = 0;
+        LinearLayout lista = null;
+        for (Movimiento m : cu.historial) {
+            if (m.canje != null || m.recorrido == null || m.recorrido.vacio()) {
+                continue;
+            }
+            if (lista == null) {
+                Ui.etiqueta(c, "Tus últimos recorridos");
+                lista = Ui.tarjeta(c);
+            }
+            String sub = m.recorrido.linea() + "\n" + m.recorrido.inicio + " a " + m.recorrido.fin
+                    + (m.recorrido.parques.isEmpty() ? "" : " · " + String.join(", ", m.recorrido.parques));
+            LinearLayout f = Ui.fila(lista, m.fecha, sub, null);
+            Ui.insignia(f, "+" + m.puntos, Nivel.BAJO);
+            if (++n == 7) {
+                break;
+            }
+        }
+    }
+
     // ---------- formulario del código ----------
     private void pintarFormulario(LinearLayout c, Usuario u, Recorrido anterior) {
         if (anterior != null && Recorrido.TERMINADO.equals(anterior.estado)) {
-            Ui.aviso(c, "Recorrido terminado. Hoy has enviado " + anterior.enviadas + " mediciones. Devuelve el sensor "
-                    + anterior.codigo + " en un punto de reparto antes de 24 h.", Nivel.BAJO);
+            pintarResumen(c, anterior);
         }
         String prestado = repo.sensorPrestado();
         if (u.esTrabajador()) {
@@ -194,6 +259,7 @@ public class SensorFragment extends Pestana {
         Ui.fila(pasos, "2 · Escribe su código", "Lo lleva impreso en la carcasa: RSP- y 4 caracteres.", null);
         Ui.fila(pasos, "3 · Pasea con el móvil", "El móvil oye al sensor y envía cada dato con su ubicación. Dentro de los parques cuenta doble.", null);
         Ui.nota(c, "Tu recorrido no se publica: el mapa solo muestra medias por zona.");
+        pintarRecorridosAnteriores(c);
     }
 
     // ---------- permisos ----------

@@ -160,6 +160,19 @@ try {
         igual(401, pedir('GET', '/yo')[0], 'sin token');
         igual(401, pedir('GET', '/panel/nodos', null, 'inventado')[0], 'token falso');
     });
+    prueba('PUT /yo/seguimiento guarda favoritos y alertas; GET /yo los devuelve con el recorrido de hoy', function () {
+        global $TOK;
+        [$c, $j] = pedir('PUT', '/yo/seguimiento', ['favoritos' => ['ribera'],
+            'alertas' => [['zona' => 'ribera', 'magnitud' => 'o3', 'condicion' => 'alto']]], $TOK['lucia']);
+        igual(200, $c);
+        igual(['ribera'], $j['favoritos']);
+        [, $yo] = pedir('GET', '/yo', null, $TOK['lucia']);
+        igual(['ribera'], $yo['seguimiento']['favoritos']);
+        igual('alto', $yo['seguimiento']['alertas'][0]['condicion']);
+        igual(['inicio', 'fin', 'duracion_min', 'distancia_m', 'lecturas', 'parques'], array_keys($yo['cuenta']['hoy']['recorrido']));
+        igual(400, pedir('PUT', '/yo/seguimiento', ['favoritos' => ['luna']], $TOK['lucia'])[0]);
+        igual(401, pedir('PUT', '/yo/seguimiento', ['favoritos' => []])[0]);
+    });
     prueba('POST /usuarios: registro 201; errores por campo 400', function () {
         [$c, $j] = pedir('POST', '/usuarios', ['nombre' => 'marcos', 'email' => 'marcos@correo.es', 'clave' => 'Marcos2026', 'acepta' => true]);
         igual(201, $c);

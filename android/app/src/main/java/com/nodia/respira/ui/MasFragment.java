@@ -61,7 +61,7 @@ public class MasFragment extends Pestana {
             aviso("Pidiendo los datos al servidor…");
         });
         Ui.fila(demo, "Probar una alerta", "Enseña cómo llega la notificación de tu última alerta", v -> simularAlerta());
-        Ui.fila(demo, "Borrar los datos de este móvil", "Cierra la sesión y borra favoritos, alertas y la bienvenida", v ->
+        Ui.fila(demo, "Borrar los datos de este móvil", "Cierra la sesión y borra de este móvil favoritos, alertas y la bienvenida (los de tu cuenta siguen en ella)", v ->
                 Ui.confirmar(requireContext(), "¿Borrar los datos de este móvil?",
                         "Tu cuenta y tus puntos siguen en el servidor: podrás volver a entrar.", "Borrar", () -> {
                             repo.olvidarEsteMovil();

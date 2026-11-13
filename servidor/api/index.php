@@ -226,6 +226,7 @@ try {
             $out = ['usuario' => $cuentas->perfil($yo)];
             if (in_array($yo['rol'], ['vecino', 'trabajador'], true)) {
                 $out['cuenta'] = $puntos->cuenta($yo);
+                $out['seguimiento'] = $cuentas->seguimiento($yo);
                 $out['prestamo'] = $flota->prestamoDe($yo['id']);
             }
             responder(200, $out);
@@ -236,6 +237,9 @@ try {
         }
         if ($metodo === 'POST' && $ruta === '/yo/sensor') {
             responder(200, $flota->sensorParaLaApp($yo, (string) ($c['codigo'] ?? '')));
+        }
+        if ($metodo === 'PUT' && $ruta === '/yo/seguimiento') {
+            responder(200, $cuentas->guardarSeguimiento($yo, $c));
         }
         if ($metodo === 'GET' && $ruta === '/yo/percepciones') {
             responder(200, $comunidad->mias($yo));

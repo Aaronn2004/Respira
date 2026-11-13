@@ -52,6 +52,9 @@ public class PuntosFragment extends Pestana {
             String sub = m.canje != null ? "Canje: " + m.canje
                     : m.minutos + " min válidos · " + m.minutosParque + " en parques"
                     + (m.descartados > 0 ? "\n" + m.descartados + " min descartados: sensor parado, sin datos o a velocidad de vehículo" : "");
+            if (m.recorrido != null && !m.recorrido.vacio()) {
+                sub += "\n" + m.recorrido.linea();
+            }
             if (m.nota != null) {
                 sub += "\n" + m.nota;
             }

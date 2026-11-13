@@ -6,10 +6,11 @@ MariaDB 10.11 en Plesk. Todo lo que usan la app y la web está aquí:
 |---|---|
 | `servidor/bd/esquema.sql` | BD completa desde cero: **borra** las tablas y las vuelve a crear, con los datos base y los de demostración |
 | `servidor/bd/actualizar_desde_v1.sql` | Pasa de la versión 1 (solo `zona`, `nodo`, `medicion`) a la actual **sin perder las mediciones válidas** |
+| `servidor/bd/actualizar_seguimiento.sql` | Añade `favorito` y `alerta` a una BD importada con el `esquema.sql` del 10/11/2026 (la de Plesk). **No borra nada** y se puede repetir |
 
 Todas las fechas se guardan en **UTC** (`DATETIME(3)`, con milisegundos). Los «días» de los puntos se cuentan en hora de España.
 
-**15 tablas y 91 campos.** Reglas del diseño:
+**17 tablas y 99 campos.** Reglas del diseño:
 
 - **Todo lo que apunta a otra tabla es una clave ajena (FK).** Por ejemplo, `medicion.id_nodo` → `nodo.codigo`.
 - **Ningún campo admite NULL** salvo tres, que se vacían a propósito:
@@ -22,6 +23,7 @@ punto_reparto ─< prestamo >─ nodo ─< medicion >─ zona
                     │                   │
 usuario ────────────┴───────────────────┘ (portador)
 usuario ─< token · revision · canje >─ regalo · percepcion
+usuario ─< favorito >─ zona          favorito ─── alerta (una por parque seguido)
 usuario ─── empleado (trabajadores)       invitacion (trabajadores sin activar)
 ayuntamiento (portada) · reglas_puntos (historial de reglas)
 ```
@@ -140,10 +142,24 @@ Al canjear se resta una unidad del stock. Si el canje caduca sin recogerse, vuel
 
 Se ven 24 h y cada cuenta puede publicar como máximo 3 por hora. Se muestran **sin el autor**: solo se dice si es tuya. Solo quien la publicó puede cambiar el tipo y el nivel, o borrarla.
 
+## 6. Seguimiento de parques (app)
+
+**favorito**: los parques (o barrios) que sigue cada cuenta.
+- Clave: `usuario_id` + `zona_id` (las dos son FK).
+- `creado`: desde cuándo lo sigue (el orden de la lista en la app).
+
+**alerta**: como mucho una por parque seguido.
+- Clave y FK: `usuario_id` + `zona_id` → `favorito` (si dejas de seguir el parque, se borra su alerta).
+- `magnitud`: `o3`, `temp` o `ruido`.
+- `condicion`: `bajo`, `medio`, `alto` o `custom` (un límite propio).
+- `valor`: el límite; solo cuenta si `condicion` = `custom` (si no, 0, para no usar NULL).
+
+La app manda siempre la lista completa (`PUT /yo/seguimiento`) y el servidor la sustituye. Sin sesión, los parques se guardan en el móvil y se suman a la cuenta al iniciar sesión. Las alertas las sigue comprobando el móvil (sin notificaciones push el servidor no podría avisar).
+
 ## Lo que NO está en la BD (y por qué)
 
 - **Quién hizo cada gestión** (quién prestó o recogió un sensor, entregó un regalo o revisó un día): el panel no lo enseña. Si el ayuntamiento lo pide, se añadiría una tabla de historial (`quien`, `que`, `cuando`).
-- **Favoritos y alertas** de la app: se guardan en el móvil. Sin un servicio de notificaciones push (FCM), el servidor no podría avisar de nada. La app comprueba las alertas con los datos reales cada vez que lee las zonas.
+- **Estadísticas de cada recorrido** (distancia, duración, parques por los que pasó): se calculan con las mediciones del día al pedirlas (`Puntos::calcularDia`), igual que los puntos.
 - **Recorrido en curso** («Mi sensor»): es el estado del móvil. Lo que importa, las mediciones, sí va al servidor.
 
 ## Datos de demostración
@@ -165,5 +181,6 @@ Además incluye:
 - 3 días en revisión: 1 aprobado y 2 pendientes.
 - 3 canjes: CJ-8R2T (válido), CJ-2K9L (caducado) y CJ-5P7Q (entregado).
 - 8 percepciones, que desaparecen del mapa a las 24 h de importar.
+- Lucía sigue el Parque de la Ribera y el Parque Central, con una alerta de ruido en nivel Alto en el Central.
 
 **Antes de usarlo de verdad, cambia esas contraseñas**: son públicas porque están en el repositorio.

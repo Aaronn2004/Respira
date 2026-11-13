@@ -56,7 +56,8 @@ Base: `https://ablabla.upv.edu.es/respira/api/index.php` (si en tu Plesk falla l
 
 | Método y ruta | Qué hace |
 |---|---|
-| `GET /yo` | Perfil, puntos, «hoy», historial, canjes, reglas y préstamo en curso (`desde`, `hasta` = fecha límite) |
+| `GET /yo` | Perfil, puntos, «hoy», historial, canjes, reglas, préstamo en curso (`desde`, `hasta` = fecha límite) y `seguimiento` (`favoritos`, `alertas`). «hoy» y cada día del historial llevan `recorrido`: `inicio`, `fin`, `duracion_min`, `distancia_m`, `lecturas` y `parques` |
+| `PUT /yo/seguimiento` `{favoritos: [zona], alertas: [{zona, magnitud, condicion, valor}]}` | Guarda en la cuenta los parques que sigues y sus alertas (sustituye la lista; máximo 50) |
 | `DELETE /yo` | Borrar la cuenta (no con un sensor prestado) |
 | `POST /yo/sensor` `{codigo}` | ¿Puedo usar este sensor? (préstamo a mi nombre o sensor de mi servicio) |
 | `GET /yo/percepciones` | Mis percepciones (30 días) |

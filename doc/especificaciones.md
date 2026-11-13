@@ -55,6 +55,14 @@ Si todo está en Bajo, no se enseña nada (no hay nada de lo que avisar).
 
 **WEB-01 (mapa): estado general.** El selector del mapa tiene «General» (por defecto) además de Ozono, Temperatura y Ruido. El estado general de una zona es la media de los niveles de sus medidas (Bajo 0, Medio 1, Alto 2), redondeada: si ninguna medida está en Bajo, la zona no sale en verde; un empate Bajo/Medio sale Medio. Con «General», la etiqueta de la zona dice Bajo, Medio o Alto en lugar de un número.
 
+**Estadísticas del recorrido (app › Mi sensor y Puntos).** Con datos del servidor (`GET /yo` › `recorrido`):
+- Durante el recorrido: mediciones enviadas, últimos valores, minutos válidos (y en parques), **distancia andada hoy**, **tiempo con el sensor** (de la primera a la última medición) y **parques por los que has pasado**.
+- Al terminar: un **resumen del día** (tiempo, distancia, lecturas, minutos válidos y descartados, puntos provisionales y parques) y la fecha límite para devolver el sensor.
+- **Tus últimos recorridos**: los 7 últimos días con sensor, con duración, distancia, lecturas, horas, parques y puntos. El historial de Puntos también enseña la duración y la distancia de cada día.
+- La distancia solo suma los tramos válidos: no cuentan los huecos de más de 15 min ni los tramos a velocidad de vehículo.
+
+**Seguimiento de parques (APP-24 a APP-26).** Los parques que sigues y sus alertas se guardan **en la cuenta** (tablas `favorito` y `alerta`) y se recuperan al entrar en cualquier móvil. Sin sesión se guardan en el móvil y, al iniciar sesión, se suman a la cuenta. Al cerrar sesión se quitan del móvil (siguen en la cuenta). Las alertas las comprueba el móvil.
+
 **Mediciones.** Solo se guardan las que traen ubicación, caen dentro de un parque o barrio y están dentro del rango del sensor; el resto se rechazan.
 
 ## Datos simulados

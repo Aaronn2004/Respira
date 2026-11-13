@@ -107,19 +107,26 @@ class Puntos extends Base {
 
     // --------------------------------------------------------------
     // usuarioId, dia, hastaMs? --> calcularDia() -->
-    //   {minutos, minutos_parque, descartados, puntos, motivo | null}
+    //   {minutos, minutos_parque, descartados, puntos, motivo | null,
+    //    inicio | null, fin | null, duracion_min, distancia_m, lecturas, parques: [nombre]}
+    // Estadísticas del recorrido: inicio y fin = primera y última medición del día;
+    // distancia = lo andado en los tramos válidos (sin huecos ni vehículo).
     // motivo != null: el día se marca para revisar
     // --------------------------------------------------------------
     public function calcularDia(string $usuarioId, string $dia, ?int $hastaMs = null): array {
         $ini = self::inicioDia($dia);
         $fin = $hastaMs ?? self::inicioDia(self::sumarDias($dia, 1));
         // Un punto por anuncio (las 3 magnitudes de un mismo instante llegan juntas)
-        $filas = $this->filas("SELECT m.fecha_medicion AS medida_en, m.lat, m.lng, z.tipo AS tipo_zona
+        $filas = $this->filas("SELECT m.fecha_medicion AS medida_en, m.lat, m.lng, z.tipo AS tipo_zona, z.nombre AS nombre_zona
             FROM {$this->p}medicion m JOIN {$this->p}zona z ON z.id = m.zona_id
             WHERE m.portador_id = ? AND m.fecha_medicion >= ? AND m.fecha_medicion < ?
             ORDER BY m.fecha_medicion", [$usuarioId, self::fechaBD($ini), self::fechaBD($fin)]);
         $puntos = [];
+        $parques = [];
         foreach ($filas as $f) {
+            if ($f['tipo_zona'] === 'parque') {
+                $parques[$f['nombre_zona']] = true;
+            }
             $t = self::msDeFechaBD($f['medida_en']);
             $ult = end($puntos);
             if ($ult && $t - $ult['t'] < 1000) {
@@ -132,7 +139,7 @@ class Puntos extends Base {
             $puntos[] = ['t' => $t, 'lat' => $f['lat'] === null ? null : (float) $f['lat'],
                 'lng' => $f['lng'] === null ? null : (float) $f['lng'], 'parque' => $f['tipo_zona'] === 'parque'];
         }
-        $valido = 0.0; $parque = 0.0; $desc = 0.0; $paradoTotal = 0.0;
+        $valido = 0.0; $parque = 0.0; $desc = 0.0; $paradoTotal = 0.0; $dist = 0.0;
         // rato «parado»: desde ancla, sin alejarse más de PARADO_M
         $ancla = null; $rato = 0.0; $ratoParque = 0.0; $descartando = false;
         $reiniciar = function () use (&$ancla, &$rato, &$ratoParque, &$descartando) {
@@ -152,6 +159,9 @@ class Puntos extends Base {
                     continue;
                 }
                 $ancla = $ancla ?? $a;
+                if (!$descartando) {
+                    $dist += $d;          // tramo andado (si está parado, apenas suma)
+                }
                 if (self::metros($ancla['lat'], $ancla['lng'], $b['lat'], $b['lng']) < self::PARADO_M) {
                     $rato += $dt;
                     if ($descartando) {
@@ -192,8 +202,19 @@ class Puntos extends Base {
         } elseif ($pts >= 0.9 * $r['max']) {
             $motivo = 'Llega al 90 % del máximo diario';
         }
+        $iniMs = $puntos ? $puntos[0]['t'] : null;
+        $finMs = $puntos ? end($puntos)['t'] : null;
         return ['minutos' => $min, 'minutos_parque' => $minParque, 'descartados' => (int) round($desc),
-            'puntos' => $pts, 'motivo' => $motivo];
+            'puntos' => $pts, 'motivo' => $motivo,
+            'inicio' => $iniMs === null ? null : self::fechaISO($iniMs), 'fin' => $finMs === null ? null : self::fechaISO($finMs),
+            'duracion_min' => $iniMs === null ? 0 : (int) round(($finMs - $iniMs) / 60000),
+            'distancia_m' => (int) round($dist), 'lecturas' => count($puntos), 'parques' => array_keys($parques)];
+    }
+
+    // calcularDia() --> recorridoJSON() --> {inicio, fin, duracion_min, distancia_m, lecturas, parques}
+    private static function recorridoJSON(array $c): array {
+        return ['inicio' => $c['inicio'], 'fin' => $c['fin'], 'duracion_min' => $c['duracion_min'],
+            'distancia_m' => $c['distancia_m'], 'lecturas' => $c['lecturas'], 'parques' => $c['parques']];
     }
 
     // --------------------------------------------------------------
@@ -295,7 +316,8 @@ class Puntos extends Base {
             $mov[] = ['tipo' => 'dia', 'fecha' => (string) $dia, 'minutos' => $c['minutos'],
                 'minutos_parque' => $c['minutos_parque'], 'descartados' => $c['descartados'],
                 'puntos' => $estado === 'anulado' ? 0 : $c['puntos'], 'revision' => $estado,
-                'razon' => $estado === 'anulado' ? $rev[$dia]['razon'] : null, 'canje' => null];
+                'razon' => $estado === 'anulado' ? $rev[$dia]['razon'] : null, 'canje' => null,
+                'recorrido' => self::recorridoJSON($c)];
         }
         $canjes = [];
         foreach ($this->filas("SELECT c.*, r.nombre FROM {$this->p}canje c JOIN {$this->p}regalo r ON r.id = c.regalo_id
@@ -310,7 +332,7 @@ class Puntos extends Base {
         usort($mov, function ($a, $b) { return strcmp($b['fecha'], $a['fecha']); });
         return ['puntos' => $this->saldo($u['id']),
             'hoy' => ['minutos' => $h['minutos'], 'minutos_parque' => $h['minutos_parque'],
-                'descartados' => $h['descartados'], 'puntos' => $h['puntos']],
+                'descartados' => $h['descartados'], 'puntos' => $h['puntos'], 'recorrido' => self::recorridoJSON($h)],
             'historial' => $mov, 'canjes' => $canjes, 'reglas' => $this->reglasDe($hoy)];
     }
 
