@@ -14,7 +14,7 @@
 const GMAP=()=>window.RespiraMapa&&window.RespiraMapa.activo()?window.RespiraMapa:null;
 /* ---------- marca: Respira (producto) y Nodia (empresa) ---------- */
 const RW=`<g transform="translate(55 1.9) scale(0.457)"><g transform="translate(-6.60 74.40) scale(0.10000)"><path d="M66 0V-254V-525H185L186 -346H205Q213 -413 232.5 -455.0Q252 -497 287.0 -517.0Q322 -537 374 -537Q383 -537 393.5 -536.5Q404 -536 418 -533L412 -380Q397 -387 379.0 -390.0Q361 -393 347 -393Q308 -393 280.0 -375.0Q252 -357 234.5 -323.5Q217 -290 211 -242V0Z M734.0 14Q669.0 14 618.5 -4.0Q568.0 -22 533.0 -56.0Q498.0 -90 479.5 -140.0Q461.0 -190 461.0 -253Q461.0 -315 478.5 -367.5Q496.0 -420 530.0 -458.5Q564.0 -497 613.0 -518.0Q662.0 -539 724.0 -539Q784.0 -539 831.0 -519.5Q878.0 -500 909.5 -461.0Q941.0 -422 955.5 -365.5Q970.0 -309 966.0 -236L554.0 -232V-311L883.0 -314L832.0 -274Q839.0 -327 825.0 -361.0Q811.0 -395 784.5 -411.0Q758.0 -427 726.0 -427Q688.0 -427 659.0 -407.0Q630.0 -387 614.0 -348.5Q598.0 -310 598.0 -256Q598.0 -171 635.5 -131.0Q673.0 -91 734.0 -91Q762.0 -91 781.5 -98.5Q801.0 -106 813.5 -118.0Q826.0 -130 833.5 -145.0Q841.0 -160 846.0 -175L971.0 -148Q962.0 -111 944.5 -81.5Q927.0 -52 898.0 -30.5Q869.0 -9 828.5 2.5Q788.0 14 734.0 14Z M1271.0 14Q1218.0 14 1175.0 4.0Q1132.0 -6 1101.0 -25.0Q1070.0 -44 1051.0 -70.5Q1032.0 -97 1026.0 -130L1136.0 -175Q1140.0 -153 1158.0 -134.0Q1176.0 -115 1206.5 -103.5Q1237.0 -92 1280.0 -92Q1326.0 -92 1351.0 -105.5Q1376.0 -119 1376.0 -144Q1376.0 -163 1362.0 -174.0Q1348.0 -185 1321.0 -193.0Q1294.0 -201 1256.0 -208Q1219.0 -217 1180.5 -227.0Q1142.0 -237 1109.5 -255.0Q1077.0 -273 1056.5 -302.5Q1036.0 -332 1036.0 -378Q1036.0 -426 1062.0 -462.0Q1088.0 -498 1138.0 -518.5Q1188.0 -539 1260.0 -539Q1325.0 -539 1374.0 -521.5Q1423.0 -504 1454.5 -471.5Q1486.0 -439 1497.0 -394L1380.0 -355Q1376.0 -379 1360.5 -397.0Q1345.0 -415 1319.5 -424.0Q1294.0 -433 1260.0 -433Q1217.0 -433 1193.5 -419.0Q1170.0 -405 1170.0 -382Q1170.0 -363 1185.5 -351.0Q1201.0 -339 1229.0 -331.5Q1257.0 -324 1295.0 -316Q1335.0 -308 1373.0 -297.5Q1411.0 -287 1441.5 -270.0Q1472.0 -253 1490.0 -225.0Q1508.0 -197 1508.0 -153Q1508.0 -101 1480.0 -63.5Q1452.0 -26 1399.0 -6.0Q1346.0 14 1271.0 14Z M1595.0 168V-258V-525H1714.0L1715.0 -379L1733.0 -378Q1742.0 -431 1764.5 -467.0Q1787.0 -503 1823.0 -521.0Q1859.0 -539 1906.0 -539Q1976.0 -539 2026.0 -504.5Q2076.0 -470 2102.5 -407.5Q2129.0 -345 2129.0 -260Q2129.0 -181 2105.0 -119.5Q2081.0 -58 2033.5 -22.0Q1986.0 14 1915.0 14Q1865.0 14 1830.5 -5.0Q1796.0 -24 1773.5 -58.5Q1751.0 -93 1736.0 -141H1717.0Q1723.0 -114 1728.0 -86.0Q1733.0 -58 1736.0 -31.5Q1739.0 -5 1739.0 20V168ZM1865.0 -101Q1901.0 -101 1926.0 -121.0Q1951.0 -141 1964.5 -177.0Q1978.0 -213 1978.0 -259Q1978.0 -309 1964.0 -344.5Q1950.0 -380 1924.0 -400.0Q1898.0 -420 1862.0 -420Q1830.0 -420 1807.0 -406.0Q1784.0 -392 1768.5 -369.0Q1753.0 -346 1746.0 -319.5Q1739.0 -293 1739.0 -269V-250Q1739.0 -231 1744.0 -210.5Q1749.0 -190 1760.0 -170.5Q1771.0 -151 1786.0 -135.5Q1801.0 -120 1821.0 -110.5Q1841.0 -101 1865.0 -101Z M2223.0 0V-525H2367.0V0ZM2296.0 -604Q2254.0 -604 2231.5 -621.5Q2209.0 -639 2209.0 -673Q2209.0 -708 2231.5 -726.0Q2254.0 -744 2296.0 -744Q2339.0 -744 2361.5 -726.0Q2384.0 -708 2384.0 -673Q2384.0 -640 2361.5 -622.0Q2339.0 -604 2296.0 -604Z M2490.0 0V-254V-525H2609.0L2610.0 -346H2629.0Q2637.0 -413 2656.5 -455.0Q2676.0 -497 2711.0 -517.0Q2746.0 -537 2798.0 -537Q2807.0 -537 2817.5 -536.5Q2828.0 -536 2842.0 -533L2836.0 -380Q2821.0 -387 2803.0 -390.0Q2785.0 -393 2771.0 -393Q2732.0 -393 2704.0 -375.0Q2676.0 -357 2658.5 -323.5Q2641.0 -290 2635.0 -242V0Z M3037.0 14Q2993.0 14 2959.0 -3.5Q2925.0 -21 2906.0 -54.0Q2887.0 -87 2887.0 -136Q2887.0 -179 2903.5 -208.0Q2920.0 -237 2952.0 -255.0Q2984.0 -273 3031.0 -285.0Q3078.0 -297 3138.0 -306Q3170.0 -311 3190.5 -315.5Q3211.0 -320 3221.0 -330.5Q3231.0 -341 3231.0 -361Q3231.0 -389 3211.0 -409.0Q3191.0 -429 3148.0 -429Q3119.0 -429 3094.5 -419.0Q3070.0 -409 3052.5 -389.0Q3035.0 -369 3027.0 -338L2900.0 -377Q2912.0 -418 2934.5 -448.0Q2957.0 -478 2989.0 -498.5Q3021.0 -519 3062.0 -529.0Q3103.0 -539 3151.0 -539Q3228.0 -539 3276.5 -514.5Q3325.0 -490 3349.0 -438.5Q3373.0 -387 3373.0 -306V-216Q3373.0 -181 3374.5 -145.0Q3376.0 -109 3378.5 -72.5Q3381.0 -36 3384.0 0H3257.0Q3253.0 -25 3249.5 -57.5Q3246.0 -90 3244.0 -123H3226.0Q3212.0 -85 3186.0 -54.0Q3160.0 -23 3122.5 -4.5Q3085.0 14 3037.0 14ZM3098.0 -90Q3117.0 -90 3136.5 -97.0Q3156.0 -104 3174.5 -116.5Q3193.0 -129 3208.5 -148.0Q3224.0 -167 3234.0 -191L3232.0 -275L3255.0 -270Q3237.0 -257 3213.0 -249.5Q3189.0 -242 3163.5 -238.0Q3138.0 -234 3113.0 -229.0Q3088.0 -224 3068.5 -216.0Q3049.0 -208 3037.5 -194.5Q3026.0 -181 3026.0 -157Q3026.0 -126 3046.0 -108.0Q3066.0 -90 3098.0 -90Z"/></g></g>`;
-const SYM=(p='var(--primary)',a='var(--accent)')=>`<path d="M20.35 3.32A21 21 0 1 0 44.68 27.65" fill="none" stroke="${a}" stroke-width="4.4" stroke-linecap="round"/><path d="M26.26 11.20A13 13 0 1 0 36.80 21.74" fill="none" stroke="${p}" stroke-width="4.4" stroke-linecap="round"/><circle cx="24" cy="24" r="6" fill="${p}"/>`;
+const SYM=(p='#0A6C74',a='#5FC4C0')=>`<path d="M20.35 3.32A21 21 0 1 0 44.68 27.65" fill="none" stroke="${a}" stroke-width="4.4" stroke-linecap="round"/><path d="M26.26 11.20A13 13 0 1 0 36.80 21.74" fill="none" stroke="${p}" stroke-width="4.4" stroke-linecap="round"/><circle cx="24" cy="24" r="6" fill="${p}"/>`;
 const LOGO=(h=30,word='var(--ink)',p,a)=>`<svg role="img" aria-label="Respira" viewBox="0 0 207 48" height="${h}" width="${Math.round(h*207/48)}" style="flex-shrink:0;display:block">${SYM(p,a)}<g fill="${word}">${RW}</g></svg>`;
 const ICON=h=>`<svg role="img" aria-label="Icono de Respira" viewBox="0 0 48 48" width="${h}" height="${h}" style="flex-shrink:0;display:block"><rect width="48" height="48" rx="11" fill="#0A6C74"/><g transform="translate(7.1 7.1) scale(0.703)">${SYM('#FFFFFF','#5FC4C0')}</g></svg>`;
 const NODIA=(h=16,c='currentColor')=>`<svg aria-hidden="true" viewBox="0 0 48 48" width="${h}" height="${h}" style="color:${c};flex-shrink:0;display:inline-block;vertical-align:middle"><path d="M10 40V14L36 40V16" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="40" r="5.5" fill="currentColor"/><circle cx="10" cy="14" r="5.5" fill="currentColor"/><circle cx="36" cy="40" r="5.5" fill="currentColor"/><circle cx="36" cy="14" r="10" fill="none" stroke="#7FD3B2" stroke-width="2.2" opacity=".75"/><circle cx="36" cy="14" r="6" fill="#7FD3B2"/></svg>`;
@@ -162,15 +162,37 @@ const ACTIV_H=48;
 const ROL={admin:'Administración',tecnico:'Técnico',reparto:'Punto de reparto',trabajador:'Trabajador municipal'};
 
 /* ---------- estado y rutas ---------- */
-const S={tabIni:'o3',iniVisto:false,view:{x:0,y:0,w:900,h:560},tilt:false,layer:'zonas',mag:'gen',sel:null,q:'',menu:false,hist:{id:'central',mag:'o3',per:'24h',desde:'',hasta:''},cmp:{a:'ribera',b:'central',mag:'o3',per:'24h'},avf:0,avt:'todos',
+const S={tabIni:'o3',iniVisto:false,view:{x:0,y:0,w:900,h:560},tilt:false,layer:'zonas',mag:'gen',sel:null,q:'',hist:{id:'central',mag:'o3',per:'24h',desde:'',hasta:''},cmp:{a:'ribera',b:'central',mag:'o3',per:'24h'},avf:0,avt:'todos',
  user:null,tries:0,lock:false,f:{},e:{},modal:null,edit:null,fT:'todos',fE:'todos',fQ:'',recOk:false,canje:null,rules:{...RULES}};
 const PUB=['inicio','mapa','comunidad','historial','comparar','como-funciona','privacidad'];
 const PAN=['panel','panel-sensores','panel-editar','panel-prestamos','panel-puntos','panel-regalos','panel-trabajadores'];
 const ACCESS={admin:PAN,tecnico:['panel','panel-sensores','panel-editar','panel-prestamos'],reparto:['panel-prestamos','panel-regalos'],trabajador:[]};
 const HOME={admin:'panel',tecnico:'panel',reparto:'panel-prestamos'};
-function route(){const h=location.hash.slice(1);if(h.startsWith('activar/')){S.tok=h.slice(8);return 'activar'}return [...PUB,...PAN,'acceso','recuperar'].includes(h)?h:'inicio'}
-function nav(r){S.e={};S.modal=null;S.menu=false;if(location.hash.slice(1)===r)render();else location.hash=r;window.scrollTo(0,0)}
-addEventListener('hashchange',()=>{S.e={};S.modal=null;S.menu=false;if(!location.hash.startsWith('#activar/'))S.activOk=null;if(!location.hash.startsWith('#panel-trabajadores'))S.altaOk=null;render()});
+function route(){const h=location.hash.slice(1);if(h==='valores'||h==='voluntariado')return 'como-funciona';if(h.startsWith('activar/')){S.tok=h.slice(8);return 'activar'}return [...PUB,...PAN,'acceso','recuperar'].includes(h)?h:'inicio'}
+function nav(r){S.e={};S.modal=null;if(location.hash.slice(1)===r)render();else location.hash=r;window.scrollTo({top:0,behavior:'instant'})}
+function seccionPortada(){
+ const destino=document.getElementById(location.hash.slice(1));
+ return destino?.matches('.tv > section, .tv#inicio, .tv > section h2[id]')?destino:null;
+}
+function desplazarASeccion(){
+ const destino=seccionPortada()||document.getElementById(location.hash.slice(1));
+ if(destino?.matches('.tv#inicio, .tv > section, main section[id], .tv section h2[id]'))destino.scrollIntoView({behavior:'instant'});
+}
+function transicionVista(actualizar){
+ if(document.startViewTransition&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+  document.startViewTransition(actualizar);
+ }else actualizar();
+}
+addEventListener('hashchange',()=>{
+ if(seccionPortada())return;
+ transicionVista(()=>{
+  S.e={};S.modal=null;
+  if(!location.hash.startsWith('#activar/'))S.activOk=null;
+  if(!location.hash.startsWith('#panel-trabajadores'))S.altaOk=null;
+  render();
+  desplazarASeccion();
+ });
+});
 let tT;function toast(m){const t=document.getElementById('toast');t.innerHTML=`<div class="t">${m}</div>`;clearTimeout(tT);tT=setTimeout(()=>t.innerHTML='',3800)}
 const err=k=>S.e[k]?`<span class="err" id="e-${k}">${I.err}${S.e[k]}</span>`:'';
 const inv=k=>S.e[k]?'aria-invalid="true" aria-describedby="e-'+k+'"':'';
@@ -276,9 +298,10 @@ function header(cur){
  return `<header class="tv tvh"><nav class="tv-nav" aria-label="Principal">
   <a class="tv-marca" href="#inicio" aria-label="Respira, inicio"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">${SYM()}</svg>Respira</a>
   <div class="tv-pill" data-tv-desktop>${links}</div>
-  <button type="button" class="tv-burger" data-tv-mobile data-act="${S.menu?'menuClose':'menu'}" aria-controls="tvh-menu" aria-expanded="${!!S.menu}" aria-label="${S.menu?'Cerrar menú':'Abrir menú'}">${TV_BURGER(!!S.menu)}</button>
-  ${botonTema(true)}<div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm sec" href="#acceso">Acceso ayuntamiento</a></div>
- </nav>${S.menu?`<div id="tvh-menu" class="tv-panel" data-tv-mobile>${links}<div class="tv-panel-pie"><a class="btn sm sec" href="#acceso">Ayuntamiento</a></div></div>`:''}</header>`}
+  ${botonTema(true)}
+  <button type="button" class="tv-burger" data-tv-mobile aria-controls="tvh-menu" aria-expanded="false" aria-label="Abrir menú">${TV_BURGER(false)}</button>
+  <div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm sec" href="#acceso">Acceso ayuntamiento</a></div>
+ </nav><div id="tvh-menu" class="tv-panel" data-tv-mobile inert>${links}<div class="tv-panel-pie"><a class="btn sm sec" href="#acceso">Ayuntamiento</a></div></div></header>`}
 const footer=()=>`<footer class="wrap"><div class="inner"><span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap">${LOGO(20)}<span>· un servicio de</span>${NODIA(15,'var(--ink)')}<b style="letter-spacing:.08em;color:var(--ink)">NODIA</b></span><span>Proyecto de Biometría · GTI · UPV · <a href="#privacidad">Privacidad</a></span></div></footer>`;
 const zonaOpts=(sel,ex)=>['parque','barrio'].map(t=>`<optgroup label="${t==='parque'?'Parques':'Barrios'}">${ZONAS.filter(z=>z.tipo===t&&est(z)!=='none').map(z=>`<option value="${z.id}" ${z.id===sel?'selected':''}>${esc(z.n)}</option>`).join('')}</optgroup>`).join('');
 
@@ -332,31 +355,26 @@ function vCmp(){const c=S.cmp;const A=byZ(c.a),B=byZ(c.b);const same=c.a===c.b;
  <div class="field" style="width:170px"><label for="c-m">Magnitud</label><select class="input" id="c-m" data-bind="cmp.mag" data-rr="1">${Object.keys(MAG).map(k=>`<option value="${k}" ${c.mag===k?'selected':''}>${MAG[k].n}</option>`).join('')}</select></div><div class="field" style="width:150px"><label for="c-p">Periodo</label><select class="input" id="c-p" data-bind="cmp.per" data-rr="1">${[['24h','24 h'],['7d','7 días'],['30d','30 días']].map(p=>`<option value="${p[0]}" ${c.per===p[0]?'selected':''}>${p[1]}</option>`).join('')}</select></div>
  <button class="btn ghost" data-act="swap" style="margin-bottom:1px">${I.swap} Intercambiar</button></div>${AVISO_DATOS()}${body}</div></main>`+footer()}
 
-/* ---------- portada (v10): la Tierra a pantalla completa ----------
-   Paleta «atmósfera»: noche orbital + el azul de la capa de aire que se
-   ve en el borde del planeta. Esquinas rectas en toda la portada. */
+/* ---------- portada ---------- */
 const AYTOS=[{id:'gandia',n:'Gandia',zona:'La Safor · Comunitat Valenciana',desde:'junio 2026',activo:true}];
 const TV_LINKS=[['mapa','Mapa'],['comunidad','Comunidad'],['como-funciona','Cómo funciona'],['privacidad','Privacidad']];
-// Cuanto más bajo, mejor: primero el peor nivel de la zona y, a igualdad, lo lejos que está cada valor de su límite de Medio
-const estadoParque=z=>{const o={bajo:0,medio:1,alto:2};const ks=Object.keys(MAG).filter(k=>z[k]!=null);return (o[nivelGeneral(z)]||0)*10+ks.reduce((a,k)=>a+z[k]/LIM[k][0],0)/Math.max(1,ks.length)};
-// Silueta del parque: su polígono real (lat/lng de la API, el mismo que dibuja el mapa) o, sin API, la forma del prototipo
-// Mejor medida (la más baja) de la última hora de cada magnitud; la da la API como «mejor». null si no la hay
-const mejorDe=z=>z.mejor&&Object.keys(MAG).some(k=>z.mejor[k]!=null)?z.mejor:null;
+const ORDEN_NIVEL={bajo:0,medio:1,alto:2};
 const siluetaD=z=>z.poligono&&z.poligono.length>2?'M'+z.poligono.map(p=>(p[1]*Math.cos(p[0]*Math.PI/180)*1e5).toFixed(1)+' '+(-p[0]*1e5).toFixed(1)).join('L')+'Z':z.path;
-const peorNivel=z=>{const o={bajo:0,medio:1,alto:2};return Object.keys(MAG).map(k=>nivel(k,z[k])).filter(l=>l in o).reduce((a,b)=>o[b]>o[a]?b:a,'bajo')};
-const escalaPos=(k,v)=>{const [l0,l1]=LIM[k];const f=v<l0?v/l0:v<l1?1+(v-l0)/(l1-l0):2+Math.min(1,(v-l1)/(l1-l0));return Math.max(1,Math.min(99,f/3*100))};
-function mediaCiudad(m){const v=ZONAS.filter(z=>est(z)!=='none'&&z[m]!=null).map(z=>z[m]);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null}
 const TV_BURGER=open=>`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="${open?'M18 6 6 18M6 6l12 12':'M3 6h18M3 12h18M3 18h18'}" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"/></svg>`;
 function vInicio(){
- const activos=SENS.filter(x=>x.est==='activo'||x.est==='prestado').length;
- const parques=ZONAS.filter(z=>z.tipo==='parque').length,barrios=ZONAS.filter(z=>z.tipo==='barrio').length;
- const MED=[['o3','Ozono','Se forma con el sol y el tráfico. Irrita ojos y vías respiratorias, sobre todo las tardes de verano.'],['temp','Temperatura','Las calles sin sombra acumulan calor. Medirla por zonas muestra dónde faltan árboles y refugios climáticos.'],['ruido','Ruido','El tráfico y el ocio nocturno afectan al descanso y a la salud. Se mide en decibelios.']];
- const PORT=[[I.broom,'Personal municipal','Las brigadas de limpieza y de jardines lo llevan en su ruta de trabajo.'],[I.bike,'Bicis y motos compartidas','El vehículo envía datos mientras circula.'],[I.bus,'Autobuses urbanos','Cubren las avenidas principales todo el día.'],[I.walk,'Vecinos voluntarios','Recogen un sensor en un punto de reparto, pasean y ganan puntos.']];
- // Parques con datos de la última hora (los mismos del mapa), del mejor al peor estado
- const pqT=ZONAS.filter(z=>z.tipo==='parque'),pq=pqT.filter(z=>est(z)==='ok').sort((a,b)=>estadoParque(a)-estadoParque(b));
- const WEB=[['mapa','Mapa por zonas','Ozono, temperatura y ruido de cada parque y barrio en la última hora.'],['comunidad','Comunidad','Lo que notan los vecinos: ruido, calor o aire cargado.'],['historial','Historial','Cómo ha cambiado una zona en 24 horas, 7 días o un mes.'],['comparar','Comparar','Dos zonas en la misma gráfica.'],['como-funciona','Voluntariado','Cómo llevar un sensor y qué regalos puedes conseguir.'],['privacidad','Privacidad','Qué se guarda y por qué nunca se publica el recorrido de nadie.']];
+ const datos=window.RespiraDatos;
+ const reales=datos?.real();
+ const horaConsulta=datos?.ultimaConsulta?.toLocaleString('es-ES',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Madrid'});
+ const PORT=[
+  ['Personal municipal','Las brigadas de limpieza y jardines llevan el sensor durante su jornada.'],
+  ['Bicis y motos compartidas','El sensor mide mientras el vehículo circula.'],
+  ['Autobuses urbanos','Las líneas recogen datos a lo largo de su recorrido.'],
+  ['Vecinos voluntarios','Recogen un sensor en un punto de reparto y lo llevan de paseo.']
+ ];
+ const parques=ZONAS.filter(z=>z.tipo==='parque'&&est(z)==='ok'&&nivelGeneral(z)!=='none')
+  .sort((a,b)=>ORDEN_NIVEL[nivelGeneral(a)]-ORDEN_NIVEL[nivelGeneral(b)]||a.n.localeCompare(b.n,'es'));
  const links=TV_LINKS.map(([h,n])=>`<a class="tv-link" href="#${h}">${n}</a>`).join('');
- return `<div class="tv">
+ return `<div class="tv${S.iniVisto?' tv-sin-entrada':''}" id="inicio">
  <section class="tv-hero" id="tv-root" aria-label="Respira">
   <div class="tv-parallax" id="tv-parallax">
    <canvas class="tv-media" id="tv-parque" data-tv-anim aria-hidden="true"></canvas>
@@ -366,61 +384,59 @@ function vInicio(){
    <nav class="tv-nav" data-tv-anim aria-label="Principal">
     <a class="tv-marca" href="#inicio" aria-label="Respira, inicio"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">${SYM()}</svg>Respira</a>
     <div class="tv-pill" data-tv-desktop>${links}</div>
+    ${botonTema(true)}
     <button type="button" class="tv-burger" id="tv-burger" data-tv-mobile aria-controls="tv-mobile-menu" aria-expanded="false" aria-label="Abrir menú">${TV_BURGER(false)}</button>
-    ${botonTema(true)}<div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm sec" href="#acceso">Acceso ayuntamiento</a></div>
+    <div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm sec" href="#acceso">Acceso ayuntamiento</a></div>
    </nav>
-   <div id="tv-mobile-menu" class="tv-panel" data-tv-mobile hidden>${links}<div class="tv-panel-pie"><a class="btn sm sec" href="#acceso">Ayuntamiento</a></div></div>
+   <div id="tv-mobile-menu" class="tv-panel" data-tv-mobile inert>${links}<div class="tv-panel-pie"><a class="btn sm sec" href="#acceso">Ayuntamiento</a></div></div>
    <main class="tv-main">
-    <h1 class="tv-h1" data-tv-anim>El aire de tus parques, medido calle a calle</h1>
-    <p class="tv-p" data-tv-anim>Ozono, temperatura y ruido de cada parque y barrio de Gandia en la última hora, medidos por vecinos con sensores.</p>
-    <div class="tv-ctas" data-tv-anim><a class="btn tv-cta" href="#mapa">${I.mapi} Ver el mapa</a><a class="btn sec tv-cta tv-blur" href="#como-funciona">Hazte voluntario</a></div>
+    <h1 class="tv-h1" data-tv-anim>Gandia, medida <span>calle a calle</span></h1>
+    <p class="tv-p" data-tv-anim>Consulta el ozono, la temperatura y el ruido de tus parques y barrios.</p>
+    <div class="tv-ctas" data-tv-anim><a class="btn tv-cta" href="#mapa">${I.mapi} Ver el mapa</a><a class="tv-voluntario" href="#voluntariado">Hazte voluntario</a></div>
    </main>
   </div>
  </section>
 
- <section class="tv-sec"><div class="tv-in">
-  <div class="tv-head rv"><h2>Los parques ahora, de mejor a peor</h2><p>Ordenados por su estado general en el mapa: la media de los niveles de ozono, temperatura y ruido de la última hora, que es el color de la silueta. Debajo, la mejor medida de esa hora de cada uno, con su color. <a class="pq-todos" href="#mapa">Ver todos en el mapa</a></p></div>
-  ${pq.length?'':'<p class="note">Ahora mismo ningún parque tiene datos de la última hora.</p>'}
-  <div class="pq-fila">${pq.map((z,i)=>{const e=est(z),V=mejorDe(z)||z,nv=k=>nivel(k,V[k]);return `<button type="button" class="pq rv" style="--i:${i}" data-act="verZona" data-arg="${z.id}" aria-label="${esc(z.n)}: ${Object.keys(MAG).map(k=>MAG[k].n+' '+fmt(V[k],k)+' '+MAG[k].u+', '+(NIV[nv(k)]||'sin datos')).join('; ')}">
-   <svg class="pq-sil" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="${siluetaD(z)}" class="pq-g-${nivelGeneral(z)}"/></svg>
-   <span class="pq-cab"><b>${esc(z.n)}</b></span>
-   <span class="pq-vals">${Object.keys(MAG).map(k=>`<span><small>${MAG[k].n}</small><b class="mono pq-v-${nv(k)}">${fmt(V[k],k)}</b> <small>${MAG[k].u}</small></span>`).join('')}</span>
-   <span class="pq-nota">${mejorDe(z)?'Mejor medida':'Media'} de la última hora · medido ${hace(z.hace)}</span></button>`}).join('')}</div>
- </div></section>
-
- <section class="tv-sec tv-alt" id="ayuntamientos"><div class="tv-in">
-  <div class="tv-head rv"><h2>Ayuntamientos con Respira</h2><p>Cada municipio tiene su propio mapa, sus puntos de reparto y su panel de gestión.</p></div>
-  <div class="tv-aytos">${AYTOS.map(a=>`<article class="tv-ayto rv">
-   <div class="tv-ayto-top"><div><h3>${esc(a.n)}</h3><span class="tv-mut">${esc(a.zona)}</span></div><span class="tv-estado"><i></i>Activo</span></div>
-   <dl class="tv-dl"><div><dt>Sensores en la calle</dt><dd>${activos}</dd></div><div><dt>Zonas medidas</dt><dd>${parques+barrios}</dd></div><div><dt>Puntos de reparto</dt><dd>${PUNTOS_REPARTO.length}</dd></div><div><dt>Datos desde</dt><dd>${a.desde}</dd></div></dl>
-   <div class="tv-medias">${Object.keys(MAG).map(k=>{const v=mediaCiudad(k),l=nivel(k,v);return `<div><span>${k==='temp'?'Temperatura media':MAG[k].n+' medio'}</span><b>${fmt(v,k)} <small>${MAG[k].u}</small></b>${l==='none'?'':`<em class="tv-nv tv-${l}">${NIV[l]}</em>`}</div>`}).join('')}</div>
-   <div class="tv-fila"><a class="btn" href="#mapa">Ver el mapa</a><a class="btn sec" href="#como-funciona">Puntos de reparto</a></div></article>`).join('')}
-   <article class="tv-ayto tv-nuevo rv" style="--i:1"><h3>¿Tu ayuntamiento?</h3><p class="tv-mut">Respira se pone en marcha con sensores, puntos de reparto, la app para los vecinos y un panel para el personal municipal.</p><a class="btn sec" href="#para-ayuntamientos">Qué incluye</a></article>
+ <section class="tv-sec" aria-labelledby="portada-parques"><div class="tv-in">
+  <div class="tv-head rv">
+   <h2 id="portada-parques">El estado de los parques</h2>
+   <p>${datos?.zonasSinConexion?'Medias guardadas de la última consulta, agrupadas por nivel general.':'Medias de la última hora, agrupadas por nivel general.'}</p>
+   <p class="tv-datos" role="status">${reales?(datos.zonasSinConexion?'Sin conexión. Última consulta: ':'Datos consultados a las ')+horaConsulta:datos?.estado==='cargando'?'Conectando con el servidor. Los valores que ves son de demostración.':'Datos de demostración'}</p>
   </div>
+  ${parques.length?'':'<p class="note">No hay parques con datos de la última hora.</p>'}
+  <div class="pq-fila">${parques.map(z=>{const nivelZona=nivelGeneral(z);return `<button type="button" class="pq" data-act="verZona" data-arg="${esc(z.id)}">
+   <span class="pq-cab"><b>${esc(z.n)}</b><span class="badge b-${nivelZona}">Nivel ${NIV[nivelZona].toLowerCase()}</span></span>
+   <svg class="pq-sil" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="${esc(siluetaD(z))}" class="pq-g-${nivelZona}"/></svg>
+   <span class="pq-vals">${Object.keys(MAG).map(k=>`<span><small>${MAG[k].n}</small>${z[k]==null?'<span>Sin datos</span>':`<b>${fmt(z[k],k)}</b> <small>${MAG[k].u}</small>`}</span>`).join('')}</span>
+   ${reales&&!datos.zonasSinConexion?`<span class="pq-nota">Última lectura ${hace(z.hace)}</span>`:''}
+  </button>`}).join('')}</div>
+  <p class="tv-parques-enlace"><a class="pq-todos" href="#mapa">Ver todos los parques en el mapa</a></p>
  </div></section>
 
- <section class="tv-sec"><div class="tv-in">
-  <div class="tv-head rv"><h2>Qué significa cada color</h2><p>Los mismos límites en la web, la app y el panel municipal. Elige qué quieres consultar.</p></div>
-  <div class="ic-tabs rv" role="tablist" aria-label="Qué se mide">${EF_B.map(e=>`<button type="button" role="tab" id="ict-${e.k}" aria-controls="icp-${e.k}" aria-selected="${S.tabIni===e.k}" data-act="tabIni" data-arg="${e.k}">${e.n}</button>`).join('')}</div>
-  ${EF_B.map(e=>{const k=e.k,v=mediaCiudad(k),l=LIM[k],txt=(MED.find(m=>m[0]===k)||[])[2]||'';return `<div class="ic-panel rv" role="tabpanel" id="icp-${k}" aria-labelledby="ict-${k}"${S.tabIni===k?'':' hidden'}>
-   <div><h3>${e.lema}</h3><p class="tv-mut">${txt}</p>
-    <div class="ic-escala" aria-hidden="true"><span class="b"></span><span class="m"></span><span class="a"></span>${v!=null?`<i style="left:${escalaPos(k,v).toFixed(1)}%"></i>`:''}</div>
-    <div class="ic-et"><span><span class="badge b-bajo">Bajo</span><small>menos de ${fmt(l[0],k)} ${MAG[k].u}</small></span><span><span class="badge b-medio">Medio</span><small>${fmt(l[0],k)} a ${fmt(l[1],k)}</small></span><span><span class="badge b-alto">Alto</span><small>desde ${fmt(l[1],k)} ${MAG[k].u}</small></span></div>
-    <p class="ic-ahora">${v!=null?`Media de la ciudad ahora: <b class="mono">${fmt(v,k)} ${MAG[k].u}</b>, nivel ${NIV[nivel(k,v)].toLowerCase()}.`:'Ahora mismo no hay datos de la ciudad.'}</p></div>
-   <div><ol class="ic-pasos">${e.pasos.map(([nv,val,t,x])=>`<li class="${nv}"><b>${EF_NV[nv]}</b><span>${x}</span><small class="mono">${val}${t?', '+t:''}</small></li>`).join('')}</ol>
-    <p class="ic-hacer"><b>Qué hacer:</b> ${e.hacer}.</p><p class="ic-hacer"><b>Más sensibles:</b> ${e.peor.join(', ').toLowerCase()}.</p></div></div>`}).join('')}
-  <p class="tv-nota">${EF_AVISO_B} <a href="#como-funciona">Guía completa en «Cómo funciona»</a>.</p>
+ <section class="tv-sec tv-alt"><div class="tv-in">
+  <div class="tv-head rv"><h2>Qué significa cada color</h2><p>Estos son los umbrales que usa el mapa para cada medición.</p></div>
+  <div class="ic-tabs rv" role="tablist" aria-label="Qué se mide">${EF_B.map(e=>`<button type="button" role="tab" id="ict-${e.k}" aria-controls="icp-${e.k}" aria-selected="${S.tabIni===e.k}" tabindex="${S.tabIni===e.k?0:-1}" data-act="tabIni" data-arg="${e.k}">${e.k==='temp'?MAG.temp.n:e.n}</button>`).join('')}</div>
+  ${EF_B.map(e=>{const k=e.k,[bajo,alto]=LIM[k],u=MAG[k].u;return `<div class="ic-panel" role="tabpanel" id="icp-${k}" aria-labelledby="ict-${k}"${S.tabIni===k?'':' hidden'}>
+    <div class="ic-escala" aria-hidden="true"><span class="b"></span><span class="m"></span><span class="a"></span></div>
+    <div class="ic-et"><span><b>Bajo</b><small>Menos de ${fmt(bajo,k)} ${u}</small></span><span><b>Medio</b><small>De ${fmt(bajo,k)} a menos de ${fmt(alto,k)} ${u}</small></span><span><b>Alto</b><small>Desde ${fmt(alto,k)} ${u}</small></span></div>
+  </div>`}).join('')}
+  <p class="tv-parques-enlace"><a class="pq-todos" href="#valores">Consultar la guía de valores</a></p>
  </div></section>
 
- <section class="tv-sec tv-alt"><div class="tv-in tv-dos">
-  <div class="tv-head rv"><h2>Sensores que se mueven con la ciudad</h2><p>En lugar de pocas estaciones fijas, muchos sensores pequeños recorren las calles. Cada medición llega con su hora y su ubicación, y el servidor calcula la media de cada zona.</p>
-   <p class="tv-priv"><b>Nunca se publica el recorrido de nadie.</b> En el mapa solo hay medias por parque y barrio.</p></div>
-  <div class="tv-port">${PORT.map((p,i)=>`<div class="tv-p4 rv" style="--i:${i}"><span class="tv-ico">${p[0]}</span><div><h3>${p[1]}</h3><p class="tv-mut">${p[2]}</p></div></div>`).join('')}</div>
+ <section class="tv-sec"><div class="tv-in tv-dos">
+  <div class="tv-head rv"><h2>Quién lleva los sensores</h2><p>Los sensores recorren Gandia con las personas y los vehículos que pasan por sus calles.</p>
+   <p class="tv-priv"><b>Los recorridos son privados.</b> El mapa público muestra las medias por zona.</p></div>
+  <dl class="tv-port">${PORT.map(([titulo,descripcion])=>`<div><dt>${titulo}</dt><dd>${descripcion}</dd></div>`).join('')}</dl>
  </div></section>
 
- <section class="tv-sec" id="para-ayuntamientos"><div class="tv-in tv-ayu">
-  <div class="rv"><span class="tv-eyebrow">Para ayuntamientos</span><h2>Un panel para gestionar todo el servicio</h2><p class="tv-mut">El personal municipal entra con su cuenta y ve solo lo que le corresponde según su rol: administración, técnico o punto de reparto.</p><div class="tv-fila"><a class="btn" href="#acceso">Acceso ayuntamiento</a></div></div>
-  <ul class="tv-lista rv" style="--i:1">${[['Flota de sensores','Estado, batería y último dato de cada sensor.'],['Préstamos','Prestar y recoger sensores en los puntos de reparto.'],['Puntos','Reglas de cálculo y revisión de días sospechosos.'],['Regalos y canjes','Catálogo, stock y entrega con código CJ-XXXX.']].map(x=>`<li><b>${x[0]}</b><span class="tv-mut">${x[1]}</span></li>`).join('')}</ul>
+ <section class="tv-sec tv-alt" id="para-ayuntamientos"><div class="tv-in tv-ayu">
+  <div class="rv"><h2 id="ayuntamientos">Respira para ayuntamientos</h2><p class="tv-mut">Gestiona los sensores, los préstamos y los canjes desde el panel municipal.</p>
+   <div class="tv-fila"><a class="btn" href="#acceso">Acceso ayuntamiento</a></div>
+  </div>
+  <div class="rv">
+   ${AYTOS.length?`<ul class="tv-lista">${AYTOS.map(a=>`<li><b>${esc(a.n)}</b><span class="tv-mut">${esc(a.zona)}${reales&&a.activo?' · Servicio activo':''}</span></li>`).join('')}</ul>`:''}
+   <a class="pq-todos" href="#voluntariado">Consultar puntos de reparto</a>
+  </div>
  </div></section>
 
  <footer class="tv-pie"><div class="tv-in"><span>Respira es un servicio de <b>NODIA</b></span><span>Proyecto de Biometría, GTI, UPV. <a href="#privacidad">Privacidad</a></span></div></footer>
@@ -436,20 +452,13 @@ function aplicarTema(){document.documentElement.setAttribute('data-tema',TEMA)}
 const TV={raf:null,target:{x:0,y:0},cur:{x:0,y:0},globo:null,limpiar:null};
 function montarInicio(){
  if(TV.limpiar)TV.limpiar();
- const root=document.getElementById('tv-root'),par=document.getElementById('tv-parallax'),
-   burger=document.getElementById('tv-burger'),panel=document.getElementById('tv-mobile-menu');
+ const root=document.getElementById('tv-root'),par=document.getElementById('tv-parallax');
  if(!root)return;
  const off=[];const on=(el,ev,fn,o)=>{el.addEventListener(ev,fn,o);off.push(()=>el.removeEventListener(ev,fn,o))};
- // menú móvil
- const setMenu=open=>{panel.hidden=!open;burger.setAttribute('aria-expanded',open);burger.setAttribute('aria-label',open?'Cerrar menú':'Abrir menú');burger.innerHTML=TV_BURGER(open)};
- on(burger,'click',()=>setMenu(panel.hidden));
- panel.querySelectorAll('a').forEach(a=>on(a,'click',()=>setMenu(false)));
- on(window,'keydown',e=>{if(e.key==='Escape'&&!panel.hidden){setMenu(false);burger.focus()}});
- const mq=matchMedia('(min-width: 768px)');const alCambiar=()=>{if(mq.matches)setMenu(false)};on(mq,'change',alCambiar);
- let ro=null;if(window.ResizeObserver){ro=new ResizeObserver(es=>{for(const e of es)if(e.contentRect.width>=768)setMenu(false)});ro.observe(root)}
- // barra fija: al bajar, gana fondo para que se lea sobre el contenido
- const navFija=root.querySelector('.tv-nav');const alScroll=()=>navFija.classList.toggle('con-fondo',window.scrollY>8);
- on(window,'scroll',alScroll,{passive:true});alScroll();
+ const barra=root.querySelector('.tv-nav');
+ const actualizarFondo=()=>barra.classList.toggle('con-fondo',window.scrollY>0);
+ on(window,'scroll',actualizarFondo,{passive:true});
+ actualizarFondo();
  // paralaje con el puntero (se para solo)
  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
   const tick=()=>{const c=TV.cur,t=TV.target;c.x+=(t.x-c.x)*0.08;c.y+=(t.y-c.y)*0.08;par.style.transform='translate3d('+c.x.toFixed(2)+'px,'+c.y.toFixed(2)+'px,0)';
@@ -465,7 +474,7 @@ function montarInicio(){
  const tvr=root.parentNode;let io=null;
  if(S.iniVisto||!window.IntersectionObserver)tvr.classList.add('quieto');
  else{S.iniVisto=true;io=new IntersectionObserver(es=>es.forEach(x=>{if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}}),{threshold:.12});tvr.querySelectorAll('.rv').forEach(el=>io.observe(el))}
- TV.limpiar=()=>{off.forEach(f=>f());ro&&ro.disconnect();io&&io.disconnect();if(TV.raf)cancelAnimationFrame(TV.raf);TV.raf=null;TV.globo&&TV.globo.parar();TV.globo=null;TV.limpiar=null;document.body.style.backgroundColor=''};
+ TV.limpiar=()=>{off.forEach(f=>f());io&&io.disconnect();if(TV.raf)cancelAnimationFrame(TV.raf);TV.raf=null;TV.globo&&TV.globo.parar();TV.globo=null;TV.limpiar=null;document.body.style.backgroundColor=''};
 }
 
 /* Un parque de Gandia a la hora dorada (o de día con el diseño claro).
@@ -532,7 +541,7 @@ function parqueEscena(cv,dia){
   dpr=Math.min(2,devicePixelRatio||1);w=cv.clientWidth;h=cv.clientHeight;if(!w||!h)return false;cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);sem=11;
   const hz=h*.6,ancho=w<700;
   // lago (forma orgánica), a la derecha para dejar libre el texto
-  const L={cx:w*(ancho?.6:.7),cy:hz+h*(ancho?.17:.14),rx:w*(ancho?.34:.17),ry:h*(ancho?.06:.062)};L.top=L.cy-L.ry;
+  const L={cx:w*(ancho?.75:.7),cy:hz+h*(ancho?.17:.14),rx:w*(ancho?.18:.17),ry:h*(ancho?.06:.062)};L.top=L.cy-L.ry;
   const lagoPath=new Path2D();for(let i=0;i<=48;i++){const a=i/48*Math.PI*2;const r=1+.08*Math.sin(a*3+1)+.05*Math.cos(a*5);const px=L.cx+Math.cos(a)*L.rx*r,py=L.cy+Math.sin(a)*L.ry*r*(Math.sin(a)<0?.85:1);i?lagoPath.lineTo(px,py):lagoPath.moveTo(px,py)}lagoPath.closePath();
   // camino: de abajo a la izquierda hacia el horizonte, rodeando el lago
   const camino=u=>{const x0=w*(ancho?.18:.3),x1=w*(ancho?.34:.5),y0=h+12,y1=hz+h*.012;const x=x0+(x1-x0)*(1-Math.pow(1-u,1.7))-Math.sin(u*Math.PI)*w*.04;return {x,y:y0+(y1-y0)*u,ancho:(1-u)*w*(ancho?.2:.12)+w*.005}};
@@ -553,10 +562,10 @@ function parqueEscena(cv,dia){
   const fila=[];// lejanos: línea continua de copas
   const [lejosC,lx]=lienzo(w,h*.12+20);const lb=h*.12;for(let x=-20;x<w+20;x+=entre(8,16)){lx.fillStyle=rnd()<.5?P.lejos[0]:P.lejos[1];lx.beginPath();lx.arc(x,lb-entre(0,h*.02),entre(h*.012,h*.026),0,7);lx.fill()}lx.fillRect(-20,lb-4,w+40,24);
   for(let i=0;i<(ancho?10:22);i++){const tipo=rnd()<.18?'palmera':rnd()<.25?'cipres':'redondo';const alto=h*entre(.07,.12);const s=nuevoArbol(tipo,alto,.45);fila.push({s,x:entre(-.02,1.02)*w,y:hz+h*entre(.005,.025),f:rnd()*6,amp:.006,prof:.25})}
-  const medios=[];const xs=ancho?[.08,.28,.5,.72,.92,1.02]:[.53,.6,.79,.86,.93,1.0,1.06];
+  const medios=[];const xs=ancho?[.04,.54,.72,.92,1.02]:[.53,.6,.79,.86,.93,1.0,1.06];
   xs.forEach(fx=>{const tipo=rnd()<.22?'palmera':rnd()<.2?'cipres':'redondo';const alto=h*(fx<.3&&!ancho?entre(.12,.16):entre(.17,.26));const s=nuevoArbol(tipo,alto,0);let y=hz+h*entre(.035,.07);if(Math.abs(fx*w-L.cx)<L.rx*1.05&&y>L.top-4)y=L.top-h*.004;medios.push({s,x:fx*w,y,f:rnd()*6,amp:tipo==='palmera'?.02:.012,prof:.6})});
   medios.sort((a,b)=>a.y-b.y);
-  const cerca={s:nuevoArbol('redondo',h*(ancho?.5:.66),0),x:w*(ancho?1.02:.985),y:h*1.0,f:1,amp:.008,prof:1};
+  const cerca={s:nuevoArbol('redondo',h*(ancho?.38:.66),0),x:w*(ancho?1.12:.985),y:h*1.0,f:1,amp:.008,prof:1};
   const palmCerca=ancho?null:{s:palmera(h*.62,0),x:w*1.07,y:h*1.02,f:2.5,amp:.018,prof:1};
   // ---- suelo (estático): césped con textura, sombras, camino, orilla, flores ----
   const [suelo,gx]=lienzo(w,h-hz+4);gx.translate(0,-hz);
@@ -577,9 +586,14 @@ function parqueEscena(cv,dia){
   // ---- reflejo del lago (estático; se ondula al pintarlo) ----
   const [refl,rx]=lienzo(w,h);rx.save();rx.clip(lagoPath);
   const ag=rx.createLinearGradient(0,L.top,0,L.cy+L.ry);ag.addColorStop(0,P.agua[0]);ag.addColorStop(.3,P.agua[1]);ag.addColorStop(.75,P.agua[2]);ag.addColorStop(1,P.agua[3]);rx.fillStyle=ag;rx.fillRect(0,L.top-4,w,L.ry*2.4);
-  rx.globalAlpha=.42;try{rx.filter='blur(1.2px)'}catch(_){}
-  medios.forEach(t=>{if(Math.abs(t.x-L.cx)>L.rx*1.3)return;rx.save();rx.translate(t.x,2*L.top-t.y+4);rx.scale(1,-1);rx.drawImage(t.s.c,-t.s.ox,-t.s.oy,t.s.cw,t.s.ch);rx.restore()});
-  rx.filter='none';rx.globalAlpha=1;
+  // En la composición estrecha los árboles quedan lejos de la orilla.
+  if(!ancho){
+   rx.globalAlpha=.42;
+   rx.filter='blur(1.2px)';
+   medios.forEach(t=>{if(Math.abs(t.x-L.cx)>L.rx*1.3)return;rx.save();rx.translate(t.x,2*L.top-t.y+4);rx.scale(1,-1);rx.drawImage(t.s.c,-t.s.ox,-t.s.oy,t.s.cw,t.s.ch);rx.restore()});
+   rx.filter='none';
+   rx.globalAlpha=1;
+  }
   // agua cristalina: borde turquesa poco profundo, fondo de piedras que se transparenta
   rx.lineWidth=h*.035;rx.strokeStyle=`rgba(${P.aguaClara},.42)`;rx.stroke(lagoPath);rx.lineWidth=h*.012;rx.strokeStyle=`rgba(${P.aguaClara},.5)`;rx.stroke(lagoPath);
   for(let i=0;i<70;i++){const a=rnd()*Math.PI*2,d=entre(.78,.96);rx.fillStyle=`rgba(90,120,110,${entre(.12,.25)})`;rx.beginPath();rx.ellipse(L.cx+Math.cos(a)*L.rx*d,L.cy+Math.sin(a)*L.ry*d,entre(1.5,3.5),entre(1,2),0,0,7);rx.fill()}
@@ -629,8 +643,9 @@ function parqueEscena(cv,dia){
    ctx.fillStyle='#22282a';ctx.fillRect(lx-1.4*esc,c.y-alto,2.8*esc,alto);ctx.beginPath();ctx.arc(lx,c.y-alto,3.6*esc,0,7);ctx.fillStyle=P.farola?'#ffe0aa':'#d8d2c2';ctx.fill()});
   // árboles medios (por profundidad) y personas en el camino
   const vol=(()=>{const c=quieto?.35:((tt/40)%1);const u=c<.5?.06+c*1.4:.06+(1-c)*1.4;const k=Math.min(.78,u);const p=E.camino(k);return {x:p.x+px*.4,y:p.y,a:h*.09*(1-k*.82)}})();
-  const cor=(()=>{const c=quieto?.7:((tt/26+.4)%1);const k=.12+c*.6;const p=E.camino(k);return {x:p.x+p.ancho*.4+px*.4,y:p.y,a:h*.085*(1-k*.82)}})();
-  const capas=E.medios.map(t=>({y:t.y,f:()=>sprite(t,tt,px)})).concat([{y:vol.y,f:()=>persona(vol.x,vol.y,vol.a,tt,false,true)},{y:cor.y,f:()=>persona(cor.x,cor.y,cor.a,tt,true,false)}]);
+  const paseo=(1-Math.cos(2*Math.PI*(tt/52+.2)))/2;
+  const cor=(()=>{const k=.12+(quieto?.7:paseo)*.6;const p=E.camino(k);return {x:p.x+p.ancho*.4+px*.4,y:p.y,a:h*.085*(1-k*.82)}})();
+  const capas=E.medios.map(t=>({y:t.y,f:()=>sprite(t,tt,px)})).concat([{y:vol.y,f:()=>persona(vol.x,vol.y,vol.a,tt,false,true)},{y:cor.y,f:()=>persona(cor.x,cor.y,cor.a,tt,false,false)}]);
   capas.sort((a,b)=>a.y-b.y).forEach(c=>c.f());
   // primer plano
   if(E.palmCerca)sprite(E.palmCerca,tt,px);sprite(E.cerca,tt,px);
@@ -649,7 +664,7 @@ function vComo(){return header('como-funciona')+`<main class="page wrap"><div cl
  <section class="gv-sec" id="valores" style="display:flex;flex-direction:column;gap:14px"><div><span class="lbl">Guía de valores</span><h2 style="font-size:26px">Qué significan los valores del mapa</h2><p class="muted" style="margin:6px 0 0">Cada zona se colorea según la media de la última hora.</p></div>${guiaHTML()}</section>
  <section class="ef-sec" style="display:flex;flex-direction:column;gap:14px"><div><span class="lbl">Efectos en la salud</span><h2 style="font-size:26px">Qué te puede pasar</h2><p class="muted" style="margin:6px 0 0">Cuanto más sube, más daño. Así afecta cada nivel.</p></div>
  ${efectosHTML()}<p class="note">${EF_AVISO_B}</p></section>
- <section style="display:flex;flex-direction:column;gap:14px"><h2 style="font-size:26px">Hazte voluntario</h2>
+ <section id="voluntariado" style="display:flex;flex-direction:column;gap:14px"><h2 style="font-size:26px">Hazte voluntario</h2>
  <div style="display:flex;flex-direction:column;gap:14px"><ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;color:var(--ink-2)"><li><b style="color:var(--ink)">Crea una cuenta en la app</b> y apunta tu ID de usuario (U-XXXXX).</li><li><b style="color:var(--ink)">Recoge un sensor</b> en un punto de reparto dando tu ID.</li><li><b style="color:var(--ink)">Escribe en la app el código</b> que lleva el sensor (RSP-XXXX) y pasea con el móvil.</li><li><b style="color:var(--ink)">Devuélvelo</b> en cualquier punto de reparto antes de 24 h.</li></ol>
  <div class="tw"><table><thead><tr><th scope="col">Punto de reparto</th><th scope="col">Dirección</th><th scope="col">Horario</th></tr></thead><tbody>${PUNTOS_REPARTO.map(p=>`<tr><td><b>${p[0]}</b></td><td>${p[1]}</td><td>${p[2]}</td></tr>`).join('')}</tbody></table></div>
  <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b style="display:flex;gap:8px;align-items:center">${I.coin} Cómo se ganan los puntos</b><p class="muted" style="margin:0">Cada noche sumamos ${RULES.min===5?'1 punto cada 5 minutos':'1 punto cada '+RULES.min+' minutos'} con datos válidos, el doble dentro de los parques, hasta ${RULES.max} al día. No cuentan los ratos con el sensor parado ni a velocidad de vehículo.</p>
@@ -829,14 +844,23 @@ const SRV=(k,d)=>{const D=window.RespiraDatos;if(!D||!D.conApi())return false;D.
 const enlaceAct=()=>window.RespiraDatos&&RespiraDatos.conApi()?RespiraDatos.enlace(S.tok):STAFF.find(x=>x.r==='trabajador'&&x.token&&x.token===S.tok);
 const vEmail=v=>/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v);
 const A={
- tema:()=>{TEMA=TEMA==='oscuro'?'claro':'oscuro';try{localStorage.setItem('respira-tema',TEMA)}catch(_){}aplicarTema();render()},
- toast:a=>toast(a), menu:()=>{S.menu=true;render()}, menuClose:()=>{S.menu=false;render()},
+ tema:(_,boton)=>{
+  const cambiar=()=>{
+   TEMA=TEMA==='oscuro'?'claro':'oscuro';
+   try{localStorage.setItem('respira-tema',TEMA)}catch(_){}
+   aplicarTema();
+   render();
+   $r.querySelector(boton.matches('[data-tv-mobile]')?'.tv-tema.movil':'.tv-tema:not(.movil)')?.focus({preventScroll:true});
+  };
+  transicionVista(cambiar);
+ },
+ toast:a=>toast(a),
  layer:a=>{S.layer=a;S.sel=null;if(a==='comunidad'&&route()!=='comunidad')location.hash='comunidad';else if(a==='zonas'&&route()!=='mapa')location.hash='mapa';else render()},
  mag:a=>{S.mag=a;render()}, sel:(a,el)=>{S.sel=a||null;if(a&&el&&el.classList.contains('srow')&&S.view.w<900){const z=byZ(a);const cx=z.x||z.lx,cy=z.y||z.ly;S.view.x=cx-S.view.w/2;S.view.y=cy-S.view.h/2;clampV()}render()},
  toastMsg:a=>toast(a),
  zoom:a=>{if(GMAP()){GMAP().zoom(a);return}const v=S.view;if(a==='reset'){S.view={x:0,y:0,w:900,h:560};S.tilt=false}else{const z=S.sel&&byZ(S.sel);const cx=z?(z.x||z.lx):v.x+v.w/2,cy=z?(z.y||z.ly):v.y+v.h/2;zoomAt(a==='in'?0.7:1/0.7,cx,cy)}render()},
  tilt:()=>{if(GMAP()){GMAP().perspectiva();return}S.tilt=!S.tilt;render();toast(S.tilt?'Vista en perspectiva: puedes seguir arrastrando y tocando las zonas':'Vista en planta')}, avf:a=>{S.avf=+a;render()}, avt:a=>{S.avt=a;S.avf=0;render()},
- tabIni:a=>{S.tabIni=a;document.querySelectorAll('[data-act=tabIni]').forEach(b=>b.setAttribute('aria-selected',b.dataset.arg===a));document.querySelectorAll('.ic-panel').forEach(p=>p.hidden=p.id!=='icp-'+a)},
+ tabIni:a=>{S.tabIni=a;document.querySelectorAll('[data-act=tabIni]').forEach(b=>{const seleccionada=b.dataset.arg===a;b.setAttribute('aria-selected',seleccionada);b.tabIndex=seleccionada?0:-1});document.querySelectorAll('.ic-panel').forEach(p=>p.hidden=p.id!=='icp-'+a)},
  verZona:a=>{S.layer='zonas';S.sel=a;nav('mapa')},
  toHist:a=>{S.hist={id:a,mag:S.mag==='gen'?'o3':S.mag,per:'24h',desde:'',hasta:''};S.sel=null;nav('historial')},
  toCmp:a=>{S.cmp.a=a;if(S.cmp.b===a)S.cmp.b=ZONAS.find(z=>z.id!==a&&est(z)==='ok').id;S.sel=null;nav('comparar')},
@@ -861,11 +885,50 @@ const A={
  closeModal:()=>{S.modal=null;S.e={};render()},
  guia:()=>{S.modal={k:'guia'};render()},
  aValores:k=>{S.modal={k:'guia',foco:k};render()},
- backdrop:(a,el,ev)=>{if(ev.target===el)A.closeModal()}, menuBackdrop:(a,el,ev)=>{if(ev.target===el)A.menuClose()},
+ backdrop:(a,el,ev)=>{if(ev.target===el)A.closeModal()},
  confirmOk:()=>{const f=S.modal.fn;S.modal=null;f();render()}
 };
-document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t||t.disabled)return;if((t.dataset.act==='backdrop'||t.dataset.act==='menuBackdrop')&&e.target!==t)return;const f=A[t.dataset.act];if(!f)return;if(!e.target.closest('a[href]'))e.preventDefault();f(t.dataset.arg,t,e)});
-document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('g[role=button]')){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}))}if(e.key==='Escape'){if(S.modal)A.closeModal();else if(S.menu)A.menuClose();else if(S.sel)A.sel('')}});
+function menuMovil(boton,abierto){
+ const panel=document.getElementById(boton.getAttribute('aria-controls'));
+ panel.inert=!abierto;
+ boton.setAttribute('aria-expanded',abierto);
+ boton.setAttribute('aria-label',abierto?'Cerrar menú':'Abrir menú');
+ boton.innerHTML=TV_BURGER(abierto);
+}
+const menuAbierto=()=>$r.querySelector('.tv-burger[aria-expanded="true"]');
+matchMedia('(min-width: 768px)').addEventListener('change',e=>{
+ const boton=menuAbierto();
+ if(e.matches&&boton)menuMovil(boton,false);
+});
+document.addEventListener('click',e=>{
+ const boton=e.target.closest('.tv-burger');
+ const abierto=menuAbierto();
+ if(boton){menuMovil(boton,boton!==abierto);return}
+ if(abierto&&(!e.target.closest('.tv-panel')||e.target.closest('a[href]')))menuMovil(abierto,false);
+ const t=e.target.closest('[data-act]');if(!t||t.disabled)return;if(t.dataset.act==='backdrop'&&e.target!==t)return;const f=A[t.dataset.act];if(!f)return;if(!e.target.closest('a[href]'))e.preventDefault();f(t.dataset.arg,t,e);
+});
+document.addEventListener('keydown',e=>{
+ const pestaña=e.target.closest('[data-act="tabIni"]');
+ if(pestaña&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
+  const pestañas=[...pestaña.parentElement.querySelectorAll('[role="tab"]')];
+  const actual=pestañas.indexOf(pestaña);
+  const siguiente=e.key==='Home'?0:e.key==='End'?pestañas.length-1:
+   (actual+(e.key==='ArrowLeft'?-1:1)+pestañas.length)%pestañas.length;
+  e.preventDefault();
+  A.tabIni(pestañas[siguiente].dataset.arg);
+  pestañas[siguiente].focus();
+  return;
+ }
+ if((e.key==='Enter'||e.key===' ')&&e.target.matches('g[role=button]')){
+  e.preventDefault();
+  e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}));
+ }
+ if(e.key!=='Escape')return;
+ const boton=menuAbierto();
+ if(boton){menuMovil(boton,false);boton.focus()}
+ else if(S.modal)A.closeModal();
+ else if(S.sel)A.sel('');
+});
 function setPath(b,v){const p=b.split('.');let o=S;for(let i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=v}
 const ERRKEY={'f.mail':'mail','f.pass':'pass','f.rmail':'rmail','f.puser':'puser','f.pcode':'pcode','f.dcode':'dcode','f.ccode':'ccode','f.bconf':'bconf','f.amot':'amot','f.gn':'gn','f.gc':'gc','f.gs':'gs','edit.code':'code','edit.asig':'asig','edit.motivo':'motivo','rules.min':'rmin','rules.mult':'rmult','rules.max':'rmax','hist.desde':'desde','hist.hasta':'hasta'};
 $r.addEventListener('input',e=>{const el=e.target,b=el.dataset.bind;if(!b||el.tagName==='SELECT')return;setPath(b,el.value);
@@ -943,4 +1006,5 @@ window.Respira={S,ZONAS,AVISOS,MAG,PERC,nivel,est,fmt,hace,esc,avOk,render,byZ,s
 window.Respira.zonaMapa=zonaMapa;
 aplicarTema();
 render();
+desplazarASeccion();
 })();
