@@ -359,20 +359,34 @@ function vCmp(){const c=S.cmp;const A=byZ(c.a),B=byZ(c.b);const same=c.a===c.b;
 const AYTOS=[{id:'gandia',n:'Gandia',zona:'La Safor · Comunitat Valenciana',desde:'junio 2026',activo:true}];
 const TV_LINKS=[['mapa','Mapa'],['comunidad','Comunidad'],['como-funciona','Cómo funciona'],['privacidad','Privacidad']];
 const ORDEN_NIVEL={bajo:0,medio:1,alto:2};
+const mejorDe=z=>z.mejor&&Object.keys(MAG).some(k=>z.mejor[k]!=null)?z.mejor:null;
+function mediaCiudad(m){
+ const valores=ZONAS.filter(z=>est(z)==='ok'&&z[m]!=null).map(z=>z[m]);
+ return valores.length?valores.reduce((a,b)=>a+b,0)/valores.length:null;
+}
+function escalaPos(k,v){
+ const [bajo,alto]=LIM[k];
+ const tramo=v<bajo?v/bajo:v<alto?1+(v-bajo)/(alto-bajo):2+Math.min(1,(v-alto)/(alto-bajo));
+ return Math.max(1,Math.min(99,tramo/3*100));
+}
+function puntuacionParque(z){
+ const magnitudes=Object.keys(MAG).filter(k=>z[k]!=null);
+ return magnitudes.reduce((suma,k)=>suma+z[k]/LIM[k][0],0)/magnitudes.length;
+}
 const siluetaD=z=>z.poligono&&z.poligono.length>2?'M'+z.poligono.map(p=>(p[1]*Math.cos(p[0]*Math.PI/180)*1e5).toFixed(1)+' '+(-p[0]*1e5).toFixed(1)).join('L')+'Z':z.path;
 const TV_BURGER=open=>`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="${open?'M18 6 6 18M6 6l12 12':'M3 6h18M3 12h18M3 18h18'}" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"/></svg>`;
 function vInicio(){
  const datos=window.RespiraDatos;
  const reales=datos?.real();
  const horaConsulta=datos?.ultimaConsulta?.toLocaleString('es-ES',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Madrid'});
- const PORT=[
-  ['Personal municipal','Las brigadas de limpieza y jardines llevan el sensor durante su jornada.'],
-  ['Bicis y motos compartidas','El sensor mide mientras el vehículo circula.'],
-  ['Autobuses urbanos','Las líneas recogen datos a lo largo de su recorrido.'],
-  ['Vecinos voluntarios','Recogen un sensor en un punto de reparto y lo llevan de paseo.']
- ];
+ const origen=reales?(datos.zonasSinConexion?'Sin conexión. Última consulta: ':'Datos consultados el ')+horaConsulta
+  :datos?.estado==='cargando'?'Conectando con el servidor. Los valores que ves son de demostración.':'Datos de demostración';
+ const activos=SENS.filter(x=>x.est==='activo'||x.est==='prestado').length;
+ const totalZonas=ZONAS.filter(z=>z.tipo==='parque'||z.tipo==='barrio').length;
+ const MED=[['o3','Ozono','Se forma con el sol y el tráfico. Irrita ojos y vías respiratorias, sobre todo las tardes de verano.'],['temp','Temperatura','Las calles sin sombra acumulan calor. Medirla por zonas muestra dónde faltan árboles y refugios climáticos.'],['ruido','Ruido','El tráfico y el ocio nocturno afectan al descanso y a la salud. Se mide en decibelios.']];
+ const PORT=[['Personal municipal','Las brigadas de limpieza y de jardines lo llevan en su ruta de trabajo.'],['Bicis y motos compartidas','El vehículo envía datos mientras circula.'],['Autobuses urbanos','Cubren las avenidas principales todo el día.'],['Vecinos voluntarios','Recogen un sensor en un punto de reparto, pasean y ganan puntos.']];
  const parques=ZONAS.filter(z=>z.tipo==='parque'&&est(z)==='ok'&&nivelGeneral(z)!=='none')
-  .sort((a,b)=>ORDEN_NIVEL[nivelGeneral(a)]-ORDEN_NIVEL[nivelGeneral(b)]||a.n.localeCompare(b.n,'es'));
+  .sort((a,b)=>ORDEN_NIVEL[nivelGeneral(a)]-ORDEN_NIVEL[nivelGeneral(b)]||puntuacionParque(a)-puntuacionParque(b)||a.n.localeCompare(b.n,'es'));
  const links=TV_LINKS.map(([h,n])=>`<a class="tv-link" href="#${h}">${n}</a>`).join('');
  return `<div class="tv${S.iniVisto?' tv-sin-entrada':''}" id="inicio">
  <section class="tv-hero" id="tv-root" aria-label="Respira">
@@ -390,53 +404,71 @@ function vInicio(){
    </nav>
    <div id="tv-mobile-menu" class="tv-panel" data-tv-mobile inert>${links}<div class="tv-panel-pie"><a class="btn sm sec" href="#acceso">Ayuntamiento</a></div></div>
    <main class="tv-main">
-    <h1 class="tv-h1" data-tv-anim>Gandia, medida <span>calle a calle</span></h1>
-    <p class="tv-p" data-tv-anim>Consulta el ozono, la temperatura y el ruido de tus parques y barrios.</p>
-    <div class="tv-ctas" data-tv-anim><a class="btn tv-cta" href="#mapa">${I.mapi} Ver el mapa</a><a class="tv-voluntario" href="#voluntariado">Hazte voluntario</a></div>
+    <p class="tv-proposito">Calidad ambiental urbana</p>
+    <h1 class="tv-h1">El aire de tus parques, medido calle a calle</h1>
+    <ul class="tv-magnitudes" aria-label="Qué medimos">${Object.entries(MAG).map(([k,m])=>`<li>${sv(EF_ICO[k],19,1.9)}${m.n}</li>`).join('')}</ul>
+    <p class="tv-p">Ozono, temperatura y ruido de cada parque y barrio en la última hora, medidos por vecinos con sensores.</p>
+    <div class="tv-ctas"><a class="btn tv-cta" href="#mapa">${I.mapi} Ver el mapa</a><a class="tv-voluntario" href="#voluntariado">Hazte voluntario</a></div>
    </main>
+   <div class="tv-explorar"><a href="#parques" aria-label="Bajar a la sección de parques">${sv('<path d="m6 9 6 6 6-6"/>',20)}</a></div>
   </div>
  </section>
 
- <section class="tv-sec" aria-labelledby="portada-parques"><div class="tv-in">
+ <section class="tv-sec" id="parques" aria-labelledby="portada-parques"><div class="tv-in">
   <div class="tv-head rv">
-   <h2 id="portada-parques">El estado de los parques</h2>
-   <p>${datos?.zonasSinConexion?'Medias guardadas de la última consulta, agrupadas por nivel general.':'Medias de la última hora, agrupadas por nivel general.'}</p>
-   <p class="tv-datos" role="status">${reales?(datos.zonasSinConexion?'Sin conexión. Última consulta: ':'Datos consultados a las ')+horaConsulta:datos?.estado==='cargando'?'Conectando con el servidor. Los valores que ves son de demostración.':'Datos de demostración'}</p>
+   <h2 id="portada-parques">Los parques ahora, de mejor a peor</h2>
+   <p>${datos?.zonasSinConexion?'Medias guardadas de la última consulta.':'Ordenados por su estado general en el mapa: la media de los niveles de ozono, temperatura y ruido de la última hora, que es el color de la silueta.'} Debajo, la mejor medida de esa hora de cada uno, con su color. Si falta, se muestra la media.</p>
+   <p class="tv-datos" role="status">${origen}</p>
   </div>
-  ${parques.length?'':'<p class="note">No hay parques con datos de la última hora.</p>'}
-  <div class="pq-fila">${parques.map(z=>{const nivelZona=nivelGeneral(z);return `<button type="button" class="pq" data-act="verZona" data-arg="${esc(z.id)}">
+  <ul class="pq-leyenda" aria-label="Leyenda de niveles">
+   ${Object.entries(NIV).map(([clave,nombre])=>`<li><i class="pq-punto pq-punto-${clave}" aria-hidden="true"></i>${nombre}</li>`).join('')}
+   <li class="pq-umbrales"><a class="pq-todos" href="#colores">Ver umbrales por medición</a></li>
+  </ul>
+  ${parques.length?'':'<p class="note">Ahora mismo ningún parque tiene datos de la última hora.</p>'}
+  <div class="pq-fila">${parques.map(z=>{
+   const nivelZona=nivelGeneral(z),mejor=mejorDe(z),valores=mejor||z;
+   return `<button type="button" class="pq" data-act="verZona" data-arg="${esc(z.id)}">
    <span class="pq-cab"><b>${esc(z.n)}</b><span class="badge b-${nivelZona}">Nivel ${NIV[nivelZona].toLowerCase()}</span></span>
    <svg class="pq-sil" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="${esc(siluetaD(z))}" class="pq-g-${nivelZona}"/></svg>
-   <span class="pq-vals">${Object.keys(MAG).map(k=>`<span><small>${MAG[k].n}</small>${z[k]==null?'<span>Sin datos</span>':`<b>${fmt(z[k],k)}</b> <small>${MAG[k].u}</small>`}</span>`).join('')}</span>
-   ${reales&&!datos.zonasSinConexion?`<span class="pq-nota">Última lectura ${hace(z.hace)}</span>`:''}
+   <span class="pq-vals">${Object.keys(MAG).map(k=>`<span><small>${MAG[k].n}</small>${valores[k]==null?'<span>Sin datos</span>':`<b class="pq-v-${nivel(k,valores[k])}">${fmt(valores[k],k)}</b> <small>${MAG[k].u}</small>`}</span>`).join('')}</span>
+   <span class="pq-nota">${mejor?'Mejor medida':'Media'} de la última hora${reales&&!datos.zonasSinConexion?' · medido '+hace(z.hace):''}</span>
   </button>`}).join('')}</div>
-  <p class="tv-parques-enlace"><a class="pq-todos" href="#mapa">Ver todos los parques en el mapa</a></p>
+  <p class="tv-parques-enlace"><a class="pq-todos" href="#mapa">Ver todos en el mapa</a></p>
  </div></section>
 
- <section class="tv-sec tv-alt"><div class="tv-in">
-  <div class="tv-head rv"><h2>Qué significa cada color</h2><p>Estos son los umbrales que usa el mapa para cada medición.</p></div>
-  <div class="ic-tabs rv" role="tablist" aria-label="Qué se mide">${EF_B.map(e=>`<button type="button" role="tab" id="ict-${e.k}" aria-controls="icp-${e.k}" aria-selected="${S.tabIni===e.k}" tabindex="${S.tabIni===e.k?0:-1}" data-act="tabIni" data-arg="${e.k}">${e.k==='temp'?MAG.temp.n:e.n}</button>`).join('')}</div>
-  ${EF_B.map(e=>{const k=e.k,[bajo,alto]=LIM[k],u=MAG[k].u;return `<div class="ic-panel" role="tabpanel" id="icp-${k}" aria-labelledby="ict-${k}"${S.tabIni===k?'':' hidden'}>
-    <div class="ic-escala" aria-hidden="true"><span class="b"></span><span class="m"></span><span class="a"></span></div>
-    <div class="ic-et"><span><b>Bajo</b><small>Menos de ${fmt(bajo,k)} ${u}</small></span><span><b>Medio</b><small>De ${fmt(bajo,k)} a menos de ${fmt(alto,k)} ${u}</small></span><span><b>Alto</b><small>Desde ${fmt(alto,k)} ${u}</small></span></div>
-  </div>`}).join('')}
-  <p class="tv-parques-enlace"><a class="pq-todos" href="#valores">Consultar la guía de valores</a></p>
+ <section class="tv-sec tv-alt" id="colores"><div class="tv-in">
+  <div class="tv-head rv"><h2>Qué significa cada color</h2><p>Los mismos límites en la web, la app y el panel municipal. Elige qué quieres consultar.</p></div>
+  <div class="ic-tabs rv" role="tablist" aria-label="Qué se mide">${EF_B.map(e=>`<button type="button" role="tab" id="ict-${e.k}" aria-controls="icp-${e.k}" aria-selected="${S.tabIni===e.k}" tabindex="${S.tabIni===e.k?0:-1}" data-act="tabIni" data-arg="${e.k}">${e.n}</button>`).join('')}</div>
+  ${EF_B.map(e=>{const k=e.k,v=mediaCiudad(k),l=LIM[k],txt=(MED.find(m=>m[0]===k)||[])[2]||'';return `<div class="ic-panel" role="tabpanel" id="icp-${k}" aria-labelledby="ict-${k}"${S.tabIni===k?'':' hidden'}>
+   <div><h3>${e.lema}</h3><p class="tv-mut">${txt}</p>
+    <div class="ic-escala" aria-hidden="true"><span class="b"></span><span class="m"></span><span class="a"></span>${v!=null?`<i style="left:${escalaPos(k,v).toFixed(1)}%"></i>`:''}</div>
+    <div class="ic-et"><span><span class="badge b-bajo">Bajo</span><small>menos de ${fmt(l[0],k)} ${MAG[k].u}</small></span><span><span class="badge b-medio">Medio</span><small>de ${fmt(l[0],k)} a menos de ${fmt(l[1],k)} ${MAG[k].u}</small></span><span><span class="badge b-alto">Alto</span><small>desde ${fmt(l[1],k)} ${MAG[k].u}</small></span></div>
+    <p class="ic-ahora">${v!=null?`${reales?(datos.zonasSinConexion?'Media de la ciudad en la última consulta':'Media de la ciudad ahora'):'Media de la ciudad (demostración)'}: <b class="mono">${fmt(v,k)} ${MAG[k].u}</b>, nivel ${NIV[nivel(k,v)].toLowerCase()}.`:'Ahora mismo no hay datos de la ciudad.'}</p></div>
+   <div><ol class="ic-pasos">${e.pasos.map(([nv,val,t,x])=>`<li class="${nv}"><b>${EF_NV[nv]}</b><span>${x}</span><small class="mono">${val}${t?', '+t:''}</small></li>`).join('')}</ol>
+    <p class="ic-hacer"><b>Qué hacer:</b> ${e.hacer}.</p><p class="ic-hacer"><b>Más sensibles:</b> ${e.peor.join(', ').toLowerCase()}.</p></div></div>`}).join('')}
+  <p class="tv-nota">${EF_AVISO_B} <a class="pq-todos" href="#valores">Guía completa en «Cómo funciona»</a>.</p>
  </div></section>
 
  <section class="tv-sec"><div class="tv-in tv-dos">
-  <div class="tv-head rv"><h2>Quién lleva los sensores</h2><p>Los sensores recorren Gandia con las personas y los vehículos que pasan por sus calles.</p>
-   <p class="tv-priv"><b>Los recorridos son privados.</b> El mapa público muestra las medias por zona.</p></div>
+  <div class="tv-head rv"><h2>Sensores que se mueven con la ciudad</h2><p>En lugar de pocas estaciones fijas, muchos sensores pequeños recorren las calles. Cada medición llega con su hora y su ubicación, y el servidor calcula la media de cada zona.</p>
+   <p class="tv-priv"><b>Nunca se publica el recorrido de nadie.</b> En el mapa solo hay medias por parque y barrio.</p></div>
   <dl class="tv-port">${PORT.map(([titulo,descripcion])=>`<div><dt>${titulo}</dt><dd>${descripcion}</dd></div>`).join('')}</dl>
  </div></section>
 
- <section class="tv-sec tv-alt" id="para-ayuntamientos"><div class="tv-in tv-ayu">
-  <div class="rv"><h2 id="ayuntamientos">Respira para ayuntamientos</h2><p class="tv-mut">Gestiona los sensores, los préstamos y los canjes desde el panel municipal.</p>
-   <div class="tv-fila"><a class="btn" href="#acceso">Acceso ayuntamiento</a></div>
+ <section class="tv-sec tv-alt" id="ayuntamientos"><div class="tv-in">
+  <div class="tv-head rv"><h2>Ayuntamientos con Respira</h2><p>Cada municipio tiene su propio mapa, sus puntos de reparto y su panel de gestión.</p><p class="tv-datos">${origen}</p></div>
+  <div class="tv-aytos">${AYTOS.map(a=>`<article class="tv-ayto rv">
+   <div class="tv-ayto-top"><div><h3>${esc(a.n)}</h3><span class="tv-mut">${esc(a.zona)}</span></div>${a.activo?'<span class="tv-estado"><i></i>Activo</span>':''}</div>
+   <dl class="tv-dl"><div><dt>Sensores en la calle</dt><dd>${activos}</dd></div><div><dt>Zonas medidas</dt><dd>${totalZonas}</dd></div><div><dt>Puntos de reparto</dt><dd>${PUNTOS_REPARTO.length}</dd></div><div><dt>Datos desde</dt><dd>${esc(a.desde)}</dd></div></dl>
+   <div class="tv-medias">${Object.keys(MAG).map(k=>{const v=mediaCiudad(k),l=nivel(k,v);return `<div><span>${k==='temp'?'Temperatura media':MAG[k].n+' medio'}</span><b>${fmt(v,k)} <small>${MAG[k].u}</small></b>${l==='none'?'':`<em class="tv-nv tv-${l}">${NIV[l]}</em>`}</div>`}).join('')}</div>
+   <div class="tv-fila"><a class="btn" href="#mapa">Ver el mapa</a><a class="btn sec" href="#voluntariado">Puntos de reparto</a></div></article>`).join('')}
+   <article class="tv-ayto tv-nuevo rv" style="--i:1"><h3>¿Tu ayuntamiento?</h3><p class="tv-mut">Respira se pone en marcha con sensores, puntos de reparto, la app para los vecinos y un panel para el personal municipal.</p><a class="btn sec" href="#para-ayuntamientos">Qué incluye</a></article>
   </div>
-  <div class="rv">
-   ${AYTOS.length?`<ul class="tv-lista">${AYTOS.map(a=>`<li><b>${esc(a.n)}</b><span class="tv-mut">${esc(a.zona)}${reales&&a.activo?' · Servicio activo':''}</span></li>`).join('')}</ul>`:''}
-   <a class="pq-todos" href="#voluntariado">Consultar puntos de reparto</a>
-  </div>
+ </div></section>
+
+ <section class="tv-sec" id="para-ayuntamientos"><div class="tv-in tv-ayu">
+  <div class="rv"><span class="tv-eyebrow">Para ayuntamientos</span><h2>Un panel para gestionar todo el servicio</h2><p class="tv-mut">El personal municipal entra con su cuenta y ve solo lo que le corresponde según su rol: administración, técnico o punto de reparto.</p><div class="tv-fila"><a class="btn" href="#acceso">Acceso ayuntamiento</a></div></div>
+  <ul class="tv-lista rv" style="--i:1">${[['Flota de sensores','Estado, batería y último dato de cada sensor.'],['Préstamos','Prestar y recoger sensores en los puntos de reparto.'],['Puntos','Reglas de cálculo y revisión de días sospechosos.'],['Regalos y canjes','Catálogo, stock y entrega con código CJ-XXXX.']].map(x=>`<li><b>${x[0]}</b><span class="tv-mut">${x[1]}</span></li>`).join('')}</ul>
  </div></section>
 
  <footer class="tv-pie"><div class="tv-in"><span>Respira es un servicio de <b>NODIA</b></span><span>Proyecto de Biometría, GTI, UPV. <a href="#privacidad">Privacidad</a></span></div></footer>
@@ -449,7 +481,7 @@ const IC_LUNA='<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true
 const IC_SOL='<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>';
 const botonTema=movil=>`<button type="button" class="tv-tema${movil?' movil':''}" ${movil?'data-tv-mobile':''} data-act="tema" aria-pressed="${TEMA==='oscuro'}" aria-label="${TEMA==='oscuro'?'Cambiar a fondo blanco':'Cambiar a modo oscuro'}" title="${TEMA==='oscuro'?'Fondo blanco':'Modo oscuro'}">${TEMA==='oscuro'?IC_SOL:IC_LUNA}</button>`;
 function aplicarTema(){document.documentElement.setAttribute('data-tema',TEMA)}
-const TV={raf:null,target:{x:0,y:0},cur:{x:0,y:0},globo:null,limpiar:null};
+const TV={inicioEscena:null,raf:null,target:{x:0,y:0},cur:{x:0,y:0},globo:null,limpiar:null};
 function montarInicio(){
  if(TV.limpiar)TV.limpiar();
  const root=document.getElementById('tv-root'),par=document.getElementById('tv-parallax');
@@ -466,8 +498,8 @@ function montarInicio(){
   on(window,'pointermove',e=>{const lim=(v,m)=>Math.max(-m,Math.min(m,v));TV.target.x=lim((e.clientX/innerWidth-0.5)*28,14);TV.target.y=lim((e.clientY/innerHeight-0.5)*18,9);if(!TV.raf)TV.raf=requestAnimationFrame(tick)},{passive:true});
  }
  // parque animado (canvas)
- const claro=luminoso(getComputedStyle(document.body).backgroundColor);
- TV.globo=parqueEscena(document.getElementById('tv-parque'),claro);
+ TV.inicioEscena??=performance.now();
+ TV.globo=parqueEscena(document.getElementById('tv-parque'),TEMA==='claro');
  // siluetas de los parques: encuadrar cada forma en su tarjeta
  root.parentNode.querySelectorAll('.pq-sil path').forEach(p=>{try{const b=p.getBBox(),m=Math.max(b.width,b.height)*.08;p.parentNode.setAttribute('viewBox',`${(b.x-m).toFixed(1)} ${(b.y-m).toFixed(1)} ${(b.width+2*m).toFixed(1)} ${(b.height+2*m).toFixed(1)}`)}catch(_){}});
  // entrada escalonada al bajar: solo la primera vez que se ve la portada (no al repintar)
@@ -483,7 +515,6 @@ function montarInicio(){
    cada fotograma solo se mueven: los árboles se mecen, el lago ondula y
    refleja el cielo y los árboles, nadan dos patos, pasan pájaros, el
    voluntario pasea con su sensor y un corredor da la vuelta al lago. */
-function luminoso(c){const m=String(c).match(/\d+(\.\d+)?/g);if(!m)return true;const [r,g,b]=m.map(Number);return (0.299*r+0.587*g+0.114*b)>140}
 const PARQUE_PAL={
  tarde:{cielo:['#0b1631','#22325a','#5f5677','#d8876a','#f6c27e'],sol:[.8,-.035],solCol:'255,214,150',solDisco:true,nubes:['#f3b88a','#7d6a86'],monte:'#4b4b6b',monte2:'#5f5a78',ciudad:'#3b3753',ventanas:true,
   lejos:['#46584f','#55665a'],hoja:['#2e5a2c','#3b6a32','#4a7a39','#5b8a40','#6d9a46'],brillo:'#e7c46a',sombraHoja:'#16301c',tronco:'#3a2b22',cesped:['#7a8e45','#4f7232','#2d4a22'],hierba:['#557a32','#6f9440','#3d6228','#8aa74c'],
@@ -496,7 +527,7 @@ function parqueEscena(cv,dia){
  const ctx=cv.getContext('2d');if(!ctx)return {parar(){}};
  const quieto=matchMedia('(prefers-reduced-motion: reduce)').matches;
  let sem=7;const rnd=()=>{sem=(sem*16807)%2147483647;return (sem-1)/2147483646};const entre=(a,b)=>a+rnd()*(b-a);const elige=a=>a[Math.floor(rnd()*a.length)];
- let w=0,h=0,dpr=1,E=null,id=null,vivo=true;const t0=performance.now();
+ let w=0,h=0,dpr=1,E=null,id=null,vivo=true;const t0=TV.inicioEscena;
  const lienzo=(cw,ch)=>{const c=document.createElement('canvas');c.width=Math.max(1,Math.ceil(cw*dpr));c.height=Math.max(1,Math.ceil(ch*dpr));const x=c.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);return [c,x]};
  const mezcla=(a,b,k)=>{const p=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));const A=p(a),B=p(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*k)).join(',')+')'};
 
@@ -552,7 +583,22 @@ function parqueEscena(cv,dia){
   if(P.solDisco){cx.fillStyle='rgba(255,236,190,.95)';cx.beginPath();cx.arc(sx,sy,h*.032,0,7);cx.fill()}
   const monte=(base,amp,col,fase)=>{cx.fillStyle=col;cx.beginPath();cx.moveTo(0,hz);for(let x=0;x<=w;x+=8){const k=x/w;const y=base-amp*(Math.exp(-Math.pow((k-.22-fase)/.16,2))*1+.35*Math.exp(-Math.pow((k-.5)/.25,2))+.25*Math.sin(k*9+fase*20)*.3);cx.lineTo(x,y)}cx.lineTo(w,hz);cx.closePath();cx.fill()};
   monte(hz-h*.01,h*.12,P.monte2,0);monte(hz,h*.07,P.monte,.15);
-  cx.fillStyle=P.ciudad;for(let x=-10;x<w+10;){const bw=entre(10,30),bh=h*entre(.012,.05);cx.fillRect(x,hz-bh,bw,bh+3);if(P.ventanas)for(let k=0;k<3;k++)if(rnd()<.4){cx.fillStyle='rgba(255,210,150,.85)';cx.fillRect(x+entre(2,bw-4),hz-bh+entre(2,bh-4),2,2.5);cx.fillStyle=P.ciudad}x+=bw+entre(0,4)}
+  cx.fillStyle=P.ciudad;
+  for(let x=-10;x<w+10;){
+   const bw=entre(10,30),bh=h*entre(.012,.05);
+   cx.fillRect(x,hz-bh,bw,bh+3);
+   if(P.ventanas){
+    // Las ventanas nocturnas no cambian la posición de los demás elementos.
+    const semEdificio=sem;
+    cx.fillStyle='rgba(255,210,150,.85)';
+    for(let k=0;k<3;k++){
+     if(rnd()<.4)cx.fillRect(x+entre(2,bw-4),hz-bh+entre(2,bh-4),2,2.5);
+    }
+    cx.fillStyle=P.ciudad;
+    sem=semEdificio;
+   }
+   x+=bw+entre(0,4);
+  }
   const tx=w*.58,th=h*.13;cx.fillRect(tx,hz-th,w*.018,th);cx.beginPath();cx.moveTo(tx-2,hz-th);cx.lineTo(tx+w*.009,hz-th-h*.04);cx.lineTo(tx+w*.018+2,hz-th);cx.fill();
   const bg=cx.createLinearGradient(0,hz-h*.12,0,hz+2);bg.addColorStop(0,`rgba(${P.bruma},0)`);bg.addColorStop(1,`rgba(${P.bruma},.55)`);cx.fillStyle=bg;cx.fillRect(0,hz-h*.12,w,h*.12+4);
   // ---- nubes (sprites que se desplazan) ----
