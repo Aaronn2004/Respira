@@ -35,6 +35,8 @@
   const D = {
     version: 0,
     estado: URL_API ? 'cargando' : 'off',   // off | cargando | ok | error   (datos públicos)
+    ultimaConsulta: null,
+    zonasSinConexion: false,
     series: {},
     pedidas: {},
     enlaces: {},                            // token de activación --> datos del enlace
@@ -160,10 +162,14 @@
         D.series = {};          // las gráficas se vuelven a pedir con los datos nuevos
         D.version++;
       }
+      D.ultimaConsulta = new Date();
+      if (D.zonasSinConexion) D.version++;
+      D.zonasSinConexion = false;
       D.estado = 'ok';
     } catch (e) {
       console.warn('[Respira] No se pudieron leer las zonas de la API:', e.message || e);
       if (D.estado !== 'ok') { D.estado = 'error'; D.version++; }
+      else if (!D.zonasSinConexion) { D.zonasSinConexion = true; D.version++; }
     }
   }
 
