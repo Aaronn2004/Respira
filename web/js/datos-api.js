@@ -4,12 +4,8 @@
    Dirección de la API: js/config.js (RESPIRA_CONFIG.API_URL), p. ej.
      https://TU_DOMINIO/respira/api/index.php
 
-   Parte pública (mapa, historial, comparar, comunidad, portada):
-   - GET /zonas al abrir y cada minuto: valores de cada zona y polígono.
-   - GET /zonas/{id}/serie para las gráficas (con caché).
-   - GET /percepciones (capa Comunidad), /ayuntamientos, /puntos-reparto.
-   - Si la API no responde, se queda con los datos de DEMOSTRACIÓN y lo
-     dice en pantalla.
+   La API carga ayuntamientos y puntos de reparto. La vista pública del
+   Grau i Platja usa un escenario local de mediciones simuladas.
 
    Panel municipal (#acceso y #panel-…): con API_URL, TODO va al
    servidor (no hay modo demo): inicio de sesión con token (en
@@ -28,32 +24,9 @@
   const R = () => window.Respira;
   const E = () => R().estado;          // getters/setters de los datos de app.js
 
-  // Misma caja de Gandia que el lienzo SVG de 900 x 560 (ver mapa-google.js)
-  const NORTE = 38.9815, SUR = 38.9540, OESTE = -0.2050, ESTE = -0.1610;
-  const aLienzo = (lat, lng) => ({ x: (lng - OESTE) / (ESTE - OESTE) * 900, y: (NORTE - lat) / (NORTE - SUR) * 560 });
-
-  const D = {
-    version: 0,
-    estado: URL_API ? 'cargando' : 'off',   // off | cargando | ok | error   (datos públicos)
-    ultimaConsulta: null,
-    zonasSinConexion: false,
-    series: {},
-    pedidas: {},
-    enlaces: {},                            // token de activación --> datos del enlace
-  };
+  const D = { version: 0, enlaces: {} };
   window.RespiraDatos = D;
-
-  D.real = () => D.estado === 'ok';
   D.conApi = () => !!URL_API;
-
-  // Aviso que app.js pinta en el mapa y en el historial
-  D.avisoHTML = () => {
-    if (D.estado === 'ok') return '';
-    const txt = D.estado === 'cargando' ? 'Conectando con el servidor de Respira…'
-      : D.estado === 'error' ? '<b>Datos de demostración:</b> no hay conexión con el servidor de Respira.'
-        : '<b>Datos de demostración:</b> falta API_URL en js/config.js.';
-    return `<p class="note" role="status" style="border-left:3px solid var(--lv-medio)">${txt}</p>`;
-  };
 
   // ---------------- repintar sin molestar ----------------
   let firmaPintada = '';
@@ -63,7 +36,7 @@
     const a = document.activeElement;
     if (!forzar && a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;   // no borrar lo que se escribe
     if (!forzar && r.S.modal) return;
-    const firma = D.estado + '|' + D.version;
+    const firma = D.version;
     if (!forzar && firma === firmaPintada) return;
     firmaPintada = firma;
     r.render();
@@ -114,84 +87,6 @@
   // DATOS PÚBLICOS
   // ==============================================================
 
-  const huellaZonas = l => JSON.stringify(l.map(z => [z.id, z.hace_min, z.n, z.o3, z.temp, z.ruido]));
-  let ultimaHuella = '';
-
-  function zonaNueva(s) {
-    // Zona que no está en el lienzo de demostración (p. ej. el campus):
-    // su geometría SVG sale del polígono del servidor.
-    const z = { id: s.id, tipo: s.tipo, n: s.nombre };
-    const pts = s.poligono.map(p => aLienzo(p[0], p[1]));
-    const e = aLienzo(s.etiqueta[0], s.etiqueta[1]);
-    if (s.tipo === 'parque') {
-      z.path = 'M' + pts.map(p => p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' L') + 'z';
-      z.x = e.x; z.y = e.y;
-    } else {
-      const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
-      const x = Math.min(...xs), y = Math.min(...ys);
-      z.rect = [x, y, Math.max(...xs) - x, Math.max(...ys) - y];
-      z.lx = e.x - 40; z.ly = e.y;
-    }
-    return z;
-  }
-
-  async function cargarZonas() {
-    try {
-      const lista = await pedir('/zonas');
-      if (!Array.isArray(lista)) throw new Error('respuesta de /zonas no válida');
-      const { ZONAS } = R();
-      lista.forEach(s => {
-        let z = ZONAS.find(q => q.id === s.id);
-        if (!z) { z = zonaNueva(s); ZONAS.push(z); }
-        z.n = s.nombre;
-        z.poligono = s.poligono;
-        z.hace = s.hace_min;
-        z.nm = s.n;
-        z.o3 = s.o3; z.temp = s.temp; z.ruido = s.ruido;
-        z.m24 = s.media_24h;
-        z.mejor = s.mejor || null;   // mejor medida (la más baja) de la última hora
-      });
-      // Zonas de la demo que el servidor no tiene: sin datos
-      ZONAS.forEach(z => {
-        if (!lista.some(s => s.id === z.id)) { z.hace = null; z.nm = 0; z.o3 = z.temp = z.ruido = null; }
-      });
-      ZONAS.forEach(z => { if (!lista.some(s => s.id === z.id)) { z.m24 = null; z.mejor = null; } });
-      const huella = huellaZonas(lista);
-      if (D.estado !== 'ok' || huella !== ultimaHuella) {
-        ultimaHuella = huella;
-        D.series = {};          // las gráficas se vuelven a pedir con los datos nuevos
-        D.version++;
-      }
-      D.ultimaConsulta = new Date();
-      if (D.zonasSinConexion) D.version++;
-      D.zonasSinConexion = false;
-      D.estado = 'ok';
-    } catch (e) {
-      console.warn('[Respira] No se pudieron leer las zonas de la API:', e.message || e);
-      if (D.estado !== 'ok') { D.estado = 'error'; D.version++; }
-      else if (!D.zonasSinConexion) { D.zonasSinConexion = true; D.version++; }
-    }
-  }
-
-  // Capa Comunidad: percepciones de las últimas 24 h
-  async function cargarPercepciones() {
-    try {
-      const l = await pedir('/percepciones');
-      const { AVISOS } = R();
-      const nuevos = l.map(p => {
-        const c = aLienzo(p.lat, p.lng);
-        return { id: p.id, tipo: p.tipo, x: Math.round(c.x), y: Math.round(c.y), lat: p.lat, lng: p.lng,
-          niv: p.nivel, min: p.hace_min, dir: p.direccion };
-      });
-      if (JSON.stringify(nuevos) !== JSON.stringify(AVISOS)) {
-        AVISOS.splice(0, AVISOS.length, ...nuevos);
-        D.version++;
-      }
-    } catch (e) {
-      console.warn('[Respira] Percepciones no disponibles:', e.message || e);
-    }
-  }
-
   let fijosCargados = false;
   let idsPuntos = {};
   async function cargarFijos() {
@@ -211,54 +106,6 @@
       console.warn('[Respira] Ayuntamientos o puntos de reparto no disponibles:', e.message || e);
     }
   }
-
-  // ---------------- series (Historial y Comparar) ----------------
-  // clave de la caché (con rango de fechas en el historial) | null si el rango no vale
-  function claveSerie(id, mag, per) {
-    const h = R().S.hist;
-    let q = 'periodo=' + per;
-    if (location.hash === '#historial' && h.per === 'custom' && id === h.id && mag === h.mag) {
-      if (!h.desde || !h.hasta || h.hasta < h.desde) return null;
-      q = 'periodo=rango&desde=' + h.desde + '&hasta=' + h.hasta;
-    }
-    return { k: id + '|' + mag + '|' + q, q };
-  }
-
-  // Devuelve los valores (o nulos mientras llegan) con .aprox (huecos cortos
-  // aproximados). null = usar la demo.
-  D.serie = (id, mag, per) => {
-    if (D.estado !== 'ok') return null;
-    const n = per === '24h' ? 48 : per === '7d' ? 56 : 60;
-    const c = claveSerie(id, mag, per);
-    if (!c) return new Array(60).fill(null);
-    const guardada = D.series[c.k];
-    if (guardada) {
-      const v = guardada.valores.slice();
-      v.aprox = guardada.aprox;
-      return v;
-    }
-    if (!D.pedidas[c.k]) {
-      D.pedidas[c.k] = true;
-      pedir('/zonas/' + encodeURIComponent(id) + '/serie?magnitud=' + mag + '&' + c.q)
-        .then(j => {
-          const ok = Array.isArray(j.valores) && j.valores.length === n;
-          D.series[c.k] = { valores: ok ? j.valores : new Array(n).fill(null), aprox: ok && j.aprox ? j.aprox : null,
-            eventos: j.eventos || null };
-        })
-        .catch(e => { console.warn('[Respira] Serie no disponible:', e.message || e); D.series[c.k] = { valores: new Array(n).fill(null), aprox: null, eventos: null }; })
-        .finally(() => { delete D.pedidas[c.k]; D.version++; repintar(true); });
-    }
-    return new Array(n).fill(null);
-  };
-
-  // Alertas y picos del periodo (los calcula la API) | null
-  D.eventos = (id, mag, per) => {
-    if (D.estado !== 'ok') return null;
-    const c = claveSerie(id, mag, per);
-    const g = c && D.series[c.k];
-    return g && g.eventos ? { alertas: g.eventos.alertas.map(a => ({ ...a, desde: Date.parse(a.desde), hasta: Date.parse(a.hasta) })),
-      picos: g.eventos.picos.map(p => ({ ...p, momento: Date.parse(p.momento) })) } : null;
-  };
 
   // ==============================================================
   // PANEL MUNICIPAL
@@ -556,7 +403,7 @@
   // Ciclo
   // ==============================================================
   async function ciclo() {
-    await Promise.all([cargarZonas(), cargarPercepciones(), cargarFijos()]);
+    await cargarFijos();
     const S = R().S;
     if (S.user && /^panel/.test(location.hash.slice(1)) && !S.modal) await cargarPanel();
     repintar();

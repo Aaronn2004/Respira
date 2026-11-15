@@ -28,12 +28,12 @@ Cuentas, préstamos, puntos, regalos, canjes y percepciones: también en el serv
 | Mapa con Google Maps (app y web) | Real (necesita clave, ver abajo) |
 | Medidas del sensor (O₃, temperatura, ruido) | **Reales** (`arduino/`), sin valores simulados. Ruido en dB aproximados (KY-037 calibrado con el móvil) |
 | Sensor → app → servidor | **Real**: la app escucha el beacon de SU sensor, añade ubicación y lo envía a `POST /mediciones`; sin red, lo guarda y lo manda en lote después |
-| Zonas y sus valores (mapa, ficha de zona, historial, comparar) | **Reales** si la API responde (`GET /zonas`, `/serie`). Si no, datos de demostración **con aviso** |
+| Zonas y sus valores | En Android, la API proporciona zonas y series. La web muestra el escenario simulado del Grau i Platja en el mapa, el historial y la comparación. |
 | Cuentas (app y panel) y sesión | **Servidor**: contraseñas con hash, token de sesión, roles comprobados en el servidor |
 | Préstamos, sensores del panel, puntos, revisiones, regalos, canjes, trabajadores | **Servidor** (BD completa). Los puntos los calcula el servidor con las mediciones de quien lleva el sensor |
-| Percepciones (capa Comunidad) | **Servidor**: se ven en la app y en la web, 24 h, sin autor |
+| Percepciones (capa Comunidad) | La app consulta el servidor. La web muestra percepciones simuladas del Grau i Platja. |
 | Datos de partida | Los del prototipo, cargados en la BD (`esquema.sql`, sección demo). Solo RSP-4F7K manda datos reales |
-| Zonas sobre Gandia | Las 9 de la demo (en la BD con sus coordenadas) + **Campus UPV** (rectángulo **aproximado**: compruébalo) |
+| Zonas en el mapa web | Ocho espacios del Grau i Platja, con contornos de OpenStreetMap. |
 | Alertas | La app las comprueba con los datos reales al leer las zonas (con la app abierta). Sin push (FCM) no llegan con la app cerrada |
 | Favoritos y alertas | Se guardan en el móvil (no en el servidor) |
 
@@ -63,12 +63,12 @@ Estructura del código (`app/src/main/java/com/nodia/respira/`):
 Páginas: portada (`#inicio`, con los ayuntamientos que usan Respira), mapa, comunidad, historial, comparar, cómo funciona, privacidad y panel municipal (`#acceso`).
 
 1. VS Code › **Open Folder** › `Respira/web` (o abre `respira.code-workspace`).
-2. Copia `web/js/config.example.js` como `web/js/config.js` y pon `MAPS_API_KEY` (clave con **Maps JavaScript API**) y `API_URL` (`https://ablabla.upv.edu.es/respira/api/index.php`). Con `API_URL`, `js/datos-api.js` pinta los datos reales; sin ella, la demo con un aviso. `MAP_ID` (opcional, mapa vectorial) activa el botón 3D: sin él, Google Maps no permite inclinar el mapa.
+2. Copia `web/js/config.example.js` como `web/js/config.js` y pon `MAPS_API_KEY` (clave con **Maps JavaScript API**) y `API_URL` (`https://ablabla.upv.edu.es/respira/api/index.php`). `API_URL` conecta la web con el panel municipal, los ayuntamientos y los puntos de reparto. `MAP_ID` (opcional, mapa vectorial) activa el botón 3D: sin él, Google Maps no permite inclinar el mapa.
 3. Abre con **Live Server** (extensión recomendada) en `http://127.0.0.1:5500`, o `npm start`.
 
 Diseño: fondo blanco con botón de modo oscuro en la cabecera (se recuerda en el navegador). En la ficha de cada zona del mapa, el botón «?» de cada medición abre la guía «Qué significan los valores»; en «Cómo funciona» están también la guía y «Qué te puede pasar» (efectos en la salud).
 
-Sin `config.js`, o si la clave falla, la web usa el mapa SVG del prototipo (sin marca de Google) (y la consola muestra un 404 de `config.js`, que es esperado).
+La vista pública del Grau i Platja utiliza el mapa base de Google y contornos WGS84 de [OpenStreetMap (ODbL 1.0)](https://www.openstreetmap.org/copyright), recogidos en `web/js/grau-platja.js` con los identificadores de origen. Las mediciones y percepciones son simuladas. Si falta la clave o falla Google Maps, la lista y las fichas de zona siguen disponibles.
 
 ## Claves de Google Maps
 

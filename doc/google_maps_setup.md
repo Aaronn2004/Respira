@@ -69,7 +69,7 @@ Una versión `release` puede tener otro certificado. Si se distribuye mediante P
 
 [`web/index.html`](../web/index.html) carga `js/config.js` antes de [`web/js/mapa-google.js`](../web/js/mapa-google.js). Este último obtiene la clave de `window.RESPIRA_CONFIG.MAPS_API_KEY` y carga Maps JavaScript API.
 
-Si falta la clave, queda el marcador de posición o falla la carga o autenticación, el código contempla un **mapa SVG de demostración**. Ver ese SVG no confirma que Google Maps esté configurado correctamente.
+Si falta la clave o falla Google Maps, la vista avisa y mantiene la lista de zonas disponible.
 
 ### Preparar la configuración local y abrir el mapa
 
@@ -82,7 +82,7 @@ Si falta la clave, queda el marcador de posición o falla la carga o autenticaci
 
    Es un fragmento del objeto, no el contenido completo del archivo. `MAP_ID` puede permanecer vacío para el mapa básico; el código permite proporcionar un ID de mapa vectorial para las opciones de inclinación y giro. `MAP_ID` no sustituye a la clave API.
 3. Servir la carpeta `web` mediante un servidor HTTP local, por ejemplo Live Server de VS Code, con el puerto **5500**. Abrir **`http://127.0.0.1:5500/`** si `web` es la raíz del servidor, o **`http://127.0.0.1:5500/web/`** si se sirve desde la raíz del repositorio.
-4. Recargar la página y abrir su vista de mapa. Comprobar que carga la cartografía de Google, con calles y controles de navegación, y que no se está mostrando únicamente el SVG.
+4. Recargar la página y abrir su vista de mapa. Comprobar que carga la cartografía de Google, con calles y controles de navegación.
 
 Evitar abrir `index.html` mediante `file://`: las restricciones Web necesitan un referente HTTP compatible. La URL, incluido el puerto, debe coincidir con lo autorizado en Google Cloud. Véase la [guía de restricciones para sitios web](https://developers.google.com/maps/api-security-best-practices).
 
@@ -102,7 +102,7 @@ La clave Web es visible para el navegador durante su uso, y la de Android se inc
 | --- | --- |
 | Android indica que falta la clave | Revisar localmente la propiedad `MAPS_API_KEY` y recompilar la aplicación. |
 | Android muestra un mapa vacío o un fallo de autorización | Comprobar el paquete, el SHA-1 de la aplicación instalada, la API habilitada y las restricciones de la clave Android. |
-| Web sigue mostrando el SVG | Comprobar que se sirve `js/config.js`, que define `window.RESPIRA_CONFIG` y que no conserva el marcador de posición; revisar también posibles fallos de red. |
+| Web muestra un aviso en el mapa | Comprobar que se sirve `js/config.js`, que define `window.RESPIRA_CONFIG` y que no conserva el marcador de posición; revisar también posibles fallos de red. |
 | `RefererNotAllowedMapError` | Comprobar protocolo, host y puerto, especialmente `127.0.0.1` frente a `localhost`. |
 | `ApiNotActivatedMapError` | Habilitar Maps JavaScript API en el proyecto al que pertenece la clave. |
 | `BillingNotEnabledMapError` | Revisar la facturación del proyecto correspondiente. |
