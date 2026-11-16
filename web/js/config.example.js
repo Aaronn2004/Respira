@@ -11,4 +11,6 @@ window.RESPIRA_CONFIG = {
   //   Plesk:            'https://TU_DOMINIO/respira/api/index.php'
   //   En tu PC (php -S): 'http://localhost:8080/index.php'
   API_URL: 'https://TU_DOMINIO/respira/api/index.php',
+  // Activa las cuentas precargadas en el acceso de una web de pruebas con API de demostración.
+  MOSTRAR_CUENTAS_PRUEBA: false,
 };

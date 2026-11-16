@@ -24,7 +24,7 @@
   const R = () => window.Respira;
   const E = () => R().estado;          // getters/setters de los datos de app.js
 
-  const D = { version: 0, enlaces: {} };
+  const D = { version: 0, enlaces: Object.create(null) };
   window.RespiraDatos = D;
   D.conApi = () => !!URL_API;
 
@@ -52,16 +52,16 @@
       this.codigo = codigo;
       this.errores = (j && j.errores) || {};
       if (j && j.campo) this.errores[j.campo] = j.error;
-      this.quedan = j && j.quedan;
     }
   }
 
   async function pedir(ruta, metodo = 'GET', cuerpo) {
+    const tokenPeticion = token;
     let res;
     try {
       const h = { Accept: 'application/json' };
       if (cuerpo !== undefined) h['Content-Type'] = 'application/json';
-      if (token) h['X-Respira-Token'] = token;
+      if (tokenPeticion) h['X-Respira-Token'] = tokenPeticion;
       res = await fetch(URL_API + ruta, { method: metodo, cache: 'no-store', headers: h,
         body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) });
     } catch (e) {
@@ -70,7 +70,7 @@
     let j = null;
     try { j = await res.json(); } catch (_) { /* sin cuerpo JSON */ }
     if (!res.ok) {
-      if (res.status === 401 && token && !/^\/sesiones/.test(ruta)) sesionCaducada();
+      if (res.status === 401 && tokenPeticion && token === tokenPeticion && !/^\/sesiones/.test(ruta)) sesionCaducada();
       throw new ErrorApi(res.status, j);
     }
     return j;
@@ -87,24 +87,31 @@
   // DATOS PÚBLICOS
   // ==============================================================
 
-  let fijosCargados = false;
+  let ayuntamientosCargados = false;
+  let puntosCargados = false;
+  D.ayuntamientosVerificados = () => ayuntamientosCargados;
+  D.repartoVerificado = () => puntosCargados;
   let idsPuntos = {};
-  async function cargarFijos() {
-    if (fijosCargados) return;
-    try {
-      const [aytos, puntos] = await Promise.all([pedir('/ayuntamientos'), pedir('/puntos-reparto')]);
-      const { AYTOS, PUNTOS_REPARTO } = E();
-      AYTOS.splice(0, AYTOS.length, ...aytos.map(a => {
-        const d = new Date(a.desde + 'T12:00');
-        return { id: a.id, n: a.nombre, zona: a.comarca, desde: MES_LARGO[d.getMonth()] + ' ' + d.getFullYear(), activo: a.activo };
-      }));
-      PUNTOS_REPARTO.splice(0, PUNTOS_REPARTO.length, ...puntos.map(p => [p.nombre, p.direccion, p.horario]));
-      idsPuntos = Object.fromEntries(puntos.map(p => [p.nombre, p.id]));   // nombre --> id (para prestar)
-      fijosCargados = true;
-      D.version++;
-    } catch (e) {
-      console.warn('[Respira] Ayuntamientos o puntos de reparto no disponibles:', e.message || e);
-    }
+  async function cargarAyuntamientos() {
+    if (ayuntamientosCargados) return;
+    const aytos = await pedir('/ayuntamientos');
+    const { AYTOS } = E();
+    AYTOS.splice(0, AYTOS.length, ...aytos.map(a => {
+      const d = new Date(a.desde + 'T12:00');
+      return { id: a.id, n: a.nombre, zona: a.comarca, desde: MES_LARGO[d.getMonth()] + ' ' + d.getFullYear(), activo: a.activo };
+    }));
+    ayuntamientosCargados = true;
+    D.version++;
+  }
+
+  async function cargarPuntos() {
+    if (puntosCargados) return;
+    const puntos = await pedir('/puntos-reparto');
+    const { PUNTOS_REPARTO } = E();
+    PUNTOS_REPARTO.splice(0, PUNTOS_REPARTO.length, ...puntos.map(p => [p.nombre, p.direccion, p.horario]));
+    idsPuntos = Object.fromEntries(puntos.map(p => [p.nombre, p.id]));
+    puntosCargados = true;
+    D.version++;
   }
 
   // ==============================================================
@@ -112,6 +119,33 @@
   // ==============================================================
 
   const PANEL = ['admin', 'tecnico', 'reparto'];
+  const DATOS_VISTA = {
+    panel: ['SENS', 'LOANS'],
+    'panel-sensores': ['SENS'],
+    'panel-editar': ['SENS'],
+    'panel-prestamos': ['SENS', 'LOANS', 'APPUSERS', 'PUNTOS_REPARTO'],
+    'panel-puntos': ['RULES', 'SOSP'],
+    'panel-regalos': ['GIFTS', 'CANJES'],
+    'panel-trabajadores': ['STAFF'],
+  };
+  let datosPanel = {};
+  let ultimaCarga = 0;
+  D.estadoPanel = (ruta, rol) => {
+    if (!URL_API) return null;
+    const datos = ruta === 'panel-regalos' && rol === 'reparto' ? [] : DATOS_VISTA[ruta];
+    return {
+      listo: datos.every(k => datosPanel[k]?.listo),
+      error: datos.some(k => datosPanel[k]?.error),
+    };
+  };
+
+  function reiniciarPanel() {
+    datosPanel = {};
+    const estado = E();
+    for (const clave of ['SENS', 'LOANS', 'APPUSERS', 'GIFTS', 'SOSP', 'CANJES', 'STAFF']) estado[clave] = [];
+    const S = R().S;
+    S.canje = null; S.edit = null; S.altaOk = null;
+  }
 
   function guardarToken(t) {
     token = t;
@@ -126,6 +160,7 @@
     guardarToken(null);
     const r = R();
     if (r && r.S.user) {
+      reiniciarPanel();
       r.S.user = null;
       r.toast('Tu sesión ha caducado. Vuelve a entrar.');
       r.nav('acceso');
@@ -153,40 +188,64 @@
   // formularios = true: también rellena el formulario de reglas (no se pisa lo que se escribe)
   async function cargarPanel(formularios = false) {
     const S = R().S;
-    if (!S.user || !PANEL.includes(S.user.r)) return;
-    const rol = S.user.r;
-    const t = [];
-    t.push(pedir('/panel/nodos').then(l => { E().SENS = l.map(aSensor); }));
-    t.push(pedir('/panel/prestamos').then(p => { E().LOANS = p.abiertos.concat(p.cerrados).map(aPrestamo); }));
-    t.push(pedir('/panel/vecinos').then(l => { E().APPUSERS = l.map(u => ({ id: u.id, n: u.nombre })); }));
-    t.push(pedir('/regalos').then(l => { E().GIFTS = l.map(aRegalo); }));
-    if (rol === 'admin') {
-      t.push(pedir('/panel/reglas').then(r => { E().RULES = { min: r.min, mult: r.mult, max: r.max };
-        if (formularios) S.rules = { min: String(r.desde_manana ? r.desde_manana.min : r.min), mult: String(r.desde_manana ? r.desde_manana.mult : r.mult),
-          max: String(r.desde_manana ? r.desde_manana.max : r.max) }; }));
-      t.push(pedir('/panel/revisiones').then(l => { E().SOSP = l.map(aRevision); }));
-      t.push(pedir('/panel/canjes').then(l => { E().CANJES = l.map(aCanje); }));
-      t.push(pedir('/panel/trabajadores').then(l => {
-        E().STAFF = [{ n: S.user.n, e: S.user.e, p: null, r: S.user.r }].concat(l.map(aTrabajador));
-      }));
-    } else {
-      E().STAFF = [{ n: S.user.n, e: S.user.e, p: null, r: S.user.r }];
-      E().SOSP = []; E().CANJES = [];
-    }
-    const res = await Promise.allSettled(t);
-    res.filter(x => x.status === 'rejected').forEach(x => console.warn('[Respira] Panel:', x.reason && x.reason.message));
+    const usuario = S.user;
+    if (!usuario || !PANEL.includes(usuario.r)) return;
+    const carga = ++ultimaCarga;
+    const consultas = [
+      ['SENS', pedir('/panel/nodos').then(l => l.map(aSensor))],
+      ['LOANS', pedir('/panel/prestamos').then(p => p.abiertos.concat(p.cerrados).map(aPrestamo))],
+      ['APPUSERS', pedir('/panel/vecinos').then(l => l.map(u => ({ id: u.id, n: u.nombre })))],
+      ['PUNTOS_REPARTO', cargarPuntos()],
+    ];
+    if (usuario.r === 'admin') consultas.push(
+      ['GIFTS', pedir('/regalos').then(l => l.map(aRegalo))],
+      ['RULES', pedir('/panel/reglas').then(r => {
+        if (![r?.min, r?.mult, r?.max].every(Number.isFinite)) throw new Error('Reglas no disponibles.');
+        return r;
+      })],
+      ['SOSP', pedir('/panel/revisiones').then(l => l.map(aRevision))],
+      ['CANJES', pedir('/panel/canjes').then(l => l.map(aCanje))],
+      ['STAFF', pedir('/panel/trabajadores').then(l => [{ ...usuario, p: null }, ...l.map(aTrabajador)])],
+    );
+    const resultados = await Promise.allSettled(consultas.map(([, peticion]) => peticion));
+    if (S.user !== usuario || carga !== ultimaCarga) return;
+    const estado = E();
+    resultados.forEach((resultado, i) => {
+      const clave = consultas[i][0];
+      const anterior = datosPanel[clave];
+      if (resultado.status === 'rejected') {
+        datosPanel[clave] = { listo: Boolean(anterior?.listo), error: true };
+        console.warn('[Respira] Panel:', resultado.reason?.message);
+        return;
+      }
+      if (clave === 'RULES') {
+        const { min, mult, max, desde_manana } = resultado.value;
+        estado.RULES = { min, mult, max };
+        if (formularios || !anterior?.listo) {
+          const reglas = desde_manana || estado.RULES;
+          S.rules = { min: String(reglas.min), mult: String(reglas.mult), max: String(reglas.max) };
+        }
+      } else if (clave !== 'PUNTOS_REPARTO') estado[clave] = resultado.value;
+      datosPanel[clave] = { listo: true, error: false };
+    });
     D.version++;
   }
   D.cargarPanel = cargarPanel;
+  D.reintentarPanel = async () => { await cargarPanel(); repintar(true); };
 
   // Al abrir la web con una sesión guardada (recargar la página del panel)
   async function restaurarSesion() {
-    if (!token) return;
+    const guardado = token;
+    if (!guardado) return;
     try {
       const j = await pedir('/yo');
+      if (token !== guardado) return;
       if (!PANEL.includes(j.usuario.rol)) { guardarToken(null); return; }
-      R().S.user = aUsuarioWeb(j.usuario);
+      reiniciarPanel();
+      const usuario = aUsuarioWeb(j.usuario);
+      R().S.user = usuario;
       await cargarPanel(true);
+      if (R().S.user !== usuario) return;
       const inicial = (window.__respiraRutaInicial || '').slice(1);
       if (inicial && inicial.startsWith('panel') && location.hash !== '#' + inicial) location.hash = inicial;
       else R().render();
@@ -198,9 +257,10 @@
   D.cerrarSesion = () => {
     if (token) pedir('/sesiones', 'DELETE').catch(() => { /* la sesión caduca sola */ });
     guardarToken(null);
+    if (URL_API) reiniciarPanel();
   };
 
-  // Enlace de activación o de contraseña nueva: undefined = cargando, null = no vale
+  // undefined = cargando, null = enlace no válido, false = comprobación fallida.
   D.enlace = tok => {
     if (!tok) return null;
     if (!(tok in D.enlaces)) {
@@ -208,9 +268,14 @@
       pedir('/enlaces/' + encodeURIComponent(tok)).then(v => {
         D.enlaces[tok] = v.estado === 'no_valido' ? null : { n: v.nombre, e: v.email, id: v.id, rol: v.rol, tipo: v.tipo,
           caduca: v.estado === 'caducado' ? 0 : Date.now() + 36e5, token: tok, horas: v.horas };
-      }).catch(() => { D.enlaces[tok] = null; }).finally(() => { D.version++; repintar(true); });
+      }).catch(() => { D.enlaces[tok] = false; }).finally(() => { D.version++; repintar(true); });
     }
     return D.enlaces[tok];
+  };
+  D.reintentarEnlace = tok => {
+    if (D.enlaces[tok] !== false) return;
+    delete D.enlaces[tok];
+    repintar(true);
   };
 
   // ---------- errores del servidor --> campos del formulario ----------
@@ -245,15 +310,16 @@
       try {
         const j = await pedir('/sesiones', 'POST', { email, clave, cliente: 'web' });
         guardarToken(j.token);
-        S.user = aUsuarioWeb(j.usuario); S.tries = 0; S.f = {}; S.e = {};
+        reiniciarPanel();
+        const usuario = aUsuarioWeb(j.usuario);
+        S.user = usuario; S.f = {}; S.e = {};
         await cargarPanel(true);
+        if (S.user !== usuario) return;
         R().toast('Hola, ' + S.user.n.split(' ')[0]);
         R().nav(R().HOME[S.user.r]);
       } catch (e) {
         S.f.pass = '';
-        if (e.codigo === 423) { S.lock = true; S.e = {}; }
-        else S.e = { login: e.codigo === 401 ? '<b>Correo o contraseña incorrectos.</b>' + (e.quedan != null
-          ? ` Te quedan ${e.quedan} intento${e.quedan === 1 ? '' : 's'} antes del bloqueo temporal.` : '') : R().esc(e.message) };
+        S.e = { login: e.codigo === 401 ? 'Correo o contraseña incorrectos.' : R().esc(e.message) };
         R().render();
       }
     },
@@ -303,7 +369,7 @@
     async prestar({ usuario, codigo, punto }) {
       const S = R().S;
       try {
-        await cargarFijos();
+        await cargarPuntos();
         await pedir('/panel/prestamos', 'POST', { usuario, codigo, punto: idsPuntos[punto] ?? null });
         S.f.puser = ''; S.f.pcode = ''; await cargarPanel(); R().render();
         R().toast(`${codigo} prestado a ${usuario}. Ya puede escribir el código en su app.`);
@@ -354,43 +420,71 @@
 
     async comprobarCanje({ codigo }) {
       const S = R().S;
+      const usuario = S.user;
+      const vigente = () => S.user === usuario && location.hash === '#panel-regalos' && S.f.ccode?.trim().toUpperCase() === codigo;
       try {
         const c = await pedir('/panel/canjes/' + encodeURIComponent(codigo));
+        if (!vigente()) return;
         S.canje = aCanje(c); S.e = {}; R().render();
-      } catch (e) { S.canje = null; mostrarError('comprobarCanje', e, 'ccode'); }
+      } catch (e) {
+        if (!vigente()) return;
+        S.canje = null; mostrarError('comprobarCanje', e, 'ccode');
+      }
     },
 
     async entregar({ codigo }) {
       const S = R().S;
+      const usuario = S.user;
       try {
         const c = await pedir('/panel/canjes/' + encodeURIComponent(codigo) + '/entrega', 'POST', {});
-        S.canje = null; S.f.ccode = ''; await cargarPanel(); R().render();
+        if (S.user !== usuario) return;
+        if (S.f.ccode?.trim().toUpperCase() === codigo) {
+          S.canje = null; S.f.ccode = '';
+        }
+        await cargarPanel();
+        if (S.user !== usuario) return;
+        R().render();
         R().toast(c.stock === 0 ? `Entregado. «${c.regalo}» queda agotado en la app.` : 'Regalo entregado');
-      } catch (e) { mostrarError('entregar', e, 'ccode'); }
+      } catch (e) {
+        if (S.user !== usuario) return;
+        if (location.hash === '#panel-regalos' && S.f.ccode?.trim().toUpperCase() === codigo) mostrarError('entregar', e, 'ccode');
+        else R().toast(e.message);
+      }
     },
 
     async trabajador({ nombre, email, num_empleado, servicio }) {
       const S = R().S;
+      const usuario = S.user;
       try {
         const j = await pedir('/panel/trabajadores', 'POST', { nombre, email, num_empleado, servicio });
+        if (S.user !== usuario) return;
         await cargarPanel();
-        const t = E().STAFF.find(x => x.id === j.trabajador.id);
-        if (t) t.token = j.enlace.split('#activar/')[1];
-        S.altaOk = j.trabajador.id; S.f.tn = ''; S.f.te = ''; S.f.temp = ''; S.f.ts = '';
-        R().render(); R().toast(`Trabajador ${j.trabajador.id} dado de alta`);
-      } catch (e) { mostrarError('trabajador', e); }
+        if (S.user !== usuario) return;
+        const t = j.trabajador;
+        if (S.user?.r === 'admin' && location.hash === '#panel-trabajadores') {
+          S.altaOk = { id:t.id, nombre:t.nombre, email:t.email, enlace:j.enlace, correoEnviado:j.correo_enviado };
+          S.f.tn = ''; S.f.te = ''; S.f.temp = ''; S.f.ts = '';
+          R().render();
+        }
+        R().toast(`Trabajador ${t.id} dado de alta`);
+      } catch (e) { if (S.user === usuario) mostrarError('trabajador', e); }
     },
 
     async reenviar({ id }) {
       const S = R().S;
+      const usuario = S.user;
       try {
         const j = await pedir('/panel/trabajadores/' + encodeURIComponent(id) + '/enlace', 'POST', {});
+        if (S.user !== usuario) return;
         await cargarPanel();
-        const t = E().STAFF.find(x => x.id === id);
-        if (t) t.token = j.enlace.split('#activar/')[1];
-        S.altaOk = id; R().render();
-        R().toast(`Enlace nuevo para ${j.trabajador.email}. El anterior ya no sirve.`);
-      } catch (e) { R().toast(e.message); }
+        if (S.user !== usuario) return;
+        const t = j.trabajador;
+        if (S.user?.r === 'admin' && location.hash === '#panel-trabajadores') {
+          S.altaOk = { id:t.id, nombre:t.nombre, email:t.email, enlace:j.enlace, correoEnviado:j.correo_enviado };
+          R().render();
+        }
+        R().toast('Enlace de activación renovado. El anterior ya no sirve.');
+      } catch (e) { if (S.user === usuario) R().toast(e.message); }
     },
   };
 
@@ -403,7 +497,8 @@
   // Ciclo
   // ==============================================================
   async function ciclo() {
-    await cargarFijos();
+    const fijos = await Promise.allSettled([cargarAyuntamientos(), cargarPuntos()]);
+    fijos.filter(x => x.status === 'rejected').forEach(x => console.warn('[Respira] Datos públicos:', x.reason?.message));
     const S = R().S;
     if (S.user && /^panel/.test(location.hash.slice(1)) && !S.modal) await cargarPanel();
     repintar();

@@ -52,7 +52,7 @@ const EF_B=[
    ['medio','0,060 ppm','8 h','Te ahogas antes si haces deporte'],
    ['alto','0,090 ppm','1 h','Ojos y garganta irritados, tos, duele respirar hondo'],
    ['grave','0,120 ppm','1 h','Crisis de asma o EPOC; los pulmones rinden menos, también en sanos']],
-  peor:['Niños','Mayores','Asma o EPOC','Deportistas'],hacer:'Nada de deporte fuera de 12 a 20 h',
+  peor:['Niños','Mayores','Asma o EPOC','Deportistas'],hacer:'Si hay un aviso oficial por ozono, sigue las recomendaciones de las autoridades',
   fuente:'UE (RD 102/2011) · OMS 2021'},
  {k:'temp',n:'Calor',lema:'El cuerpo deja de poder enfriarse',pasos:[
    ['medio','28–30 °C','máxima','Deshidratación, calambres y dolor de cabeza en personas sensibles'],
@@ -77,10 +77,10 @@ const efectosB=()=>`<div class="efb-grid">${EF_B.map(e=>`<article class="efb">
 
 /* guía de valores (equivale a «Qué significan los valores» de la app) */
 const GUIA_TXT={
- o3:{bajo:'Aire sin problemas para nadie.',medio:'Quien hace deporte intenso puede notarlo.',alto:'Supera el umbral de información de la UE: evita el esfuerzo al aire libre.',fuente:'Referencia europea de 120 y 180 µg/m³ (≈ 0,060 y 0,090 ppm)'},
+ o3:{bajo:'Intervalo inferior de la escala de Respira.',medio:'Intervalo intermedio de la escala de Respira.',alto:'Intervalo superior de la escala de Respira.',fuente:'Referencias del RD 102/2011: 120 µg/m³ en 8 h y umbral de información de 180 µg/m³ en 1 h. El mapa clasifica medias horarias simuladas.'},
  temp:{bajo:'Temperatura agradable.',medio:'Calor: busca sombra y bebe agua.',alto:'Riesgo para mayores, niños y enfermos crónicos.',fuente:'Valores de ejemplo del prototipo, pendientes de fuente oficial'},
  ruido:{bajo:'Ambiente tranquilo.',medio:'Ruido de tráfico habitual: molesta y cansa.',alto:'Si es habitual, daña la salud (sueño, tensión, corazón).',fuente:'Valores de ejemplo del prototipo, pendientes de fuente oficial'}};
-const guiaRango=(k,i)=>{const l=LIM[k];return i===0?'&lt; '+fmt(l[0],k):i===1?fmt(l[0],k)+' – '+fmt(l[1],k):'≥ '+fmt(l[1],k)};
+const guiaRango=(k,i)=>{const l=LIM[k];return i===0?'&lt; '+fmt(l[0],k):i===1?fmt(l[0],k)+' a menos de '+fmt(l[1],k):'≥ '+fmt(l[1],k)};
 const guiaHTML=()=>`<div class="gv-grid">${Object.keys(MAG).map(k=>`<article class="gv" data-k="${k}">
  <header class="gv-top"><span class="efb-ico efb-${k}">${sv(EF_ICO[k],22,1.9)}</span><div><h3>${MAG[k].n}</h3><span class="gv-u">${k==='o3'?MAG[k].ab+' · ':''}${MAG[k].u}</span></div></header>
  <div class="gv-barra" aria-hidden="true"><i class="lv-b"></i><i class="lv-m"></i><i class="lv-a"></i></div>
@@ -89,19 +89,23 @@ const guiaHTML=()=>`<div class="gv-grid">${Object.keys(MAG).map(k=>`<article cla
  <div class="gv-estado"><b class="ef-t">Estado del dato</b><div class="gv-est">${[
   ['real','Reciente','Medido en la última hora.'],
   ['ant','Antiguo','Medido hace entre 1 y 24 horas. Se muestra con su hora.'],
-  ['sin','Sin datos','Nadie con sensor ha pasado en 24 horas. Trama gris: no significa «todo bien».']].map(([c,t,d])=>`<div><i class="gv-sw gv-${c}"></i><span><b>${t}</b>${d}</span></div>`).join('')}</div>
- <p class="gv-nota">Cada zona muestra la media de la última hora. Parques con contorno; barrios en tono suave. Los sensores de bajo coste no sustituyen a las estaciones ni a los avisos oficiales.</p></div>`;
-const EF_AVISO_B='Orientativo: no sustituye al médico. El mapa da medias de la última hora. Si hay síntomas graves, llama al 112.';
+  ['sin','Sin datos','Han pasado más de 24 horas desde la última medición, o la zona aún no tiene mediciones.'],
+  ['estimado','Estimado','La línea de puntos une mediciones a ambos lados de huecos de hasta dos horas. Si cada intervalo dura más de dos horas, se puede estimar un intervalo.']].map(([c,t,d])=>`<div><i class="gv-sw gv-${c}" aria-hidden="true"></i><span><b>${t}</b>${d}</span></div>`).join('')}</div>
+ <p class="gv-nota">Los valores del mapa se presentan como medias por zona. Los sensores de bajo coste no sustituyen a las estaciones ni a los avisos oficiales.</p></div>`;
+const EF_AVISO_B='Los efectos dependen de la duración y del contexto de la exposición. Las medias horarias simuladas del mapa son orientativas. Si hay síntomas graves, llama al 112.';
 const efectosHTML=efectosB;
 
 const NIV={bajo:'Bajo',medio:'Medio',alto:'Alto'};
 const PERC={ruido:{n:'Ruido',lv:['Bajo','Medio','Alto']},temp:{n:'Temperatura',lv:['Agradable','Calor','Mucho calor']},aire:{n:'Aire',lv:['Limpio','Regular','Malo']}};
-const avOk=a=>(!S.avf||a.niv===S.avf)&&(S.avt==='todos'||a.tipo===S.avt);
+const antiguedadAviso=a=>Math.max(0,Math.floor((Date.now()-a.momento)/60000));
+const avOk=a=>antiguedadAviso(a)<1440&&(!S.avf||a.niv===S.avf)&&(S.avt==='todos'||a.tipo===S.avt);
 const nivel=(m,v)=>v==null?'none':v<LIM[m][0]?'bajo':v<LIM[m][1]?'medio':'alto';
 // Estado general de una zona: media de los niveles de sus tres medidas (Bajo 0, Medio 1, Alto 2), redondeada.
 // Si ninguna medida está en Bajo, la zona no puede salir en verde.
 const nivelGeneral=z=>{const c={bajo:0,medio:1,alto:2};const ls=['o3','temp','ruido'].map(k=>nivel(k,z[k])).filter(l=>l in c);if(!ls.length)return 'none';return ['bajo','medio','alto'][Math.round(ls.reduce((a,l)=>a+c[l],0)/ls.length)]};
 const fmt=(v,m)=>v==null?'—':m==='o3'?(+v).toFixed(3):m==='temp'?(+v).toFixed(1):String(Math.round(v));
+const FORMATO_RUIDO=new Intl.NumberFormat('es-ES',{maximumFractionDigits:1});
+const fmtSerie=(v,m)=>m==='ruido'&&v!=null?FORMATO_RUIDO.format(v):fmt(v,m);
 const hace=m=>m==null?'sin datos':m<60?`hace ${m} min`:m<1440?`hace ${Math.round(m/60)} h`:`hace ${Math.round(m/1440)} d`;
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Escenario local de demostración, indexado por los identificadores del GeoJSON.
@@ -119,7 +123,11 @@ const ZONAS=window.RespiraGrauPlatja.features.map(({id,properties,geometry})=>{
 const TIPOS_ZONA={parque:['Parque','Parques y plazas'],playa:['Playa','Playas']};
 // Lo que pinta el mapa en cada zona según lo elegido: 'gen' (estado general) o una magnitud
 const zonaMapa=z=>{const e=est(z);if(S.mag==='gen'){const l=e==='none'?'none':nivelGeneral(z);return {l,valor:l==='none'?'–':NIV[l],texto:l==='none'?'sin datos':'estado general '+NIV[l].toLowerCase()}}
- const v=z[S.mag],l=e==='none'||v==null?'none':nivel(S.mag,v);return {l,valor:l==='none'?'–':fmt(v,S.mag),texto:l==='none'?'sin datos':fmt(v,S.mag)+' '+MAG[S.mag].u}};
+ const v=z[S.mag],l=e==='none'||v==null?'none':nivel(S.mag,v);
+ if(l==='none')return {l,valor:'–',texto:'sin datos'};
+ const valor=fmtSerie(v,S.mag);
+ return {l,valor,texto:valor+' '+MAG[S.mag].u+' · '+NIV[l]};
+};
 const est=z=>z.hace==null||z.hace>1440?'none':z.hace>60?'old':'ok';
 const byZ=id=>ZONAS.find(z=>z.id===id);
 const AVISOS=[
@@ -128,7 +136,7 @@ const AVISOS=[
  {id:'a3',zona:'oller',tipo:'aire',niv:1,min:160},
  {id:'a4',zona:'castell',tipo:'ruido',niv:1,min:220},
  {id:'a5',zona:'venecia',tipo:'aire',niv:2,min:75},
-].map(a=>({...a,dir:byZ(a.zona).n,ancla:byZ(a.zona).ancla}));
+].map(a=>({...a,momento:Date.now()-a.min*60000,dir:byZ(a.zona).n,ancla:byZ(a.zona).ancla}));
 const PUNTOS_REPARTO=[['Biblioteca Central','Pl. Mayor, 2','L–V 9:00–20:00'],['Centro Cívico Norte','Av. Norte, 15','L–S 10:00–14:00'],['Oficina de Turismo','Pl. de la Estación, 1','Todos los días 9:00–19:00']];
 const TIPOS={vol:'Voluntariado',trab:'Trabajador público',bici:'Bici o moto compartida',bus:'Autobús'};
 const TIPO_IC={vol:I.walk,trab:I.broom,bici:I.bike,bus:I.bus};
@@ -146,13 +154,22 @@ let SENS=[
  {code:'RSP-B05C',tipo:'bus',asig:'Línea 5 · Bus 231',mags:['o3','temp','ruido'],est:'activo',ult:1700,bat:null},
  {code:'RSP-V08E',tipo:'bici',asig:'Bici compartida · Estación 8',mags:['o3','temp'],est:'activo',ult:30,bat:41}
 ];
+const SENSORES_DEMO_ACTIVOS=SENS.filter(s=>s.est==='activo'||s.est==='prestado').length;
 const byCode=c=>SENS.find(s=>s.code===c);
 let LOANS=[{code:'RSP-4F7K',user:'U-48213',ini:'2 nov 09:12',fin:null,punto:'Biblioteca Central'},{code:'RSP-2B9Q',user:'U-11902',ini:'1 nov 10:05',fin:null,punto:'Centro Cívico Norte'},{code:'RSP-7H3M',user:'U-48213',ini:'31 oct 17:40',fin:'1 nov 09:02',punto:'Biblioteca Central',estDev:'Correcto'}];
-let RULES={min:5,mult:2,max:100};
+const REGLAS_DEMO={min:5,mult:2,max:100};
+let RULES={...REGLAS_DEMO};
 let SOSP=[{id:'d1',user:'U-30577',d:'1 nov',min:520,pts:100,mot:'Llega al máximo diario',estado:'pend'},{id:'d2',user:'U-11902',d:'1 nov',min:180,pts:58,mot:'Sensor 3 h sin moverse en el mismo punto (descontado)',estado:'pend'},{id:'d3',user:'U-48213',d:'31 oct',min:310,pts:91,mot:'Llega al 90 % del máximo',estado:'ok'}];
-let GIFTS=[{id:'g1',n:'Bolsa de tela',c:100,stock:0},{id:'g2',n:'Gorra Respira',c:150,stock:12},{id:'g3',n:'Cantimplora',c:250,stock:8},{id:'g4',n:'Mochila del ayuntamiento',c:600,stock:3}];
-let CANJES=[{code:'CJ-8R2T',user:'U-48213',gift:'g2',cad:'2026-11-06',estado:'pendiente'},{code:'CJ-2K9L',user:'U-11902',gift:'g3',cad:'2026-10-30',estado:'pendiente'},{code:'CJ-5P7Q',user:'U-30577',gift:'g2',cad:'2026-11-04',estado:'entregado'}];
-let STAFF=[{n:'Ana García',e:'admin@ayto.es',p:'Admin2026!',r:'admin'},{n:'Luis Pérez',e:'tecnico@ayto.es',p:'Tecnico2026!',r:'tecnico'},{n:'Marta Ruiz',e:'reparto@ayto.es',p:'Reparto2026!',r:'reparto',punto:'Biblioteca Central'}];
+const REGALOS_DEMO=[{id:'g1',n:'Bolsa de tela',c:100,stock:0},{id:'g2',n:'Gorra Respira',c:150,stock:12},{id:'g3',n:'Cantimplora',c:250,stock:8},{id:'g4',n:'Mochila del ayuntamiento',c:600,stock:3}];
+let GIFTS=REGALOS_DEMO.map(regalo=>({...regalo}));
+const CADUCIDAD_CANJE_DEMO=new Date(Date.parse(TODAY+'T00:00:00Z')+7*864e5).toISOString().slice(0,10);
+let CANJES=[{code:'CJ-8R2T',user:'U-48213',gift:'g2',cad:CADUCIDAD_CANJE_DEMO,estado:'pendiente'},{code:'CJ-2K9L',user:'U-11902',gift:'g3',cad:'2026-10-30',estado:'pendiente'},{code:'CJ-5P7Q',user:'U-30577',gift:'g2',cad:'2026-11-04',estado:'entregado'}];
+const CUENTAS_PANEL_PRUEBA=[
+ {n:'Ana García',e:'admin@ayto.es',p:'Admin2026!',r:'admin'},
+ {n:'Luis Pérez',e:'tecnico@ayto.es',p:'Tecnico2026!',r:'tecnico'},
+ {n:'Marta Ruiz',e:'reparto@ayto.es',p:'Reparto2026!',r:'reparto',punto:'Biblioteca Central'},
+];
+let STAFF=CUENTAS_PANEL_PRUEBA.map(cuenta=>({...cuenta}));
 /* Trabajadores municipales (portadores de sensor). Rol 'trabajador': NO entra en el panel.
    La cuenta se activa con un enlace de un solo uso que caduca a las 48 h; administración nunca
    conoce ni fija su contraseña. En la versión real el token solo existe en el servidor (hash). */
@@ -166,8 +183,8 @@ const ACTIV_H=48;
 const ROL={admin:'Administración',tecnico:'Técnico',reparto:'Punto de reparto',trabajador:'Trabajador municipal'};
 
 /* ---------- estado y rutas ---------- */
-const S={tabIni:'o3',iniVisto:false,layer:'zonas',mag:'gen',sel:null,q:'',hist:{id:ZONAS[0].id,mag:'o3',per:'24h',desde:'',hasta:''},cmp:{a:ZONAS[0].id,b:ZONAS[1].id,mag:'o3',per:'24h'},avf:0,avt:'todos',
- user:null,tries:0,lock:false,f:{},e:{},modal:null,edit:null,fT:'todos',fE:'todos',fQ:'',recOk:false,canje:null,rules:{...RULES}};
+const S={tabIni:'o3',iniVisto:false,layer:'zonas',mag:'gen',sel:null,q:'',hist:{id:ZONAS[0].id,mag:'o3',per:'24h',desde:'',hasta:''},cmp:{a:ZONAS[0].id,b:ZONAS[1].id,mag:'o3',per:'24h'},avf:0,avt:'todos',avSel:null,
+ user:null,f:{},e:{},modal:null,edit:null,fT:'todos',fE:'todos',fQ:'',recOk:false,canje:null,rules:{...RULES}};
 const PUB=['inicio','mapa','comunidad','historial','comparar','como-funciona','privacidad'];
 const PAN=['panel','panel-sensores','panel-editar','panel-prestamos','panel-puntos','panel-regalos','panel-trabajadores'];
 const ACCESS={admin:PAN,tecnico:['panel','panel-sensores','panel-editar','panel-prestamos'],reparto:['panel-prestamos','panel-regalos'],trabajador:[]};
@@ -180,7 +197,11 @@ function seccionPortada(){
 }
 function desplazarASeccion(){
  const destino=seccionPortada()||document.getElementById(location.hash.slice(1));
- if(destino?.matches('.tv#inicio, .tv > section, main section[id], .tv section h2[id]'))destino.scrollIntoView({behavior:'instant'});
+ if(destino?.matches('.tv#inicio, .tv > section, main section[id], .tv section h2[id]')){
+  destino.scrollIntoView({behavior:'instant'});
+  return destino;
+ }
+ return null;
 }
 function transicionVista(actualizar){
  if(document.startViewTransition&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
@@ -191,13 +212,19 @@ addEventListener('hashchange',()=>{
  if(seccionPortada())return;
  transicionVista(()=>{
   S.e={};S.modal=null;
-  if(!location.hash.startsWith('#activar/'))S.activOk=null;
+  if(!location.hash.startsWith('#activar/')||location.hash.slice(9)!==S.tok){
+   S.activOk=null;S.activRol=null;S.activTipo=null;S.f.ap1='';S.f.ap2='';
+  }
   if(!location.hash.startsWith('#panel-trabajadores'))S.altaOk=null;
   render();
-  desplazarASeccion();
+  const seccion=desplazarASeccion();
+  if(route()!=='inicio'){
+   if(!seccion)window.scrollTo({top:0,behavior:'instant'});
+   enfocarSeccion(seccion?.querySelector('h2,h3')||$r.querySelector('main h1'));
+  }
  });
 });
-let tT;function toast(m){const t=document.getElementById('toast');t.innerHTML=`<div class="t">${m}</div>`;clearTimeout(tT);tT=setTimeout(()=>t.innerHTML='',3800)}
+let tT;function toast(m){const t=document.getElementById('toast');t.innerHTML=`<div class="t">${esc(m)}</div>`;clearTimeout(tT);tT=setTimeout(()=>t.innerHTML='',3800)}
 const err=k=>S.e[k]?`<span class="err" id="e-${k}">${I.err}${S.e[k]}</span>`:'';
 const inv=k=>S.e[k]?'aria-invalid="true" aria-describedby="e-'+k+'"':'';
 const badge=(m,v)=>{const l=nivel(m,v);return l==='none'?'<span class="badge b-none">Sin datos</span>':`<span class="badge b-${l}">${NIV[l]}</span>`};
@@ -206,63 +233,20 @@ const fecha=d=>d.split('-').reverse().slice(0,2).join('/');
 const barsIco=(n,s=18)=>{const c=['','var(--lv-bajo)','var(--lv-medio)','var(--lv-alto)'][n];return `<span style="display:inline-flex;align-items:flex-end;gap:2px;height:${s}px">${[7,12,18].map((h,i)=>`<i style="width:4px;border-radius:2px;height:${h*s/18}px;background:${i<n?c:'var(--surface-3)'}"></i>`).join('')}</span>`};
 
 /* ---------- gráfica ---------- */
-const AVISO_DATOS=()=>'<p class="note">Datos simulados del Grau i Platja.</p>';
-// Alertas y picos de las series simuladas.
-function EVENTOS(mag,per,d){const n=d.length,[ini,fin]=intervaloSerie(per),paso=(fin-ini)/n;
- const l=LIM[mag];const al=[];for(const [nv,lim] of [['alto',l[1]],['medio',l[0]]]){for(let i=0;i<n;i++){if(d[i]==null||d[i]<lim)continue;let j=i,mx=d[i];while(j+1<n&&d[j+1]!=null&&d[j+1]>=lim){j++;mx=Math.max(mx,d[j])}al.push({desde:ini+i*paso,hasta:ini+(j+1)*paso,max:mx,nivel:nv});i=j}if(al.length)break}
-  const o=d.map((v,i)=>[v,i]).filter(x=>x[0]!=null).sort((a,b)=>b[0]-a[0]);const us={},pi=[];for(const [v,i] of o){if(us[i-1]||us[i+1])continue;us[i]=1;pi.push({momento:ini+i*paso+paso/2,valor:v});if(pi.length===3)break}const ev={alertas:al.slice(-10),picos:pi};
- const F=t=>{const x=new Date(t);return x.getDate()+' '+['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][x.getMonth()]+' '+String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0')};const H=t=>{const x=new Date(t);return String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0')};
- const u=MAG[mag].u;const nv=ev.alertas.length?ev.alertas[0].nivel:'alto';
- return `<section class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b>Alertas y picos</b>`+
-  (ev.alertas.length?`<span class="hint">Ratos con la media en nivel ${NIV[nv]} (desde ${fmt(LIM[mag][nv==='alto'?1:0],mag)} ${u}):</span><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">${ev.alertas.slice().reverse().map(a=>`<li>${F(a.desde)}–${H(a.hasta)} · máx. <b class="mono">${fmt(a.max,mag)}</b> ${u} <span class="badge b-${a.nivel}">${NIV[a.nivel]}</span></li>`).join('')}</ul>`:`<span class="hint">Ningún rato en nivel Medio o Alto en este periodo.</span>`)+
-  (ev.picos.length?`<span class="hint">Valores más altos medidos:</span><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">${ev.picos.map(p=>`<li><b class="mono">${fmt(p.valor,mag)}</b> ${u} · ${F(p.momento)} ${badge(mag,p.valor)}</li>`).join('')}</ul>`:'')+`</section>`}
-function serie(id,mag,per,shift=0){const n=per==='24h'?48:per==='7d'?56:60;let seed=[...id+mag+per+(route()==='historial'&&S.hist.per==='custom'?S.hist.desde+S.hist.hasta:'')].reduce((a,c)=>a+c.charCodeAt(0),7+shift);const r=()=>{seed=(seed*9301+49297)%233280;return seed/233280};
- const z=byZ(id);const base=z[mag]??(mag==='o3'?0.05:mag==='temp'?22:58);const o=[];
- for(let i=0;i<n;i++){const t=i/n;const d=per==='24h'?Math.sin((t-.3)*Math.PI*2):Math.sin(t*Math.PI*2*(per==='7d'?7:30));let v=mag==='o3'?base*(0.75+0.35*d+0.12*(r()-.5)):mag==='temp'?base+3*d+(r()-.5):base+6*d+3*(r()-.5);
-  if(per==='24h'&&i>=4&&i<=12&&z.tipo==='parque')v=null;if(per!=='24h'&&r()<.06)v=null;o.push(v)}if(z[mag]!=null)o[n-1]=z[mag];return o}
-function chart(series,mag,per,w=860,h=330){
- const all=series.flatMap(x=>x.d).filter(v=>v!=null);const l=LIM[mag];let mn=Math.min(...all,l[0]*.6),mx=Math.max(...all,l[1]*1.08);if(mag==='temp'){mn=(all.length?Math.min(...all):l[0]-6)-2;mx=Math.max(...all,l[0])+2}
- const n=series[0].d.length,x0=46,y0=h-28,X=i=>x0+i*(w-x0-10)/(n-1),Y=v=>y0-(v-mn)/(mx-mn)*(y0-12);
- const band=(a,b,c)=>{const ya=Y(Math.min(Math.max(a,mn),mx)),yb=Y(Math.min(Math.max(b,mn),mx));return yb<ya?`<rect x="${x0}" y="${yb}" width="${w-x0-10}" height="${ya-yb}" fill="${c}" opacity=".5"/>`:''};
- let s=`<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Gráfica de ${MAG[mag].n}">`+band(mn,l[0],'var(--lv-bajo-soft)')+band(l[0],l[1],'var(--lv-medio-soft)')+band(l[1],mx,'var(--lv-alto-soft)');
- l.forEach(t=>{if(t>mn&&t<mx)s+=`<line x1="${x0}" x2="${w-10}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--ink-3)" stroke-dasharray="4 4"/><text x="${x0-6}" y="${Y(t)+4}" font-size="11" text-anchor="end" fill="var(--ink-3)" font-family="JetBrains Mono,monospace">${fmt(t,mag)}</text>`});
- const d0=series[0].d;const hu=i=>d0[i]==null&&!(d0.aprox&&d0.aprox[i]!=null);let st=null;d0.forEach((v,i)=>{if(hu(i)&&st==null)st=i;if((!hu(i)||i===n-1)&&st!=null){const e=hu(i)?i:i-1;s+=`<rect x="${X(Math.max(st-.5,0))}" y="12" width="${X(Math.min(e+.5,n-1))-X(Math.max(st-.5,0))}" height="${y0-12}" fill="var(--surface-2)"/>`;if(e-st>3)s+=`<text x="${(X(st)+X(e))/2}" y="${y0/2}" font-size="11" text-anchor="middle" fill="var(--ink-3)">sin datos</text>`;st=null}});
- series.forEach((se,k)=>{let seg=[],segs=[];se.d.forEach((v,i)=>{if(v==null){if(seg.length)segs.push(seg);seg=[]}else seg.push([X(i),Y(v)])});if(seg.length)segs.push(seg);
-  segs.forEach(p=>{const d=p.map((q,i)=>(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' ');if(k===0)s+=`<path d="${d} L${p[p.length-1][0]} ${y0} L${p[0][0]} ${y0}Z" fill="var(--primary)" opacity=".1"/>`;s+=`<path d="${d}" fill="none" stroke="${k?'var(--sim)':'var(--primary)'}" stroke-width="2.5" ${k?'stroke-dasharray="7 5"':''} stroke-linejoin="round"/>`});
-  const lv=se.d[n-1];if(lv!=null)s+=`<circle cx="${X(n-1)}" cy="${Y(lv)}" r="5" fill="${k?'var(--sim)':'var(--primary)'}" stroke="var(--surface)" stroke-width="2"/>`});
- series.forEach((se,k)=>{const a=se.d.aprox;if(!a)return;let i=0;while(i<n){if(a[i]==null){i++;continue}let j=i;while(j<n&&a[j]!=null)j++;const pts=[];if(i>0&&se.d[i-1]!=null)pts.push([X(i-1),Y(se.d[i-1])]);for(let q=i;q<j;q++)pts.push([X(q),Y(a[q])]);if(j<n&&se.d[j]!=null)pts.push([X(j),Y(se.d[j])]);s+=`<path d="${pts.map((q,m)=>(m?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' ')}" fill="none" stroke="${k?'var(--sim)':'var(--primary)'}" stroke-width="2" stroke-dasharray="2 4" opacity=".8"><title>Aproximado: no hay medición en este rato</title></path>`;i=j}});
- s+=`<line x1="${x0}" x2="${w-10}" y1="${y0}" y2="${y0}" stroke="var(--line)"/>`;
- const labs=ejeTiempo(per);
- labs.forEach((t,i)=>s+=`<text x="${x0+i*(w-x0-10)/4}" y="${h-8}" font-size="11.5" text-anchor="${i===0?'start':i===4?'end':'middle'}" fill="var(--ink-3)">${t}</text>`);
- return s+'</svg>'}
-// Etiquetas del eje X con la hora o la fecha reales (las series acaban «ahora»)
-function intervaloSerie(per){
- const {desde,hasta}=S.hist;
- const ahora=Date.now();
- if(route()==='historial'&&S.hist.per==='custom'&&desde&&hasta&&desde<=hasta){
-  return [new Date(desde+'T00:00').getTime(),Math.min(ahora,new Date(hasta+'T23:59').getTime())];
- }
- return [ahora-(per==='24h'?1:per==='7d'?7:30)*864e5,ahora];
-}
-function ejeTiempo(per){const MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
- const [ini,fin]=intervaloSerie(per);
- return [0,1,2,3,4].map(i=>{const d=new Date(ini+(fin-ini)*i/4);if(i===4&&fin>=Date.now()-6e4)return 'ahora';
-  return per==='24h'?String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'):d.getDate()+' '+MES[d.getMonth()]})}
-const statsOf=d=>{const v=d.filter(x=>x!=null);return v.length?[Math.min(...v),v.reduce((a,b)=>a+b,0)/v.length,Math.max(...v)]:[null,null,null]};
-
 /* ---------- web pública ---------- */
 function header(cur){
  /* Misma barra que la portada: marca, píldora de enlaces, botones y menú móvil */
  const com=S.layer==='comunidad';
  const activo=h=>h==='comunidad'?cur==='mapa'&&com:h==='mapa'?(cur==='mapa'&&!com)||['historial','comparar'].includes(cur):cur===h;
  const links=TV_LINKS.map(([h,n])=>`<a class="tv-link" href="#${h}"${activo(h)?' aria-current="page"':''}>${n}</a>`).join('');
- return `<header class="tv tvh"><nav class="tv-nav" aria-label="Principal">
+ const accesoActual=['acceso','recuperar','activar'].includes(cur)?' aria-current="page"':'';
+ return `<header class="tv tvh public-nav"><nav class="tv-nav" aria-label="Principal">
   <a class="tv-marca" href="#inicio" aria-label="Respira, inicio"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">${SYM()}</svg>Respira</a>
   <div class="tv-pill" data-tv-desktop>${links}</div>
   ${botonTema(true)}
   <button type="button" class="tv-burger" data-tv-mobile aria-controls="tvh-menu" aria-expanded="false" aria-label="Abrir menú">${TV_BURGER(false)}</button>
-  <div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm sec" href="#acceso">Acceso ayuntamiento</a></div>
- </nav><div id="tvh-menu" class="tv-panel" data-tv-mobile inert>${links}<div class="tv-panel-pie"><a class="btn sm sec" href="#acceso">Ayuntamiento</a></div></div></header>`}
+  <div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm sec" href="#acceso"${accesoActual}>Acceso ayuntamiento</a></div>
+ </nav><div id="tvh-menu" class="tv-panel" data-tv-mobile inert>${links}<div class="tv-panel-pie"><a class="btn sm sec" href="#acceso"${accesoActual}>Ayuntamiento</a></div></div></header>`}
 const footer=()=>`<footer class="wrap"><div class="inner"><span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap">${LOGO(20)}<span>· un servicio de</span>${NODIA(15,'var(--ink)')}<b style="letter-spacing:.08em;color:var(--ink)">NODIA</b></span><span>Proyecto de Biometría · GTI · UPV · <a href="#privacidad">Privacidad</a></span></div></footer>`;
 const zonaOpts=sel=>Object.entries(TIPOS_ZONA).map(([t,[,plural]])=>{
  const opciones=ZONAS.filter(z=>z.tipo===t&&est(z)!=='none')
@@ -284,17 +268,23 @@ function seleccionarZona(id){
 function detalleZona(z){
  if(!z)return '';
  const estado=est(z);
+ const medias24=Object.entries(MAG).map(([k,m])=>[m,resumenSerie(modeloSerie(z,k,'24h')).media,k]).filter(([,valor])=>valor!=null);
  return `<section class="mapa-detalle" id="zona-detalle" aria-labelledby="zona-nombre" tabindex="-1">
   <div class="mapa-detalle-cab">
    <div><span class="hint">${TIPOS_ZONA[z.tipo][0]}</span><h2 id="zona-nombre">${esc(z.n)}</h2></div>
    <button type="button" class="ib" data-act="sel" data-arg="" aria-label="Cerrar detalle">${I.x}</button>
   </div>
   ${estado==='none'?'<p class="note">Esta zona no tiene mediciones en el escenario simulado.</p>':`
-   <p class="hint">${z.nm} mediciones simuladas · ${hace(z.hace)} ${estado==='old'?'· Dato antiguo':''}</p>
+   <p class="hint">${z.nm} mediciones simuladas · ${hace(z.hace)} ${estado==='old'?'· Dato antiguo':'· Media de la última hora'}</p>
    <div>${Object.entries(MAG).map(([k,m])=>`<div class="vrow"><span>${m.n}</span>
-    <b>${fmt(z[k],k)} <small>${m.u}</small></b>${badge(k,z[k])}
+    <b>${fmtSerie(z[k],k)} <small>${m.u}</small></b>${badge(k,z[k])}
     <button type="button" class="gv-q" data-act="aValores" data-arg="${k}" aria-label="Qué significa el valor de ${m.n.toLowerCase()}">?</button>
    </div>`).join('')}</div>`}
+  ${medias24.length?`<p class="hint">Media de las últimas 24 h · ${medias24.map(([m,v,k])=>m.n+' '+fmtSerie(v,k)+' '+m.u).join(' · ')}</p>`:''}
+  ${estado!=='none'?`<details class="mapa-efectos"><summary>Efectos en la salud</summary>
+   <p>La guía explica cómo influyen la magnitud y la duración de la exposición.</p>
+   <a href="#valores">Consultar la guía de valores y efectos</a>
+  </details>`:''}
   <div class="mapa-detalle-acciones">
    <button type="button" class="btn sm" data-act="toHist" data-arg="${z.id}" ${estado==='none'?'disabled':''}>Ver historial</button>
    <button type="button" class="btn sm sec" data-act="toCmp" data-arg="${z.id}" ${estado==='none'?'disabled':''}>Comparar</button>
@@ -307,7 +297,7 @@ function listaZonas(){
  const fila=z=>{
   const zm=zonaMapa(z);
   const estado=est(z);
-  const valor=zm.l==='none'?'Sin datos':S.mag==='gen'?zm.valor:zm.valor+' '+MAG[S.mag].u;
+  const valor=zm.l==='none'?'Sin datos':S.mag==='gen'?zm.valor:zm.texto;
   return `<button type="button" id="zona-${z.id}" class="srow" data-act="sel" data-arg="${z.id}" aria-pressed="${S.sel===z.id}">
    <span class="mapa-punto gm-${zm.l}" aria-hidden="true"></span>
    <span class="mapa-fila-texto"><b>${esc(z.n)}</b>${estado==='old'?'<span class="hint">Dato antiguo</span>':''}</span>
@@ -348,6 +338,7 @@ function vMapa(){
    </nav>
    ${sensores?opciones(magnitudes,'mag',S.mag,'Magnitud'):
     opciones(filtrosComunidad,'avt',S.avt,'Tipo de percepción')+opciones([[0,'Cualquier nivel'],...nivelesComunidad.map((n,i)=>[i+1,n])],'avf',S.avf,'Nivel de percepción')}
+   ${sensores?`<button type="button" class="btn sec mapa-saltar" aria-controls="mapa-lista" data-act="buscarZona" aria-label="Buscar zona">${I.search}<span>Buscar zona</span></button>`:''}
   </div>
   <div class="mapview">
    <div class="mapa-cartografia">
@@ -360,41 +351,211 @@ function vMapa(){
       <span><i class="mapa-punto gm-bajo"></i>${sensores?'Bajo':nivelesComunidad[0]}</span>
       <span><i class="mapa-punto gm-medio"></i>${sensores?'Medio':nivelesComunidad[1]}</span>
       <span><i class="mapa-punto gm-alto"></i>${sensores?'Alto':nivelesComunidad[2]}</span>
-      ${sensores?`<span><i class="mapa-punto gm-none"></i>Sin datos</span><button type="button" class="gv-abrir" data-act="guia">Qué significan los niveles</button>`:''}
+      ${sensores?`<span><i class="mapa-punto gm-old"></i>Antiguo</span><span><i class="mapa-punto gm-none"></i>Sin datos</span><button type="button" class="gv-abrir" data-act="guia">Qué significan los niveles</button>`:''}
      </div>
      <a class="mapa-fuente" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">Contornos © colaboradores de OpenStreetMap</a>
     </div>
    </div>
-   <aside class="side" aria-label="${sensores?'Zonas':'Percepciones'}">
+   <aside class="side" id="mapa-lista" aria-label="${sensores?'Zonas':'Percepciones'}">
     ${sensores?listaZonas():`<section><h2 class="mapa-label">Percepciones recientes</h2>
-     <p class="hint">Ejemplos de lo que podrían comunicar los vecinos desde la app.</p>
-     ${aviso.length?`<ul class="mapa-avisos">${aviso.map(a=>`<li>${barsIco(a.niv)}<div><b>${esc(a.dir)}</b><span>${PERC[a.tipo].n} · ${PERC[a.tipo].lv[a.niv-1]}</span></div><span class="hint">${hace(a.min)}</span></li>`).join('')}</ul>`:'<p class="note" role="status">No hay percepciones con estos filtros.</p>'}
+     <p class="hint">Las percepciones se publican desde la app Respira y se muestran durante 24 h. Aquí puedes explorar ejemplos simulados.</p>
+     ${aviso.length?`<ul class="mapa-avisos">${aviso.map(a=>`<li><button type="button" class="srow" id="aviso-${a.id}" data-act="verPercepcion" data-arg="${a.id}" aria-pressed="${S.avSel===a.id}">${barsIco(a.niv)}<div><b>${esc(a.dir)}</b><span>${PERC[a.tipo].n} · ${PERC[a.tipo].lv[a.niv-1]}</span></div><span class="hint">${hace(antiguedadAviso(a))}</span></button></li>`).join('')}</ul>`:'<p class="note" role="status">No hay percepciones con estos filtros.</p>'}
     </section>`}
    </aside>
   </div>
  </main>`;
 }
 
-function vHist(){const h=S.hist,z=byZ(h.id);const per=h.per==='custom'?'30d':h.per;const d=serie(h.id,h.mag,per);const st=statsOf(d);
- return header('historial')+`<main class="page wrap"><div class="inner"><nav class="crumb" aria-label="Ruta"><a href="#mapa">Mapa</a> › Historial</nav>
- <div class="pagehead"><div><span class="hint">${TIPOS_ZONA[z.tipo][0]}</span><h1>${esc(z.n)}</h1></div><button class="btn sec" data-act="toCmp" data-arg="${z.id}">${I.swap} Comparar con otra zona</button></div>
- <div class="toolbar"><div class="field" style="width:280px;max-width:100%"><label for="h-id">Zona</label><select class="input" id="h-id" data-bind="hist.id" data-rr="1">${zonaOpts(h.id)}</select></div>
- <div class="field"><span class="flabel">Magnitud</span><div class="seg" role="tablist">${Object.keys(MAG).map(k=>`<button role="tab" aria-selected="${h.mag===k}" data-act="hmag" data-arg="${k}">${MAG[k].n}</button>`).join('')}</div></div>
- <div class="field"><span class="flabel">Periodo</span><div class="chips">${[['24h','24 h'],['7d','7 días'],['30d','30 días'],['custom','Entre dos fechas']].map(p=>`<button class="chip" aria-pressed="${h.per===p[0]}" data-act="hper" data-arg="${p[0]}">${p[1]}</button>`).join('')}</div></div></div>
- ${h.per==='custom'?`<form class="card" id="f-rango" style="padding:16px;display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap" novalidate><div class="field" style="width:200px"><label for="h-desde">Desde</label><input class="input mono" type="date" id="h-desde" data-bind="hist.desde" value="${h.desde}" ${inv('desde')}>${err('desde')}</div><div class="field" style="width:200px"><label for="h-hasta">Hasta</label><input class="input mono" type="date" id="h-hasta" data-bind="hist.hasta" value="${h.hasta}" ${inv('hasta')}>${err('hasta')}</div><button class="btn" type="submit" style="margin-top:27px">Aplicar</button><span class="hint" style="flex-basis:100%">Máximo 90 días. Los datos empiezan el 01/06/2026.</span></form>`:''}
- <div class="grid2"><section class="card" style="padding:16px 14px 8px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:0 4px 8px"><b>${MAG[h.mag].n} (${MAG[h.mag].u}) · media de la zona</b><span class="hint">Fondo verde, ámbar y rojo: niveles Bajo, Medio y Alto</span></div>${chart([{d}],h.mag,per)}<p class="hint" style="margin:6px 4px">Línea de puntos: hueco corto (hasta 2 h) aproximado; no cuenta en mínimo, media y máximo. Franjas grises: ratos más largos sin ningún sensor, que no se rellenan.</p></section>
- <aside style="display:flex;flex-direction:column;gap:14px"><div class="stats"><div><span>Mínimo</span><b>${fmt(st[0],h.mag)}</b></div><div><span>Media</span><b>${fmt(st[1],h.mag)}</b></div><div><span>Máximo</span><b>${fmt(st[2],h.mag)}</b></div></div><p class="note">Cada punto representa una media simulada de la zona en el intervalo correspondiente.</p>${EVENTOS(h.mag,per,d)}${AVISO_DATOS()}</aside></div>
- </div></main>`+footer()}
+const PERIODOS_SERIE=[['24h','24 h'],['7d','7 días'],['30d','30 días']];
+const modeloSerie=(zona,mag,per,rango)=>window.RespiraSeries.serie(zona,mag,per,rango);
+const resumenSerie=serie=>window.RespiraSeries.resumen(serie);
+const HORA_SERIE=new Intl.DateTimeFormat('es-ES',{hour:'2-digit',minute:'2-digit'});
+const HORA_SERIE_UTC=new Intl.DateTimeFormat('es-ES',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
+const FECHA_SERIE=new Intl.DateTimeFormat('es-ES',{day:'numeric',month:'short'});
+const FECHA_SERIE_UTC=new Intl.DateTimeFormat('es-ES',{day:'numeric',month:'short',timeZone:'UTC'});
+const MOMENTO_SERIE=new Intl.DateTimeFormat('es-ES',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+const MOMENTO_SERIE_UTC=new Intl.DateTimeFormat('es-ES',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
+const momentoSerie=(ms,per)=>(per==='custom'?MOMENTO_SERIE_UTC:MOMENTO_SERIE).format(ms);
+const horasSerie=valor=>new Intl.NumberFormat('es-ES',{maximumFractionDigits:2}).format(valor)+' h';
 
-function vCmp(){const c=S.cmp;const A=byZ(c.a),B=byZ(c.b);const same=c.a===c.b;
- let body='';if(same)body=`<div class="alert bad" role="alert">${I.alert}<span><b>Has elegido la misma zona dos veces.</b> Cambia la zona B para poder comparar.</span></div>`;
- else{const da=serie(c.a,c.mag,c.per),db=serie(c.b,c.mag,c.per,3);const sa=statsOf(da),sb=statsOf(db);const gaps=d=>d.filter(v=>v==null).length*(c.per==='24h'?.5:c.per==='7d'?3:12);
-  body=`<div class="grid2"><section class="card" style="padding:16px 14px 8px"><div style="display:flex;gap:18px;flex-wrap:wrap;padding:0 4px 8px;font-size:14px"><span><b style="color:var(--primary)">━━</b> A · ${esc(A.n)}</span><span><b style="color:var(--sim)">┅┅</b> B · ${esc(B.n)}</span></div>${chart([{d:da},{d:db}],c.mag,c.per)}<p class="hint" style="margin:6px 4px">Las dos series se distinguen por el trazo (continuo y discontinuo), no solo por el color.</p></section>
-  <aside style="display:flex;flex-direction:column;gap:14px"><div class="tw"><table><thead><tr><th scope="col"></th><th scope="col">A</th><th scope="col">B</th></tr></thead><tbody>${[['Mínimo',sa[0],sb[0]],['Media',sa[1],sb[1]],['Máximo',sa[2],sb[2]]].map(r=>`<tr><td>${r[0]}</td><td class="mono">${fmt(r[1],c.mag)}</td><td class="mono">${fmt(r[2],c.mag)}</td></tr>`).join('')}<tr><td>Horas sin datos</td><td class="mono">${gaps(da)} h</td><td class="mono">${gaps(db)} h</td></tr></tbody></table></div></aside></div>`}
- return header('comparar')+`<main class="page wrap"><div class="inner"><nav class="crumb"><a href="#mapa">Mapa</a> › <a href="#historial">Historial</a> › Comparar</nav><div class="pagehead"><h1>Comparar zonas</h1></div>
- <div class="toolbar"><div class="field" style="width:260px;max-width:100%"><label for="c-a">Zona A (línea continua)</label><select class="input" id="c-a" data-bind="cmp.a" data-rr="1">${zonaOpts(c.a)}</select></div><div class="field" style="width:260px;max-width:100%"><label for="c-b">Zona B (línea discontinua)</label><select class="input" id="c-b" data-bind="cmp.b" data-rr="1" ${same?'aria-invalid="true"':''}>${zonaOpts(c.b)}</select></div>
- <div class="field" style="width:170px"><label for="c-m">Magnitud</label><select class="input" id="c-m" data-bind="cmp.mag" data-rr="1">${Object.keys(MAG).map(k=>`<option value="${k}" ${c.mag===k?'selected':''}>${MAG[k].n}</option>`).join('')}</select></div><div class="field" style="width:150px"><label for="c-p">Periodo</label><select class="input" id="c-p" data-bind="cmp.per" data-rr="1">${[['24h','24 h'],['7d','7 días'],['30d','30 días']].map(p=>`<option value="${p[0]}" ${c.per===p[0]?'selected':''}>${p[1]}</option>`).join('')}</select></div>
- <button class="btn ghost" data-act="swap" style="margin-bottom:1px">${I.swap} Intercambiar</button></div>${AVISO_DATOS()}${body}</div></main>`+footer()}
+function tramos(valores,incluir){
+ const grupos=[];
+ let inicio=null;
+ for(let i=0;i<=valores.length;i++){
+  if(i<valores.length&&incluir(valores[i],i)){if(inicio===null)inicio=i;}
+  else if(inicio!==null){grupos.push([inicio,i-1]);inicio=null;}
+ }
+ return grupos;
+}
+
+function graficaSeries(series,mag,per){
+ const [medio,alto]=LIM[mag],unidad=MAG[mag].u;
+ const datos=series.flatMap(({observados,estimados})=>[...observados,...estimados]).filter(v=>v!=null);
+ const base=Math.min(medio,...datos),techo=Math.max(alto,...datos);
+ const margen=(techo-base)*.12;
+ const min=Math.max(0,base-margen),max=techo+margen;
+ const fuente=series[0],n=fuente.observados.length;
+ let formatoEje=per==='24h'?HORA_SERIE:FECHA_SERIE;
+ if(per==='custom'){
+  const mismoDia=FECHA_SERIE_UTC.format(fuente.inicio)===FECHA_SERIE_UTC.format(fuente.fin);
+  formatoEje=mismoDia?HORA_SERIE_UTC:FECHA_SERIE_UTC;
+ }
+ const x=i=>(i+.5)/n*1000;
+ const y=v=>(max-v)/(max-min)*300;
+ const linea=puntos=>puntos.map(([i,v],j)=>(j?'L':'M')+x(i).toFixed(2)+' '+y(v).toFixed(2)).join(' ');
+ const bandas=[[min,medio,'bajo'],[medio,alto,'medio'],[alto,max,'alto']];
+ const seriesSvg=series.map((s,j)=>{
+  const color=j?'var(--sim)':'var(--primary)';
+  const trazos=tramos(s.observados,v=>v!=null).map(([a,b])=>{
+   if(a===b)return `<circle cx="${x(a)}" cy="${y(s.observados[a])}" r="3" fill="${color}"/>`;
+   const puntos=s.observados.slice(a,b+1).map((v,i)=>[a+i,v]);
+   return `<path d="${linea(puntos)}" stroke="${color}" ${j?'stroke-dasharray="8 4"':''}/>`;
+  });
+  const estimados=tramos(s.estimados,v=>v!=null).map(([a,b])=>{
+   const puntos=[[a-1,s.observados[a-1]],...s.estimados.slice(a,b+1).map((v,i)=>[a+i,v]),[b+1,s.observados[b+1]]];
+   return `<path d="${linea(puntos)}" stroke="${color}" stroke-dasharray="${j?'2 3 2 6':'2 4'}" opacity=".82"/>`;
+  });
+  return trazos.join('')+estimados.join('');
+ }).join('');
+ const sinDatos=tramos(fuente.observados,(_,i)=>series.every(s=>s.observados[i]==null&&s.estimados[i]==null));
+ return `<div class="serie-grafica" aria-label="Gráfica de ${MAG[mag].n} en ${unidad}">
+  <div class="serie-valores" aria-hidden="true">${[alto,medio].map(v=>`<span style="top:${y(v)/3}%">${fmtSerie(v,mag)}</span>`).join('')}</div>
+  <div class="serie-dibujo">
+   <svg viewBox="0 0 1000 300" preserveAspectRatio="none" role="img" aria-label="Evolución de ${MAG[mag].n} (${unidad}). Consulta los datos en la tabla de la gráfica.">
+    ${bandas.map(([a,b,nivel])=>`<rect width="1000" y="${y(b)}" height="${y(a)-y(b)}" fill="var(--lv-${nivel}-soft)"/>`).join('')}
+    ${sinDatos.map(([a,b])=>`<rect class="serie-hueco" x="${a/n*1000}" width="${(b-a+1)/n*1000}" height="300"/>`).join('')}
+    ${[medio,alto].map(v=>`<line class="serie-umbral" x2="1000" y1="${y(v)}" y2="${y(v)}"/>`).join('')}
+    <g class="serie-trazos">${seriesSvg}</g>
+   </svg>
+   <div class="serie-eje">${[0,.25,.5,.75,1].map(p=>`<span>${formatoEje.format(fuente.inicio+(fuente.fin-fuente.inicio)*p)}</span>`).join('')}</div>
+  </div>
+ </div>`;
+}
+
+function tablaSerie(series,nombres,mag,per){
+ const letra=i=>series.length===1?'':' · '+(i===0?'A':'B');
+ const s=series[0];
+ return `<details class="serie-tabla">
+  <summary>Ver datos de la gráfica</summary>
+  <div class="serie-tabla-scroll" tabindex="0" aria-label="Datos de la gráfica, tabla desplazable"><table>
+   <thead><tr><th scope="col">Fin del intervalo</th>${series.map((_,i)=>`<th scope="col">${esc(nombres[i])}${letra(i)} (${MAG[mag].u})</th>`).join('')}</tr></thead>
+   <tbody>${s.observados.map((_,i)=>`<tr><th scope="row">${momentoSerie(s.inicio+(i+1)*s.paso,per)}</th>
+    ${series.map(ds=>`<td>${ds.observados[i]!=null?fmtSerie(ds.observados[i],mag):ds.estimados[i]!=null?fmtSerie(ds.estimados[i],mag)+' <small>Estimado</small>':'Sin datos'}</td>`).join('')}
+   </tr>`).join('')}</tbody>
+  </table></div>
+ </details>`;
+}
+
+function panelSerie(series,nombres,mag,per){
+ const comparar=series.length===2;
+ const hayDatos=series.some(s=>s.observados.some(v=>v!=null));
+ return `<section class="serie-panel" aria-labelledby="serie-titulo">
+  <div class="serie-panel-cab"><h2 id="serie-titulo">${MAG[mag].n} <small>${MAG[mag].u}</small></h2>
+   ${comparar?`<div class="serie-comparacion">
+    <span><i class="serie-muestra" aria-hidden="true"></i>A · ${esc(nombres[0])}</span>
+    <span><i class="serie-muestra serie-b" aria-hidden="true"></i>B · ${esc(nombres[1])}</span>
+   </div>`:''}
+  </div>
+  ${hayDatos?graficaSeries(series,mag,per):'<p class="note">No hay mediciones en este periodo.</p>'}
+  <ul class="serie-leyenda" aria-label="Leyenda de la gráfica">
+   ${Object.entries(NIV).map(([k,n])=>`<li><i class="mapa-punto gm-${k}" aria-hidden="true"></i>${n}</li>`).join('')}
+   <li><i class="serie-muestra serie-estimada" aria-hidden="true"></i>Estimación</li>
+   <li><i class="serie-muestra serie-ausente" aria-hidden="true"></i>Hueco sin datos</li>
+  </ul>
+  <p class="hint">Los huecos cortos con datos a ambos lados se estiman con una línea de puntos. Los cálculos usan solo las mediciones sin interpolar.</p>
+  ${tablaSerie(series,nombres,mag,per)}
+ </section>`;
+}
+
+function alertasSerie(serie,mag,per){
+ const {alertas,picos}=serie;
+ const m=MAG[mag];
+ return `<section class="serie-panel serie-eventos" aria-labelledby="serie-eventos">
+  <h2 id="serie-eventos">Alertas y picos</h2>
+  <h3>Periodos en nivel ${alertas.length?NIV[alertas[0].nivel]:'Medio o Alto'}</h3>
+  ${alertas.length?`<ul>${alertas.slice().reverse().map(a=>`<li><b>${m.n} · ${fmtSerie(a.max,mag)} ${m.u}</b><span>${momentoSerie(a.desde,per)} – ${momentoSerie(a.hasta,per)}</span></li>`).join('')}</ul>`
+   :'<p class="hint">Ningún intervalo en nivel Medio o Alto.</p>'}
+  <h3>Valores más altos</h3>
+  ${picos.length?`<ul>${picos.map(p=>`<li><b>${m.n} · ${fmtSerie(p.valor,mag)} ${m.u}</b><span>${momentoSerie(p.momento,per)}</span></li>`).join('')}</ul>`
+   :'<p class="hint">Sin picos registrados en este periodo.</p>'}
+ </section>`;
+}
+
+function selectorSerie(id,titulo,clave,opciones,attrs=''){
+ return `<div class="field"><label class="mapa-label" for="${id}">${titulo}</label><select class="input" id="${id}" data-bind="${clave}" data-rr="1" ${attrs}>${opciones}</select></div>`;
+}
+const opcionesSerie=(lista,valor)=>lista.map(([k,n])=>`<option value="${k}" ${valor===k?'selected':''}>${n}</option>`).join('');
+const filtrosSerie=(lista,activo,accion,label)=>`<div class="field">
+ <span class="mapa-label">${label}</span>
+ <div class="chips mapa-chips" role="group" aria-label="${label}">${lista.map(([k,n])=>`<button type="button" class="chip" aria-pressed="${activo===k}" data-act="${accion}" data-arg="${k}">${n}</button>`).join('')}</div>
+</div>`;
+
+function vHist(){
+ const h=S.hist,z=byZ(h.id);
+ const rango=h.per==='custom'?h.rango:null;
+ const datos=h.per==='custom'&&!rango?null:modeloSerie(z,h.mag,h.per,rango||undefined);
+ const resumen=datos&&resumenSerie(datos),mag=MAG[h.mag];
+ return header('historial')+`<main class="page wrap serie-pagina"><div class="inner">
+  <nav class="crumb" aria-label="Ruta"><a href="#mapa">Mapa</a> <span aria-hidden="true">›</span> <span aria-current="page">Historial</span></nav>
+  <div class="mapa-encabezado">
+   <div><h1>${esc(z.n)}</h1><p>Historial de mediciones · ${TIPOS_ZONA[z.tipo][0]}</p></div>
+   <button type="button" class="btn sec" data-act="toCmp" data-arg="${z.id}">${I.swap} Comparar con otra zona</button>
+  </div>
+  <section class="serie-filtros" aria-label="Filtros del historial">
+   ${selectorSerie('h-id','Zona','hist.id',zonaOpts(h.id))}
+   ${filtrosSerie(Object.entries(MAG).map(([k,m])=>[k,m.n]),h.mag,'hmag','Magnitud')}
+   ${filtrosSerie([...PERIODOS_SERIE,['custom','Entre dos fechas']],h.per,'hper','Periodo')}
+   ${h.per==='custom'?`<form id="f-rango" class="serie-rango" novalidate>
+    <div class="field"><label for="h-desde">Desde (UTC)</label><input class="input" type="date" id="h-desde" data-bind="hist.desde" value="${esc(h.desde)}" ${inv('desde')}>${err('desde')}</div>
+    <div class="field"><label for="h-hasta">Hasta (UTC)</label><input class="input" type="date" id="h-hasta" data-bind="hist.hasta" value="${esc(h.hasta)}" ${inv('hasta')}>${err('hasta')}</div>
+    <button class="btn" type="submit">Aplicar rango</button>
+    <span class="hint">Hasta 90 días. Los datos empiezan el 01/06/2026.</span>
+   </form>`:''}
+  </section>
+  <div class="serie-contexto"><span class="mapa-simulacion">Mediciones simuladas</span>
+   ${datos?`<span>${momentoSerie(datos.inicio,h.per)} – ${momentoSerie(datos.fin,h.per)}${h.per==='custom'?' (UTC)':''}</span>`:''}</div>
+  ${datos?`
+  <dl class="serie-resumen" aria-label="Resumen del periodo">
+   ${[['Mínimo',resumen.min],['Media',resumen.media],['Máximo',resumen.max]].map(([etiqueta,v])=>`<div><dt>${etiqueta}</dt><dd>${fmtSerie(v,h.mag)} ${v==null?'':`<small>${mag.u}</small>`}</dd></div>`).join('')}
+   <div><dt>Tiempo sin mediciones</dt><dd>${horasSerie(resumen.horasSinDatos)}</dd></div>
+  </dl>
+  <div class="serie-resultados">${panelSerie([datos],[z.n],h.mag,h.per)}${alertasSerie(datos,h.mag,h.per)}</div>`
+  :'<p class="note" role="status">Elige las fechas y pulsa Aplicar rango para consultar el historial.</p>'}
+ </div></main>`+footer();
+}
+
+function vCmp(){
+ const c=S.cmp,A=byZ(c.a),B=byZ(c.b),iguales=c.a===c.b;
+ let resultado='';
+ if(!iguales){
+  const reloj={ahora:Math.floor(Date.now()/60000)*60000};
+  const datos=[modeloSerie(A,c.mag,c.per,reloj),modeloSerie(B,c.mag,c.per,reloj)];
+  const resumenes=datos.map(resumenSerie),unidad=MAG[c.mag].u;
+  resultado=`<div class="serie-resultados">${panelSerie(datos,[A.n,B.n],c.mag,c.per)}
+   <section class="serie-panel" aria-labelledby="serie-res-comparacion">
+    <h2 id="serie-res-comparacion">Resumen del periodo</h2>
+    <table class="serie-contraste">
+    <thead><tr><th scope="col">Indicador</th><th scope="col" abbr="${esc(A.n)}">A</th><th scope="col" abbr="${esc(B.n)}">B</th></tr></thead>
+    <tbody>${[['Mínimo','min'],['Media','media'],['Máximo','max'],['Sin mediciones','horasSinDatos']].map(([label,k])=>`<tr><th scope="row">${label}</th>${resumenes.map(r=>`<td>${k==='horasSinDatos'?horasSerie(r[k]):r[k]==null?'—':fmtSerie(r[k],c.mag)+' '+unidad}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table>
+    <p class="hint">El tiempo sin mediciones incluye los intervalos estimados.</p>
+   </section>
+  </div>`;
+ }
+ return header('comparar')+`<main class="page wrap serie-pagina"><div class="inner">
+  <nav class="crumb" aria-label="Ruta"><a href="#mapa">Mapa</a> <span aria-hidden="true">›</span> <a href="#historial">Historial</a> <span aria-hidden="true">›</span> <span aria-current="page">Comparar</span></nav>
+  <div class="mapa-encabezado"><div><h1>Comparar zonas</h1><p>Consulta la misma magnitud y el mismo periodo en dos lugares.</p></div></div>
+  <section class="serie-filtros" aria-label="Filtros de la comparación">
+   ${selectorSerie('c-a','Zona A · línea continua','cmp.a',zonaOpts(c.a))}
+   ${selectorSerie('c-b','Zona B · línea discontinua','cmp.b',zonaOpts(c.b),iguales?'aria-invalid="true" aria-describedby="comparar-error"':'')}
+   ${selectorSerie('c-m','Magnitud','cmp.mag',opcionesSerie(Object.entries(MAG).map(([k,m])=>[k,m.n]),c.mag))}
+   ${selectorSerie('c-p','Periodo','cmp.per',opcionesSerie(PERIODOS_SERIE,c.per))}
+   <button type="button" class="btn sec" data-act="swap">${I.swap} Intercambiar</button>
+  </section>
+  <div class="serie-contexto"><span class="mapa-simulacion">Mediciones simuladas</span></div>
+  ${iguales?`<div class="alert warn" id="comparar-error" role="alert">${I.alert}<span>Has elegido la misma zona dos veces. Cambia la zona B para poder comparar.</span></div>`:resultado}
+ </div></main>`+footer();
+}
 
 /* ---------- portada ---------- */
 const AYTOS=[{id:'gandia',n:'Gandia',zona:'La Safor · Comunitat Valenciana',desde:'junio 2026',activo:true}];
@@ -423,10 +584,12 @@ function siluetaZona(z){
  return puntos.map(r=>'M'+r.map(([lng,lat])=>((lng-minX)*escala+x).toFixed(1)+' '+((lat-minY)*escala+y).toFixed(1)).join('L')+'Z').join(' ');
 }
 const TV_BURGER=open=>`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="${open?'M18 6 6 18M6 6l12 12':'M3 6h18M3 12h18M3 18h18'}" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"/></svg>`;
+const iconoParque=pausa=>sv(pausa?'<path d="m8 5 12 7-12 7z"/>':'<path d="M9 6v12m6-12v12"/>',18);
+const etiquetaParque=pausa=>pausa?'Reanudar animación del parque':'Pausar animación del parque';
 function vInicio(){
  const origen='Datos simulados del Grau i Platja';
- const activos=SENS.filter(x=>x.est==='activo'||x.est==='prestado').length;
- const totalZonas=ZONAS.length;
+ const pausa=TV.pausaEn!==null;
+ const aytosVerificados=window.RespiraDatos?.ayuntamientosVerificados();
  const MED=[['o3','Ozono','Se forma con el sol y el tráfico. Irrita ojos y vías respiratorias, sobre todo las tardes de verano.'],['temp','Temperatura','Las calles sin sombra acumulan calor. Medirla por zonas muestra dónde faltan árboles y refugios climáticos.'],['ruido','Ruido','El tráfico y el ocio nocturno afectan al descanso y a la salud. Se mide en decibelios.']];
  const PORT=[['Personal municipal','Las brigadas de limpieza y de jardines lo llevan en su ruta de trabajo.'],['Bicis y motos compartidas','El vehículo envía datos mientras circula.'],['Autobuses urbanos','Cubren las avenidas principales todo el día.'],['Vecinos voluntarios','Recogen un sensor en un punto de reparto, pasean y ganan puntos.']];
  const parques=ZONAS.filter(z=>z.tipo==='parque'&&est(z)==='ok'&&nivelGeneral(z)!=='none')
@@ -451,17 +614,20 @@ function vInicio(){
     <p class="tv-proposito">Calidad ambiental urbana</p>
     <h1 class="tv-h1">El aire de tus parques, medido calle a calle</h1>
     <ul class="tv-magnitudes" aria-label="Qué medimos">${Object.entries(MAG).map(([k,m])=>`<li>${sv(EF_ICO[k],19,1.9)}${m.n}</li>`).join('')}</ul>
-    <p class="tv-p">Ozono, temperatura y ruido de cada parque y barrio en la última hora, medidos por vecinos con sensores.</p>
+    <p class="tv-p">Ozono, temperatura y ruido de cada parque y barrio en la última hora, medidos por vecinos con sensores. Demostración con datos simulados.</p>
     <div class="tv-ctas"><a class="btn tv-cta" href="#mapa">${I.mapi} Ver el mapa</a><a class="tv-voluntario" href="#voluntariado">Hazte voluntario</a></div>
    </main>
-   <div class="tv-explorar"><a href="#parques" aria-label="Bajar a la sección de parques">${sv('<path d="m6 9 6 6 6-6"/>',20)}</a></div>
+   <div class="tv-explorar">
+    <button type="button" class="tv-pausa" data-act="pausaParque" aria-label="${etiquetaParque(pausa)}" title="${etiquetaParque(pausa)}">${iconoParque(pausa)}</button>
+    <a href="#parques" aria-label="Bajar a la sección de parques">${sv('<path d="m6 9 6 6 6-6"/>',20)}</a>
+   </div>
   </div>
  </section>
 
  <section class="tv-sec" id="parques" aria-labelledby="portada-parques"><div class="tv-in">
   <div class="tv-head rv">
    <h2 id="portada-parques">Los parques ahora, de mejor a peor</h2>
-   <p>Ordenados por su estado general en el mapa. El color de la silueta resume los niveles de ozono, temperatura y ruido de cada parque.</p>
+   <p>Ordenados por su estado general en el mapa. La etiqueta de nivel resume el ozono, la temperatura y el ruido de cada parque.</p>
    <p class="tv-datos" role="status">${origen}</p>
   </div>
   <ul class="pq-leyenda" aria-label="Leyenda de niveles">
@@ -502,10 +668,10 @@ function vInicio(){
  <section class="tv-sec tv-alt" id="ayuntamientos"><div class="tv-in">
   <div class="tv-head rv"><h2>Ayuntamientos con Respira</h2><p>Cada municipio tiene su propio mapa, sus puntos de reparto y su panel de gestión.</p><p class="tv-datos">${origen}</p></div>
   <div class="tv-aytos">${AYTOS.map(a=>`<article class="tv-ayto rv">
-   <div class="tv-ayto-top"><div><h3>${esc(a.n)}</h3><span class="tv-mut">${esc(a.zona)}</span></div>${a.activo?'<span class="tv-estado"><i></i>Activo</span>':''}</div>
-   <dl class="tv-dl"><div><dt>Sensores en la calle</dt><dd>${activos}</dd></div><div><dt>Zonas en el mapa</dt><dd>${totalZonas}</dd></div><div><dt>Puntos de reparto</dt><dd>${PUNTOS_REPARTO.length}</dd></div><div><dt>Datos desde</dt><dd>${esc(a.desde)}</dd></div></dl>
+   <div class="tv-ayto-top"><div><h3>${esc(a.n)}</h3><span class="tv-mut">${esc(a.zona)}</span></div>${!aytosVerificados?'<span class="tv-mut">Demostración</span>':a.activo?'<span class="tv-estado"><i></i>Activo</span>':''}</div>
+   ${a.id==='gandia'?`<dl class="tv-dl"><div><dt>Sensores en la demo</dt><dd>${SENSORES_DEMO_ACTIVOS}</dd></div><div><dt>Zonas en el mapa</dt><dd>${ZONAS.length}</dd></div><div><dt>Puntos de reparto</dt><dd>${PUNTOS_REPARTO.length}</dd></div><div><dt>${aytosVerificados?'Datos desde':'Inicio del escenario'}</dt><dd>${esc(a.desde)}</dd></div></dl>
    <div class="tv-medias">${Object.keys(MAG).map(k=>{const v=mediaCosta(k),l=nivel(k,v);return `<div><span>${k==='temp'?'Temperatura media':MAG[k].n+' medio'}</span><b>${fmt(v,k)} <small>${MAG[k].u}</small></b>${l==='none'?'':`<em class="tv-nv tv-${l}">${NIV[l]}</em>`}</div>`}).join('')}</div>
-   <div class="tv-fila"><a class="btn" href="#mapa">Ver el mapa</a><a class="btn sec" href="#voluntariado">Puntos de reparto</a></div></article>`).join('')}
+   <div class="tv-fila"><a class="btn" href="#mapa">Ver el mapa</a><a class="btn sec" href="#voluntariado">Puntos de reparto</a></div>`:''}</article>`).join('')}
    <article class="tv-ayto tv-nuevo rv" style="--i:1"><h3>¿Tu ayuntamiento?</h3><p class="tv-mut">Respira se pone en marcha con sensores, puntos de reparto, la app para los vecinos y un panel para el personal municipal.</p><a class="btn sec" href="#para-ayuntamientos">Qué incluye</a></article>
   </div>
  </div></section>
@@ -525,7 +691,7 @@ const IC_LUNA='<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true
 const IC_SOL='<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>';
 const botonTema=movil=>`<button type="button" class="tv-tema${movil?' movil':''}" ${movil?'data-tv-mobile':''} data-act="tema" aria-pressed="${TEMA==='oscuro'}" aria-label="${TEMA==='oscuro'?'Cambiar a fondo blanco':'Cambiar a modo oscuro'}" title="${TEMA==='oscuro'?'Fondo blanco':'Modo oscuro'}">${TEMA==='oscuro'?IC_SOL:IC_LUNA}</button>`;
 function aplicarTema(){document.documentElement.setAttribute('data-tema',TEMA)}
-const TV={inicioEscena:null,raf:null,target:{x:0,y:0},cur:{x:0,y:0},globo:null,limpiar:null};
+const TV={inicioEscena:null,pausaEn:null,raf:null,target:{x:0,y:0},cur:{x:0,y:0},globo:null,limpiar:null};
 function montarInicio(){
  if(TV.limpiar)TV.limpiar();
  const root=document.getElementById('tv-root'),par=document.getElementById('tv-parallax');
@@ -539,7 +705,7 @@ function montarInicio(){
  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
   const tick=()=>{const c=TV.cur,t=TV.target;c.x+=(t.x-c.x)*0.08;c.y+=(t.y-c.y)*0.08;par.style.transform='translate3d('+c.x.toFixed(2)+'px,'+c.y.toFixed(2)+'px,0)';
    TV.raf=(Math.abs(t.x-c.x)>0.05||Math.abs(t.y-c.y)>0.05)?requestAnimationFrame(tick):null};
-  on(window,'pointermove',e=>{const lim=(v,m)=>Math.max(-m,Math.min(m,v));TV.target.x=lim((e.clientX/innerWidth-0.5)*28,14);TV.target.y=lim((e.clientY/innerHeight-0.5)*18,9);if(!TV.raf)TV.raf=requestAnimationFrame(tick)},{passive:true});
+  on(window,'pointermove',e=>{if(TV.pausaEn!==null)return;const lim=(v,m)=>Math.max(-m,Math.min(m,v));TV.target.x=lim((e.clientX/innerWidth-0.5)*28,14);TV.target.y=lim((e.clientY/innerHeight-0.5)*18,9);if(!TV.raf)TV.raf=requestAnimationFrame(tick)},{passive:true});
  }
  // parque animado (canvas)
  TV.inicioEscena??=performance.now();
@@ -571,7 +737,8 @@ function parqueEscena(cv,dia){
  const ctx=cv.getContext('2d');if(!ctx)return {parar(){}};
  const quieto=matchMedia('(prefers-reduced-motion: reduce)').matches;
  let sem=7;const rnd=()=>{sem=(sem*16807)%2147483647;return (sem-1)/2147483646};const entre=(a,b)=>a+rnd()*(b-a);const elige=a=>a[Math.floor(rnd()*a.length)];
- let w=0,h=0,dpr=1,E=null,id=null,vivo=true;const t0=TV.inicioEscena;
+ let w=0,h=0,dpr=1,E=null,id=null,vivo=true,visible=true;
+ const animar=()=>vivo&&!quieto&&visible&&TV.pausaEn===null;
  const lienzo=(cw,ch)=>{const c=document.createElement('canvas');c.width=Math.max(1,Math.ceil(cw*dpr));c.height=Math.max(1,Math.ceil(ch*dpr));const x=c.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);return [c,x]};
  const mezcla=(a,b,k)=>{const p=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));const A=p(a),B=p(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*k)).join(',')+')'};
 
@@ -704,8 +871,8 @@ function parqueEscena(cv,dia){
   if(sensor){const pul=quieto?.6:.5+.5*Math.sin(tt*3);const ex=x+alto*.13,ey=y-alto*.6;const ha=ctx.createRadialGradient(ex,ey,0,ex,ey,alto*.6);ha.addColorStop(0,`rgba(95,196,192,${.6*pul})`);ha.addColorStop(1,'rgba(95,196,192,0)');ctx.fillStyle=ha;ctx.fillRect(ex-alto*.6,ey-alto*.6,alto*1.2,alto*1.2);ctx.fillStyle='#8af0e6';ctx.beginPath();ctx.arc(ex,ey,Math.max(1.6,alto*.05),0,7);ctx.fill()}}
 
  function dibujar(){
-  if(!E){if(!preparar()){id=requestAnimationFrame(dibujar);return}}
-  const tt=(performance.now()-t0)/1000,px=(TV.cur?TV.cur.x:0)*.5,{hz,L}=E;
+  if(!E&&!preparar()){id=animar()?requestAnimationFrame(dibujar):null;return}
+  const tt=((TV.pausaEn??performance.now())-TV.inicioEscena)/1000,px=TV.cur.x*.5,{hz,L}=E;
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.drawImage(E.cielo,0,0,w,hz+4);
   E.nubes.forEach(n=>{let x=n.x+(quieto?0:tt*n.v);x=((x+n.w)%(w+2*n.w))-n.w;ctx.drawImage(n.c,x+px*.1,n.y,n.w,n.h)});
@@ -740,153 +907,577 @@ function parqueEscena(cv,dia){
   // primer plano
   if(E.palmCerca)sprite(E.palmCerca,tt,px);sprite(E.cerca,tt,px);
   E.motas.forEach(m=>{if(!quieto){m.y-=m.v*.35;m.x+=Math.sin(tt*.6+m.f)*.2;if(m.y<-4){m.y=h+4;m.x=Math.random()*w}}ctx.fillStyle=`rgba(${P.polen},${.2+.2*Math.sin(tt*1.5+m.f)})`;ctx.beginPath();ctx.arc(m.x+px*.8,m.y,m.r,0,7);ctx.fill()});
-  id=vivo&&!quieto&&visible?requestAnimationFrame(dibujar):null;
+  id=animar()?requestAnimationFrame(dibujar):null;
  }
  // fuera de la pantalla no se dibuja (ahorra batería)
- let visible=true;const vis=window.IntersectionObserver?new IntersectionObserver(es=>{visible=es[0].isIntersecting;if(visible&&!id&&vivo&&!quieto)id=requestAnimationFrame(dibujar)}):null;vis&&vis.observe(cv);
+ const vis=window.IntersectionObserver?new IntersectionObserver(es=>{visible=es[0].isIntersecting;if(!id&&animar())id=requestAnimationFrame(dibujar)}):null;vis&&vis.observe(cv);
  E=null;dibujar();
- const ro=window.ResizeObserver?new ResizeObserver(()=>{E=null;if(quieto)dibujar()}):null;ro&&ro.observe(cv);
- return {parar(){vivo=false;id&&cancelAnimationFrame(id);ro&&ro.disconnect();vis&&vis.disconnect()}};
+ const ro=window.ResizeObserver?new ResizeObserver(()=>{E=null;if(quieto||TV.pausaEn!==null)dibujar()}):null;ro&&ro.observe(cv);
+ return {
+  actualizarPausa(){
+   if(id)cancelAnimationFrame(id);
+   id=animar()?requestAnimationFrame(dibujar):null;
+  },
+  parar(){vivo=false;id&&cancelAnimationFrame(id);ro&&ro.disconnect();vis&&vis.disconnect()}
+ };
 }
 
-function vComo(){return header('como-funciona')+`<main class="page wrap"><div class="inner"><div class="pagehead"><div><span class="lbl">Cómo funciona</span><h1>Sensores que se mueven por la ciudad</h1></div></div>
- <div class="steps">${[[I.walk,'Un portador lleva el sensor','Voluntarios, personal de limpieza y jardines, bicis compartidas y autobuses.'],[I.phone,'El móvil o el vehículo lo envía','Recibe cada medición por Bluetooth y la manda con la ubicación y la hora.'],[I.server,'El servidor la comprueba','Descarta lo imposible y calcula la media de cada zona.'],[I.mapi,'Mapa por zonas','Medias por parque y barrio. Nunca se publica el recorrido de nadie.']].map((s,i)=>`<div class="step"><span class="n">PASO ${i+1}</span><span class="stepico">${s[0]}</span><h3>${s[1]}</h3><p class="muted" style="margin:0;font-size:14px">${s[2]}</p></div>`).join('')}</div>
- <section class="gv-sec" id="valores" style="display:flex;flex-direction:column;gap:14px"><div><span class="lbl">Guía de valores</span><h2 style="font-size:26px">Qué significan los valores del mapa</h2><p class="muted" style="margin:6px 0 0">Cada zona se colorea según la media de la última hora.</p></div>${guiaHTML()}</section>
- <section class="ef-sec" style="display:flex;flex-direction:column;gap:14px"><div><span class="lbl">Efectos en la salud</span><h2 style="font-size:26px">Qué te puede pasar</h2><p class="muted" style="margin:6px 0 0">Cuanto más sube, más daño. Así afecta cada nivel.</p></div>
- ${efectosHTML()}<p class="note">${EF_AVISO_B}</p></section>
- <section id="voluntariado" style="display:flex;flex-direction:column;gap:14px"><h2 style="font-size:26px">Hazte voluntario</h2>
- <div style="display:flex;flex-direction:column;gap:14px"><ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;color:var(--ink-2)"><li><b style="color:var(--ink)">Crea una cuenta en la app</b> y apunta tu ID de usuario (U-XXXXX).</li><li><b style="color:var(--ink)">Recoge un sensor</b> en un punto de reparto dando tu ID.</li><li><b style="color:var(--ink)">Escribe en la app el código</b> que lleva el sensor (RSP-XXXX) y pasea con el móvil.</li><li><b style="color:var(--ink)">Devuélvelo</b> en cualquier punto de reparto antes de 24 h.</li></ol>
- <div class="tw"><table><thead><tr><th scope="col">Punto de reparto</th><th scope="col">Dirección</th><th scope="col">Horario</th></tr></thead><tbody>${PUNTOS_REPARTO.map(p=>`<tr><td><b>${p[0]}</b></td><td>${p[1]}</td><td>${p[2]}</td></tr>`).join('')}</tbody></table></div>
- <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b style="display:flex;gap:8px;align-items:center">${I.coin} Cómo se ganan los puntos</b><p class="muted" style="margin:0">Cada noche sumamos ${RULES.min===5?'1 punto cada 5 minutos':'1 punto cada '+RULES.min+' minutos'} con datos válidos, el doble dentro de los parques, hasta ${RULES.max} al día. No cuentan los ratos con el sensor parado ni a velocidad de vehículo.</p>
- <div style="display:flex;gap:8px;flex-wrap:wrap">${GIFTS.map(g=>`<span class="badge ${g.stock?'b-real':'b-none'}" style="font-size:13px;padding:6px 12px">${I.gift} ${esc(g.n)} · ${g.c} pts${g.stock?'':' · agotado'}</span>`).join('')}</div></div></div></section>
- <section><h2 style="font-size:24px;margin-bottom:12px">Preguntas frecuentes</h2><div class="card">
- <details open><summary>¿Por qué una zona dice «Sin datos»?</summary><p>Los sensores van con sus portadores. Si en la última hora no ha pasado ninguno por esa zona, no hay datos nuevos. No significa que el aire esté limpio.</p></details>
- <details><summary>¿Se ve por dónde voy cuando llevo un sensor?</summary><p>No. Tu ubicación se usa para situar cada dato y calcular tus puntos, pero en el mapa público solo aparecen medias por zona. El personal municipal tampoco ve recorridos de personas: los sensores de trabajadores van asignados a un servicio o vehículo.</p></details>
- <details><summary>¿Qué significan Bajo, Medio y Alto?</summary><p>Para el ozono usamos como referencia orientativa 0,060 y 0,090 ppm (aprox. 120 y 180 µg/m³, valores europeos). Están pendientes de confirmar con la fuente oficial.</p></details>
- <details><summary>¿Gasta mucha batería o datos?</summary><p>Muy poco: cada medición ocupa menos de 100 bytes. Puedes enviar solo con wifi desde los ajustes de la app.</p></details>
- <details><summary>¿Quién puede ver mis percepciones?</summary><p>Cualquiera, durante 24 horas, en la capa Comunidad. No llevan tu nombre; solo el punto que eliges, el nivel y la hora.</p></details></div></section></div></main>`+footer()}
-function vPriv(){return header('privacidad')+`<main class="page wrap"><div class="inner"><div class="prose"><span class="lbl">Privacidad</span><h1>Política de privacidad</h1><span class="hint">Última actualización: noviembre de 2026 (texto de ejemplo para el prototipo)</span>
- ${[['Quién es responsable','El Ayuntamiento, a través de su servicio de medio ambiente, con Nodia como encargada del tratamiento. Contacto del delegado de protección de datos: dpd@ayto.es.'],['Qué datos tratamos','De quien lleva un sensor: cada medición con su ubicación y hora, el código del sensor y su cuenta (nombre de usuario, correo, puntos y canjes). De quien publica percepciones: punto elegido, nivel y hora. La web pública no recoge ningún dato.'],['Para qué','Calcular las medias por zona del mapa público, calcular los puntos de cada voluntario y gestionar el préstamo de sensores y la entrega de regalos.'],['Qué se publica','Solo medias por zona. Nunca recorridos ni ubicaciones individuales. Los sensores de trabajadores públicos se asignan a un servicio o vehículo, no a una persona.'],['Cuánto tiempo','Las ubicaciones individuales se borran a los 30 días; se conservan las medias por zona. Las percepciones se ven 24 h y se borran a los 30 días.'],['Tus derechos','Puedes borrar tu cuenta y tus datos desde la app, en Mi cuenta, o escribir al delegado de protección de datos.']].map(s=>`<h2>${s[0]}</h2><p>${s[1]}</p>`).join('')}</div></div></main>`+footer()}
+function vComo(){
+ const pasos=[
+  [I.walk,'Un portador lleva el sensor','Voluntarios, personal de limpieza y jardines, bicis y motos compartidas y autobuses.'],
+  [I.phone,'El móvil o el vehículo lo envía','Recibe cada medición por Bluetooth y la manda con la ubicación y la hora.'],
+  [I.server,'El servidor la comprueba','Descarta valores imposibles y calcula la media de cada zona.'],
+  [I.mapi,'Mapa por zonas','Se publican medias por zona. Nunca se publica el recorrido de nadie.'],
+ ];
+ const preguntas=[
+  ['¿Por qué una zona dice «Sin datos»?','Los sensores van con sus portadores. Si en la última hora no ha pasado ninguno por esa zona, no hay datos nuevos. Si han pasado más de 24 horas desde la última medición, la zona queda sin datos.'],
+  ['¿Se ve por dónde voy cuando llevo un sensor?','No. Tu ubicación se usa para situar cada dato y calcular tus puntos, pero en el mapa público solo aparecen medias por zona. El personal municipal tampoco ve recorridos de personas: los sensores de trabajadores van asignados a un servicio o vehículo.'],
+  ['¿Qué significan Bajo, Medio y Alto?','Indican en qué intervalo cae la media de cada medición. <a href="#valores">Consulta los umbrales y las fuentes de cada magnitud.</a>'],
+  ['¿Gasta mucha batería o datos?','Muy poco: cada medición ocupa menos de 100 bytes. Puedes enviar solo con wifi desde los ajustes de la app.'],
+  ['¿Quién puede ver mis percepciones?','Cualquiera, durante 24 horas, en la capa Comunidad. No llevan tu nombre; solo el punto que eliges, el nivel y la hora.'],
+ ];
+ return header('como-funciona')+`<main class="contenido-pagina wrap">
+  <header class="contenido-cabecera">
+   <h1>Sensores que se mueven por la ciudad</h1>
+   <p>Así llegan al mapa las mediciones de ozono, temperatura y ruido.</p>
+   <nav class="contenido-accesos" aria-label="Accesos de esta página">
+    <a class="btn" href="#mapa">${I.mapi} Ver el mapa</a>
+    <a href="#valores">Guía de valores</a>
+    <a href="#voluntariado">Hazte voluntario</a>
+   </nav>
+  </header>
+
+  <ol class="contenido-pasos">${pasos.map(([icono,titulo,descripcion])=>`<li>
+   <span class="contenido-paso-icono" aria-hidden="true">${icono}</span><h2>${titulo}</h2><p>${descripcion}</p>
+  </li>`).join('')}</ol>
+
+  <section class="contenido-seccion" id="valores" aria-labelledby="contenido-valores">
+   <div class="contenido-titulo"><h2 id="contenido-valores">Qué significan los valores del mapa</h2>
+    <p>Cada zona se colorea según la media de la última hora. El mapa de demostración usa mediciones simuladas.</p></div>
+   ${guiaHTML()}
+  </section>
+
+  <section class="contenido-seccion" aria-labelledby="contenido-salud">
+   <div class="contenido-titulo"><h2 id="contenido-salud">Qué te puede pasar</h2>
+    <p>Cómo afectan a la salud el ozono, el calor y el ruido.</p></div>
+   ${efectosHTML()}<p class="note">${EF_AVISO_B}</p>
+  </section>
+
+  <section class="contenido-seccion" id="voluntariado" aria-labelledby="contenido-voluntarios">
+   <div class="contenido-titulo"><h2 id="contenido-voluntarios">Hazte voluntario</h2></div>
+   <div class="contenido-voluntariado">
+    <ol class="contenido-instrucciones">
+     <li><b>Crea una cuenta en la app</b> y apunta tu ID de usuario (U-XXXXX).</li>
+     <li><b>Recoge un sensor</b> en un punto de reparto dando tu ID.</li>
+     <li><b>Escribe en la app el código</b> que lleva el sensor (RSP-XXXX) y pasea con el móvil.</li>
+     <li><b>Devuélvelo</b> en cualquier punto de reparto dentro de los 10 días siguientes a la recogida.</li>
+    </ol>
+    <aside class="contenido-puntos card" aria-labelledby="contenido-puntos-titulo">
+     <h3 id="contenido-puntos-titulo">${I.coin} Cómo se ganan los puntos</h3>
+     <p>En el ejemplo de la demo, se suma 1 punto por cada ${REGLAS_DEMO.min} minutos con datos válidos,
+      el doble dentro de los parques, hasta ${REGLAS_DEMO.max} al día. No cuentan los ratos con el sensor parado ni a velocidad de vehículo.</p>
+     <ul class="contenido-premios">${REGALOS_DEMO.map(g=>`<li><span class="badge ${g.stock?'b-real':'b-none'}">
+      ${I.gift} ${esc(g.n)} · ${g.c} pts${g.stock?'':' · agotado'}</span></li>`).join('')}</ul>
+    </aside>
+   </div>
+   <div class="contenido-reparto">
+    <h3>Puntos de reparto</h3>
+    ${window.RespiraDatos?.repartoVerificado()?'':'<p class="note">Direcciones y horarios de ejemplo para la demostración.</p>'}
+    ${PUNTOS_REPARTO.length?`<ul>${PUNTOS_REPARTO.map(([nombre,direccion,horario])=>`<li>
+     <b>${esc(nombre)}</b>
+     <dl><dt>Dirección</dt><dd>${esc(direccion)}</dd><dt>Horario</dt><dd>${esc(horario)}</dd></dl>
+    </li>`).join('')}</ul>`:'<p class="note">No hay puntos de reparto disponibles.</p>'}
+   </div>
+   <p class="contenido-personal">La descarga estará disponible cuando se publique la app.</p>
+   <p class="contenido-personal">Administración da de alta a los trabajadores municipales y les envía un enlace para activar su cuenta en la app. <a href="#acceso">Acceso ayuntamiento</a></p>
+  </section>
+
+  <section class="contenido-seccion contenido-faq" aria-labelledby="contenido-preguntas">
+   <h2 id="contenido-preguntas">Preguntas frecuentes</h2>
+   <div>${preguntas.map(([titulo,respuesta])=>`<details><summary>${titulo}</summary><p>${respuesta}</p></details>`).join('')}</div>
+  </section>
+ </main>`+footer();
+}
+
+function vPriv(){
+ const apartados=[
+  ['Quién es responsable','El Ayuntamiento, a través de su servicio de medio ambiente, con Nodia como encargada del tratamiento. Contacto del delegado de protección de datos: dpd@ayto.es.'],
+  ['Qué datos tratamos','De quien lleva un sensor: cada medición con su ubicación y hora, el código del sensor y su cuenta (nombre de usuario, correo, puntos y canjes). De quien publica percepciones: punto elegido, nivel y hora. La consulta pública del mapa no requiere una cuenta. La cartografía utiliza Google Maps.'],
+  ['Para qué','Calcular las medias por zona del mapa público, calcular los puntos de cada voluntario y gestionar el préstamo de sensores y la entrega de regalos.'],
+  ['Qué se publica','Las mediciones se publican como medias por zona, sin recorridos ni ubicaciones individuales. En Comunidad aparece el punto elegido, el nivel y la hora de cada percepción. Los sensores de trabajadores públicos se asignan a un servicio o vehículo, no a una persona.'],
+  ['Cuánto tiempo','Las ubicaciones individuales se borran a los 30 días; se conservan las medias por zona. Las percepciones se ven 24 h y se borran a los 30 días.'],
+  ['Tus derechos','Puedes borrar tu cuenta y tus datos desde la app, en Mi cuenta, o escribir al delegado de protección de datos.'],
+ ];
+ return header('privacidad')+`<main class="contenido-pagina contenido-privacidad wrap">
+  <header class="contenido-cabecera">
+   <h1>Política de privacidad</h1>
+   <p>Qué datos usa Respira, qué se publica y cómo ejercer tus derechos.</p>
+   <p class="contenido-version">Última actualización: <time datetime="2026-11">noviembre de 2026</time>. Texto de ejemplo para el prototipo.</p>
+  </header>
+  <div class="contenido-politica">
+   ${apartados.map(([titulo,texto],i)=>`<section aria-labelledby="contenido-priv-${i}"><h2 id="contenido-priv-${i}">${titulo}</h2><p>${texto}</p></section>`).join('')}
+  </div>
+ </main>`+footer();
+}
 
 /* ---------- acceso (WEB-05) ---------- */
-function vAcceso(rec){
- const art=`<div class="art"><a class="logo" href="#inicio" aria-label="Respira, inicio">${LOGO(36,'#FFFFFF','#FFFFFF','#5FC4C0')}</a><div style="display:flex;flex-direction:column;gap:14px"><h2>Panel de gestión de sensores, préstamos y puntos</h2><span style="display:inline-flex;gap:8px;align-items:center;color:#B9CFC4">Un servicio de ${NODIA(22,'#FFFFFF')}<b style="letter-spacing:.08em;color:#fff">NODIA</b></span></div><a href="#mapa" style="color:#9EE3C9">← Volver al mapa público</a></div>`;
- if(rec)return `<div class="login">${art}<div class="formside">${S.recOk?`<div style="width:min(400px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert ok">${I.check}<span>Si <b>${esc(S.f.rmail)}</b> está registrado, recibirás un enlace en unos minutos.</span></div><a class="btn" href="#acceso" data-act="recBack">Volver a iniciar sesión</a></div>`:`<form id="f-rec" novalidate><h1 style="font-size:30px">Recuperar contraseña</h1><p class="muted" style="margin:0">Te enviaremos un enlace para crear una nueva.</p><div class="field"><label for="r-mail">Correo municipal</label><input class="input" id="r-mail" type="email" data-bind="f.rmail" value="${esc(S.f.rmail||'')}" placeholder="nombre@ayto.es" autocomplete="email" ${inv('rmail')}>${err('rmail')}</div><button class="btn" type="submit">Enviar enlace</button><p class="note">Por seguridad, no te diremos si el correo existe o no.</p><a href="#acceso">← Volver a iniciar sesión</a></form>`}</div></div>`;
- return `<div class="login">${art}<div class="formside"><form id="f-login" novalidate><div><span class="lbl">Acceso restringido</span><h1 style="font-size:30px">Personal municipal</h1></div>
- ${S.lock?`<div class="alert bad" role="alert">${I.alert}<span><b>Acceso bloqueado 15 minutos</b> por 5 intentos fallidos. ${window.RespiraDatos&&RespiraDatos.conApi()?'Vuelve a intentarlo más tarde.':'<button type="button" class="link" data-act="unlock">Desbloquear (solo demo)</button>'}</span></div>`:S.e.login?`<div class="alert bad" role="alert">${I.alert}<span>${S.e.login}</span></div>`:''}
- <div class="field"><label for="l-mail">Correo</label><input class="input" id="l-mail" type="email" data-bind="f.mail" value="${esc(S.f.mail||'')}" placeholder="nombre@ayto.es" autocomplete="username" ${inv('mail')} ${S.lock?'disabled':''}>${err('mail')}</div>
- <div class="field"><label for="l-pass">Contraseña</label><div style="position:relative"><input class="input" id="l-pass" type="${S.showPass?'text':'password'}" data-bind="f.pass" value="${esc(S.f.pass||'')}" autocomplete="current-password" style="padding-right:84px" ${inv('pass')} ${S.lock?'disabled':''}><button type="button" class="link" style="position:absolute;right:12px;top:13px" data-act="showPass">${S.showPass?'Ocultar':'Mostrar'}</button></div>${err('pass')}</div>
- <button class="btn" type="submit" ${S.lock?'disabled':''}>Entrar</button><a href="#recuperar" style="align-self:center">¿Has olvidado la contraseña?</a>
- <div class="demo-creds"><b>Cuentas de prueba del prototipo</b><br>Administración: <code>admin@ayto.es</code> · <code>Admin2026!</code><br>Técnico: <code>tecnico@ayto.es</code> · <code>Tecnico2026!</code><br>Punto de reparto: <code>reparto@ayto.es</code> · <code>Reparto2026!</code><br>Trabajador (no entra al panel): <code>psanz@ayto.es</code> · <code>Trabajo2026!</code></div></form></div></div>`}
+function accesoMunicipal(titulo,descripcion,contenido){
+ return header('acceso')+`<main class="contenido-pagina acceso-pagina wrap">
+  <header class="contenido-cabecera acceso-cabecera">
+   <h1>${titulo}</h1>
+   <p>${descripcion}</p>
+   <a href="#mapa">Volver al mapa público</a>
+  </header>
+  <div class="acceso-contenido card">${contenido}</div>
+ </main>`+footer();
+}
 
-/* ---------- panel ---------- */
-// fuera de plazo: no devuelto y pasada la fecha límite (10 días desde la recogida)
+function vAcceso(rec){
+ const apiConfigurada=window.RespiraDatos?.conApi() ?? Boolean(window.RESPIRA_CONFIG?.API_URL);
+ if(rec){
+  if(!apiConfigurada)return accesoMunicipal('Recuperar contraseña','En el modo de demostración no se envían correos.',`
+   <a class="btn" href="#acceso">Volver a iniciar sesión</a>`);
+  const contenido=S.recOk?`
+   <p class="alert ok" role="status">${I.check}<span>Si <b>${esc(S.f.rmail)}</b> está registrado, recibirás un enlace en unos minutos.</span></p>
+   <a class="btn" href="#acceso" data-act="recBack">Volver a iniciar sesión</a>`:`
+   <form id="f-rec" novalidate>
+    <h2>Solicita un enlace</h2>
+    <div class="field">
+     <label for="r-mail">Correo municipal</label>
+     <input class="input" id="r-mail" type="email" data-bind="f.rmail" value="${esc(S.f.rmail||'')}" placeholder="nombre@ayto.es" autocomplete="email" autocapitalize="none" spellcheck="false" required ${inv('rmail')}>
+     ${err('rmail')}
+    </div>
+    <button class="btn" type="submit">Enviar enlace</button>
+    <p class="note">Por seguridad, la respuesta es la misma para todos los correos.</p>
+    <a class="acceso-enlace" href="#acceso">Volver a iniciar sesión</a>
+   </form>`;
+  return accesoMunicipal('Recuperar contraseña','Te enviaremos un enlace para crear una nueva.',contenido);
+ }
+ const demoVisible=!apiConfigurada||window.RESPIRA_CONFIG?.MOSTRAR_CUENTAS_PRUEBA===true;
+ const contenido=`<form id="f-login" novalidate>
+  <h2>Iniciar sesión</h2>
+  ${S.e.login?`<div class="alert bad" role="alert">${I.alert}<span>${S.e.login}</span></div>`:''}
+  <div class="field">
+   <label for="l-mail">Correo municipal</label>
+   <input class="input" id="l-mail" type="email" data-bind="f.mail" value="${esc(S.f.mail||'')}" placeholder="nombre@ayto.es" autocomplete="username" autocapitalize="none" spellcheck="false" required ${inv('mail')}>
+   ${err('mail')}
+  </div>
+  <div class="field">
+   <label for="l-pass">Contraseña</label>
+   <div class="acceso-clave">
+    <input class="input" id="l-pass" type="${S.showPass?'text':'password'}" data-bind="f.pass" value="${esc(S.f.pass||'')}" autocomplete="current-password" required ${inv('pass')}>
+    <button type="button" class="acceso-ver" id="l-ver" data-act="showPass" aria-controls="l-pass" aria-label="${S.showPass?'Ocultar':'Mostrar'} contraseña">${S.showPass?'Ocultar':'Mostrar'}</button>
+   </div>
+   ${err('pass')}
+  </div>
+  <button class="btn" type="submit">Entrar</button>
+  <a class="acceso-enlace" href="#recuperar">¿Has olvidado la contraseña?</a>
+ </form>${demoVisible?`<section class="acceso-prueba" aria-labelledby="acceso-prueba-titulo">
+  <h3 id="acceso-prueba-titulo">Acceso de prueba</h3>
+  <ul>
+   ${CUENTAS_PANEL_PRUEBA.map(cuenta=>`<li>
+    <div><b>${ROL[cuenta.r]}</b><code>${esc(cuenta.e)}</code><code>${esc(cuenta.p)}</code></div>
+    <button class="btn sm ghost" type="button" data-act="usarCuentaPrueba" data-arg="${cuenta.r}" aria-label="Usar cuenta de ${ROL[cuenta.r]}">Usar</button>
+   </li>`).join('')}
+  </ul>
+ </section>`:''}`;
+ return accesoMunicipal('Personal municipal','Panel de gestión de sensores, préstamos y puntos.',contenido);
+}
+/* ---------- panel municipal ---------- */
 const pendDev=()=>LOANS.filter(l=>!l.fin&&l.ini!==undefined&&(l.limMs!=null?Date.now()>l.limMs:/^1 nov|^31 oct/.test(l.ini)));
 const sinDatos=s=>['activo','prestado'].includes(s.est)&&(s.ult==null||s.ult>1440);
-function pshell(cur,inner){const u=S.user;const L=[['panel','Flota',I.grid],['panel-sensores','Sensores',I.pin],['panel-prestamos','Préstamos',I.box,pendDev().length],['panel-puntos','Puntos',I.coin,SOSP.filter(d=>d.estado==='pend').length],['panel-regalos','Regalos y canjes',I.gift],['panel-trabajadores','Trabajadores',I.users,TRAB().filter(t=>t.estado==='pendiente').length]].filter(l=>ACCESS[u.r].includes(l[0]));
- return `<div class="panel"><nav class="pside" aria-label="Panel"><a class="logo" href="#${HOME[u.r]}" aria-label="Respira, panel" style="flex-direction:column;align-items:flex-start;gap:4px">${LOGO(26,'#FFFFFF','#FFFFFF','#5FC4C0')}<span style="font-family:var(--f-body);font-size:12px;font-weight:600;color:var(--side-mut);letter-spacing:.06em;text-transform:uppercase">Panel municipal</span></a>${L.map(([h,n,ic,c])=>`<a href="#${h}" ${cur===h||(h==='panel-sensores'&&cur==='panel-editar')?'aria-current="page"':''}>${ic}${n}${c?`<span class="cnt">${c}</span>`:''}</a>`).join('')}<div class="who"><b>${esc(u.n)}</b><span>${ROL[u.r]}${u.punto?' · '+u.punto:''}</span><a href="#mapa" style="padding:0;color:#9EE3C9">Ver web pública</a><button data-act="logout">Cerrar sesión</button></div></nav><main class="pmain">${inner}</main></div>`}
-const stCell=s=>{const m={activo:['var(--lv-bajo)','Activo'],prestado:['var(--primary)','Prestado'],disponible:['var(--ink-3)','Disponible'],mant:['var(--mant)','Mantenimiento']}[s.est];return `<span class="st"><i style="background:${m[0]}"></i>${m[1]}</span>`};
-const portador=s=>s.tipo==='vol'?(s.est==='prestado'?`Prestado a <b class="mono">${s.user}</b>`:'<span class="hint">En el punto de reparto</span>'):esc(s.asig);
-function vFlota(){const q=S.fQ.trim().toLowerCase();
- let rows=SENS.filter(s=>(S.fT==='todos'||s.tipo===S.fT)&&(S.fE==='todos'||(S.fE==='sindatos'&&sinDatos(s))||(S.fE==='pend'&&pendDev().some(l=>l.code===s.code))||(S.fE==='mant'&&s.est==='mant'))&&(!q||(s.code+' '+(s.asig||'')+' '+(s.user||'')).toLowerCase().includes(q)));
- const act=SENS.filter(s=>['activo','prestado'].includes(s.est)&&s.ult!=null&&s.ult<=1440).length;
- return pshell('panel',`<div class="pagehead"><div><h1>Estado de la flota</h1><span class="hint">Datos a ${new Date().toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})} · ${SENS.length} sensores</span></div>${S.user.r==='admin'||S.user.r==='tecnico'?'<a class="btn sec" href="#panel-sensores">Gestionar sensores</a>':''}</div>
- <div class="kpis"><div class="kpi"><span class="t">Con datos hoy</span><b>${act}</b><span>de ${SENS.filter(s=>s.est!=='mant').length} en servicio</span></div><button class="kpi" data-act="fE" data-arg="sindatos"><span class="t">Sin datos en 24 h</span><b style="color:var(--lv-medio)">${SENS.filter(sinDatos).length}</b><span>Ver ›</span></button><button class="kpi" data-act="fE" data-arg="pend"><span class="t">Fuera de plazo</span><b style="color:var(--lv-alto)">${pendDev().length}</b><span>Más de 10 días sin devolver ›</span></button></div>
- <p class="note">«Sin datos» no equivale a avería: puede que el sensor no haya salido ese día o que su autobús esté en cocheras. Si un sensor activo lleva varios días sin datos, conviene revisarlo.</p>
- <div class="toolbar"><div class="field" style="width:240px;max-width:100%"><label for="f-q" class="lbl">Buscar</label><input class="input" id="f-q" data-bind="fQ" data-live="1" value="${esc(S.fQ)}" placeholder="Código, línea, servicio o ID"></div>
- <div class="field"><span class="lbl">Portador</span><div class="chips">${[['todos','Todos'],...Object.entries(TIPOS)].map(([k,n])=>`<button class="chip" aria-pressed="${S.fT===k}" data-act="fT" data-arg="${k}">${n}</button>`).join('')}</div></div>
- <div class="field"><span class="lbl">Estado</span><div class="chips">${[['todos','Todos'],['sindatos','Sin datos 24 h'],['pend','Fuera de plazo'],['mant','Mantenimiento']].map(([k,n])=>`<button class="chip" aria-pressed="${S.fE===k}" data-act="fE" data-arg="${k}">${n}</button>`).join('')}</div></div></div>
- <div class="tw"><table><thead><tr><th scope="col">Código</th><th scope="col">Portador</th><th scope="col">Asignación</th><th scope="col">Último dato</th><th scope="col">Estado</th></tr></thead><tbody>${rows.length?rows.map(s=>`<tr><td class="mono"><b>${s.code}</b></td><td>${TIPOS[s.tipo]}</td><td>${portador(s)}${pendDev().some(l=>l.code===s.code)?' <span class="badge b-alto">Fuera de plazo</span>':''}</td><td>${s.ult==null?'<span class="hint">Nunca</span>':hace(s.ult)}${sinDatos(s)?' <span class="badge b-medio">Sin datos</span>':''}</td><td>${stCell(s)}</td></tr>`).join(''):'<tr><td colspan="5" class="hint" style="text-align:center;padding:24px">Ningún sensor cumple estos filtros.</td></tr>'}</tbody></table></div>`)}
 
-function vSensores(){const admin=S.user.r==='admin';
- return pshell('panel-sensores',`<div class="pagehead"><div><h1>Sensores</h1><span class="hint">Alta, asignación, mantenimiento${admin?' y baja':''}</span></div><button class="btn" data-act="editar">+ Nuevo sensor</button></div>
- <div class="tw"><table><thead><tr><th scope="col">Código</th><th scope="col">Mide</th><th scope="col">Portador</th><th scope="col">Asignación</th><th scope="col">Estado</th><th scope="col"><span class="hint" style="text-transform:none;letter-spacing:0">Acciones</span></th></tr></thead><tbody>${SENS.map(s=>`<tr><td class="mono"><b>${s.code}</b></td><td>${s.mags.map(m=>MAG[m].ab).join(' · ')}</td><td>${TIPOS[s.tipo]}</td><td>${portador(s)}${s.est==='mant'?`<br><span class="hint">${esc(s.motivo||'')}</span>`:''}</td><td>${stCell(s)}</td><td style="white-space:nowrap"><button class="link" data-act="editar" data-arg="${s.code}">Editar</button>${admin?` · <button class="link" style="color:var(--lv-alto)" data-act="baja" data-arg="${s.code}" ${s.est==='prestado'?'disabled title="Está prestado: primero registra la devolución"':''}>Dar de baja</button>`:''}</td></tr>`).join('')}</tbody></table></div>
- ${admin?'':'<p class="note">Dar de baja un sensor solo puede hacerlo Administración.</p>'}`)}
-function vEditar(){const e=S.edit;if(!e){location.hash='panel-sensores';return ''}const nuevo=!e.orig;
- return pshell('panel-editar',`<nav class="crumb"><a href="#panel-sensores">Sensores</a> › ${nuevo?'Nuevo sensor':e.orig}</nav><h1>${nuevo?'Nuevo sensor':'Editar '+e.orig}</h1>
- <form class="card" id="f-sensor" style="padding:22px;display:flex;flex-direction:column;gap:18px;max-width:760px" novalidate><div class="formgrid">
- <div class="field"><label for="e-code-in">Código del sensor</label><input class="input mono" id="e-code-in" data-bind="edit.code" value="${esc(e.code)}" placeholder="RSP-XXXX" ${nuevo?'':'disabled'} style="text-transform:uppercase" ${inv('code')}><span class="hint">${nuevo?'RSP- y 4 letras o números. Es el que va impreso en la carcasa.':'El código no se puede cambiar.'}</span>${err('code')}</div>
- <div class="field"><span class="flabel">Magnitudes que mide</span><div class="chips" ${S.e.mags?'aria-describedby="e-mags"':''}>${Object.keys(MAG).map(k=>`<button type="button" class="check" role="checkbox" aria-checked="${e.mags.includes(k)}" data-act="emag" data-arg="${k}"><span class="b">${e.mags.includes(k)?I.check:''}</span>${MAG[k].n}</button>`).join('')}</div>${err('mags')}</div>
- <div class="field full"><span class="flabel">Tipo de portador</span><div role="radiogroup" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px" ${e.orig&&byCode(e.orig).est==='prestado'?'aria-disabled="true"':''}>${Object.entries(TIPOS).map(([k,n])=>`<button type="button" class="radio" role="radio" aria-checked="${e.tipo===k}" data-act="etipo" data-arg="${k}"><span class="o"></span><span><b>${n}</b><br><span class="hint">${k==='vol'?'Se presta en los puntos de reparto':k==='trab'?'Asignado a un servicio, nunca a una persona':k==='bici'?'Va fijo en una bici o moto':'Va fijo en un autobús, con corriente'}</span></span></button>`).join('')}</div></div>
- ${e.tipo!=='vol'?`<div class="field full"><label for="ed-asig">${e.tipo==='trab'?'Servicio':e.tipo==='bus'?'Línea y vehículo':'Vehículo o estación'}</label><input class="input" id="ed-asig" data-bind="edit.asig" value="${esc(e.asig||'')}" placeholder="${e.tipo==='trab'?'Ej.: Limpieza · Brigada de parques 2':e.tipo==='bus'?'Ej.: Línea 2 · Bus 214':'Ej.: Bici compartida · Estación 8'}" ${inv('asig')}>${err('asig')}</div>`:''}
- <div class="field full"><span class="flabel">Estado</span><div class="chips">${[['ok','En servicio'],['mant','En mantenimiento']].map(([k,n])=>`<button type="button" class="chip" aria-pressed="${e.estado===k}" data-act="eest" data-arg="${k}">${n}</button>`).join('')}</div></div>
- ${e.estado==='mant'?`<div class="field full"><label for="ed-mot">Motivo del mantenimiento</label><input class="input" id="ed-mot" data-bind="edit.motivo" value="${esc(e.motivo||'')}" placeholder="Ej.: Carcasa rota al devolverlo" ${inv('motivo')}>${err('motivo')}</div>`:''}
- </div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" type="submit">${nuevo?'Dar de alta':'Guardar cambios'}</button><a class="btn ghost" href="#panel-sensores">Cancelar</a></div></form>`)}
-
-function vPrestamos(){const f=S.f;const abiertos=LOANS.filter(l=>!l.fin);const cerrados=LOANS.filter(l=>l.fin);
- return pshell('panel-prestamos',`<div class="pagehead"><div><h1>Préstamos de sensores</h1><span class="hint">${S.user.punto?'Punto de reparto: '+S.user.punto:'Todos los puntos de reparto'}</span></div></div>
- <div class="formgrid">
- <form class="card" id="f-prestar" style="padding:20px;display:flex;flex-direction:column;gap:14px" novalidate><h2 style="font-size:20px">Prestar un sensor</h2>
- <div class="field"><label for="p-user">ID de usuario de la app</label><input class="input mono" id="p-user" data-bind="f.puser" value="${esc(f.puser||'')}" placeholder="U-XXXXX" style="text-transform:uppercase" ${inv('puser')}>${err('puser')}</div>
- <div class="field"><label for="p-code">Código del sensor</label><input class="input mono" id="p-code" data-bind="f.pcode" value="${esc(f.pcode||'')}" placeholder="RSP-XXXX" style="text-transform:uppercase" ${inv('pcode')}>${err('pcode')}</div>
- <div class="field"><label for="p-punto">Punto de recogida</label><select class="input" id="p-punto" data-bind="f.ppunto" ${inv('ppunto')}>${PUNTOS_REPARTO.map(p=>`<option ${(f.ppunto||PUNTOS_REPARTO[0][0])===p[0]?'selected':''}>${esc(p[0])}</option>`).join('')}</select><span class="hint">Plazo para devolverlo: 10 días desde ahora, en cualquier punto de reparto.</span>${err('ppunto')}</div>
- <button class="btn" type="submit">Registrar préstamo</button><span class="hint">Disponibles ahora: ${SENS.filter(s=>s.tipo==='vol'&&s.est==='disponible').map(s=>`<span class="mono">${s.code}</span>`).join(', ')||'ninguno'}</span></form>
- <form class="card" id="f-devolver" style="padding:20px;display:flex;flex-direction:column;gap:14px" novalidate><h2 style="font-size:20px">Registrar una devolución</h2>
- <div class="field"><label for="d-code">Código del sensor</label><input class="input mono" id="d-code" data-bind="f.dcode" value="${esc(f.dcode||'')}" placeholder="RSP-XXXX" style="text-transform:uppercase" ${inv('dcode')}>${err('dcode')}</div>
- <div class="field"><span class="flabel">¿Cómo llega?</span><div role="radiogroup" style="display:flex;flex-direction:column;gap:6px">${[['Correcto','Listo para volver a prestarse'],['Defectuoso','No se ha entregado en buenas condiciones: pasa a mantenimiento']].map(o=>`<button type="button" class="radio" role="radio" aria-checked="${(f.dest||'Correcto')===o[0]}" data-act="dest" data-arg="${o[0]}"><span class="o"></span><span><b>${o[0]}</b> <span class="hint">· ${o[1]}</span></span></button>`).join('')}</div></div>
- <button class="btn sec" type="submit">Registrar devolución</button></form></div>
- <h2 style="font-size:20px">En préstamo ahora (${abiertos.length})</h2>
- <div class="tw"><table><thead><tr><th scope="col">Sensor</th><th scope="col">Usuario</th><th scope="col">Desde</th><th scope="col">Devolver antes de</th><th scope="col">Punto</th><th scope="col">Estado</th></tr></thead><tbody>${abiertos.length?abiertos.map(l=>`<tr><td class="mono"><b>${l.code}</b></td><td class="mono">${l.user}</td><td>${l.ini}</td><td>${l.lim||'—'}</td><td>${l.punto}</td><td>${pendDev().includes(l)?'<span class="badge b-alto">Fuera de plazo</span>':'<span class="badge b-real">En curso</span>'}</td></tr>`).join(''):'<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">No hay sensores prestados.</td></tr>'}</tbody></table></div>
- <h2 style="font-size:20px">Devoluciones recientes</h2>
- <div class="tw"><table><thead><tr><th scope="col">Sensor</th><th scope="col">Usuario</th><th scope="col">Prestado</th><th scope="col">Fecha límite</th><th scope="col">Cómo llegó</th></tr></thead><tbody>${cerrados.map(l=>`<tr><td class="mono">${l.code}</td><td class="mono">${l.user}</td><td>${l.ini}</td><td>${l.lim||l.fin}</td><td>${l.estDev}</td></tr>`).join('')}</tbody></table></div>`)}
-
-function vPuntos(){const r=S.rules;
- return pshell('panel-puntos',`<div class="pagehead"><div><h1>Puntos del voluntariado</h1><span class="hint">El cálculo se hace cada noche con los datos válidos del día</span></div></div>
- <div class="grid2"><form class="card" id="f-rules" style="padding:20px;display:flex;flex-direction:column;gap:14px" novalidate><h2 style="font-size:20px">Reglas de cálculo</h2>
- <div class="formgrid"><div class="field"><label for="r-min">Minutos válidos por punto</label><input class="input mono" id="r-min" data-bind="rules.min" value="${esc(r.min)}" inputmode="numeric" ${inv('rmin')}><span class="hint">Entre 1 y 60.</span>${err('rmin')}</div>
- <div class="field"><label for="r-mult">Multiplicador en parques</label><input class="input mono" id="r-mult" data-bind="rules.mult" value="${esc(r.mult)}" inputmode="numeric" ${inv('rmult')}><span class="hint">Entre 1 y 5.</span>${err('rmult')}</div>
- <div class="field"><label for="r-max">Máximo de puntos al día</label><input class="input mono" id="r-max" data-bind="rules.max" value="${esc(r.max)}" inputmode="numeric" ${inv('rmax')}><span class="hint">Entre 10 y 500.</span>${err('rmax')}</div></div>
- <p class="note">Siempre se descartan los datos con el sensor parado más de 15 minutos o a velocidad de vehículo (más de 25 km/h). Los cambios se aplican desde el día siguiente.</p>
- <button class="btn" type="submit" style="align-self:flex-start">Guardar reglas</button></form>
- <aside class="card" style="padding:20px;display:flex;flex-direction:column;gap:8px;align-self:start"><b>Ejemplo con las reglas actuales</b><span class="muted">Un voluntario con 120 minutos válidos, 40 de ellos en parques:</span><b class="mono" style="font-size:26px">${Math.min(RULES.max,Math.floor(120/RULES.min)+Math.floor(40/RULES.min)*(RULES.mult-1))} puntos</b></aside></div>
- <h2 style="font-size:20px">Días para revisar</h2>
- <div class="tw"><table><thead><tr><th scope="col">Usuario</th><th scope="col">Día</th><th scope="col">Min. válidos</th><th scope="col">Puntos</th><th scope="col">Motivo</th><th scope="col">Estado</th><th scope="col"><span class="hint" style="text-transform:none;letter-spacing:0">Acciones</span></th></tr></thead><tbody>${SOSP.map(d=>`<tr><td class="mono">${d.user}</td><td>${d.d}</td><td class="mono">${d.min}</td><td class="mono"><b>${d.pts}</b></td><td>${esc(d.mot)}${d.razon?`<br><span class="hint">${esc(d.razon)}</span>`:''}</td><td>${d.estado==='pend'?'<span class="badge b-medio">Pendiente</span>':d.estado==='ok'?'<span class="badge b-bajo">Aprobado</span>':'<span class="badge b-alto">Anulado</span>'}</td><td style="white-space:nowrap">${d.estado==='pend'?`<button class="link" data-act="aprobar" data-arg="${d.id}">Aprobar</button> · <button class="link" style="color:var(--lv-alto)" data-act="anular" data-arg="${d.id}">Anular</button>`:'<span class="hint">Revisado</span>'}</td></tr>`).join('')}</tbody></table></div>
- <p class="note">El voluntario ve el resultado en su historial de puntos. Al anular, se le restan los puntos de ese día.</p>`)}
-
-function vRegalos(){const admin=S.user.r==='admin';const c=S.canje;const g=c&&(GIFTS.find(x=>x.id===c.gift)||{n:c.giftN||'Regalo retirado',stock:0});
- const entregar=`<form class="card" id="f-canje" style="padding:20px;display:flex;flex-direction:column;gap:14px" novalidate><h2 style="font-size:20px">Entregar un regalo canjeado</h2>
- <div class="field"><label for="c-code">Código de recogida</label><div style="display:flex;gap:8px;flex-wrap:wrap"><input class="input mono" id="c-code" data-bind="f.ccode" value="${esc(S.f.ccode||'')}" placeholder="CJ-XXXX" style="text-transform:uppercase;flex:1;min-width:160px" ${inv('ccode')}><button class="btn" type="submit">Comprobar</button></div>${err('ccode')}</div>
- ${c?`<div class="alert ok" style="align-items:center">${I.gift}<span style="flex:1"><b>${esc(g.n)}</b> para <b class="mono">${c.user}</b> · válido hasta el ${fecha(c.cad)}</span><button type="button" class="btn sm" data-act="entregar">Marcar como entregado</button></div>`:''}
- <span class="hint">Prueba con CJ-8R2T (válido), CJ-2K9L (caducado) o CJ-5P7Q (ya entregado).</span></form>`;
- return pshell('panel-regalos',`<div class="pagehead"><div><h1>${admin?'Regalos y canjes':'Entregar regalos'}</h1><span class="hint">${admin?'Catálogo que ven los voluntarios en la app':'Comprueba el código que enseña el voluntario'}</span></div>${admin?'<button class="btn" data-act="nuevoRegalo">+ Nuevo regalo</button>':''}</div>
- ${entregar}
- ${admin?`<h2 style="font-size:20px">Catálogo</h2><div class="tw"><table><thead><tr><th scope="col">Regalo</th><th scope="col">Coste</th><th scope="col">Existencias</th><th scope="col">En la app</th><th scope="col"><span class="hint" style="text-transform:none;letter-spacing:0">Acciones</span></th></tr></thead><tbody>${GIFTS.map(x=>`<tr><td><b>${esc(x.n)}</b></td><td class="mono">${x.c} pts</td><td class="mono">${x.stock}</td><td>${x.stock?'<span class="badge b-bajo">Disponible</span>':'<span class="badge b-none">Agotado</span>'}</td><td style="white-space:nowrap"><button class="link" data-act="editRegalo" data-arg="${x.id}">Editar</button> · <button class="link" style="color:var(--lv-alto)" data-act="retirarRegalo" data-arg="${x.id}">Retirar</button></td></tr>`).join('')}</tbody></table></div>
- <h2 style="font-size:20px">Canjes</h2><div class="tw"><table><thead><tr><th scope="col">Código</th><th scope="col">Usuario</th><th scope="col">Regalo</th><th scope="col">Caduca</th><th scope="col">Estado</th></tr></thead><tbody>${CANJES.map(x=>`<tr><td class="mono">${x.code}</td><td class="mono">${x.user}</td><td>${esc((GIFTS.find(y=>y.id===x.gift)||{n:x.giftN||'Regalo retirado'}).n)}</td><td>${fecha(x.cad)}</td><td>${x.estado==='entregado'?'<span class="badge b-bajo">Entregado</span>':x.cad<TODAY?'<span class="badge b-none">Caducado · puntos devueltos</span>':'<span class="badge b-medio">Pendiente</span>'}</td></tr>`).join('')}</tbody></table></div>`:''}`)}
-
-/* ---------- trabajadores municipales (alta desde administración) ---------- */
-const estTrab=t=>t.estado==='activo'?'<span class="badge b-bajo">Activa</span>':t.caduca<Date.now()?'<span class="badge b-alto">Enlace caducado</span>':'<span class="badge b-medio">Pendiente de activar</span>';
-function vTrabajadores(){
- if(!S.user||S.user.r!=='admin')return '';   // doble barrera: la ruta ya lo impide
- const f=S.f,ok=S.altaOk&&STAFF.find(x=>x.id===S.altaOk);
- return pshell('panel-trabajadores',`<div class="pagehead"><div><h1>Trabajadores municipales</h1><span class="hint">Cuentas del personal que lleva sensores. No dan acceso a este panel.</span></div></div>
- ${ok?`<div class="alert ok" role="status">${I.check}<span style="flex:1"><b>${esc(ok.n)}</b> dado de alta como trabajador municipal (<b class="mono">${ok.id}</b>). Le hemos enviado a <b>${esc(ok.e)}</b> un enlace para activar la cuenta y crear su contraseña; caduca en ${ACTIV_H} h y solo sirve una vez.</span><a class="btn sm sec" href="#activar/${ok.token}" title="Solo en el prototipo: abre el enlace que recibiría por correo">Abrir correo de prueba</a></div>`:''}
- <form class="card trab-form" id="f-trab" novalidate>
-  <h2 style="font-size:20px">Dar de alta un trabajador</h2>
-  <div class="formgrid">
-   <div class="field"><label for="t-n">Nombre y apellidos</label><input class="input" id="t-n" data-bind="f.tn" value="${esc(f.tn||'')}" autocomplete="off" maxlength="80" ${inv('tn')}>${err('tn')}</div>
-   <div class="field"><label for="t-e">Correo municipal</label><input class="input" id="t-e" type="email" data-bind="f.te" value="${esc(f.te||'')}" placeholder="nombre@ayto.es" autocomplete="off" ${inv('te')}>${err('te')}</div>
-   <div class="field"><label for="t-emp">Nº de empleado</label><input class="input mono" id="t-emp" data-bind="f.temp" value="${esc(f.temp||'')}" placeholder="6 cifras" inputmode="numeric" maxlength="6" ${inv('temp')}>${err('temp')}</div>
-   <div class="field"><label for="t-s">Servicio</label><select class="input" id="t-s" data-bind="f.ts" ${inv('ts')}><option value="">Elige un servicio…</option>${SERVICIOS.map(x=>`<option ${f.ts===x?'selected':''}>${x}</option>`).join('')}</select>${err('ts')}</div>
+function pshell(cur,inner){
+ const usuario=S.user;
+ const secciones=[
+  ['panel','Flota'],
+  ['panel-sensores','Sensores'],
+  ['panel-prestamos','Préstamos',pendDev().length],
+  ['panel-puntos','Puntos',SOSP.filter(d=>d.estado==='pend').length],
+  ['panel-regalos','Regalos y canjes'],
+  ['panel-trabajadores','Trabajadores'],
+ ].filter(([ruta])=>ACCESS[usuario.r].includes(ruta));
+ const enlaces=secciones.map(([ruta,nombre,pendientes])=>{
+  const activa=cur===ruta||(ruta==='panel-sensores'&&cur==='panel-editar');
+  return `<a href="#${ruta}"${activa?' aria-current="page"':''}>${nombre}${pendientes?`<span class="panel-pendientes" aria-label="${pendientes} pendientes">${pendientes}</span>`:''}</a>`;
+ }).join('');
+ const rol=ROL[usuario.r]+(usuario.punto?' · '+esc(usuario.punto):'');
+ const cuenta=`<div class="panel-cuenta"><b>${esc(usuario.n)}</b><span>${rol}</span>
+  <button type="button" class="link" data-act="logout">Cerrar sesión</button></div>`;
+ const datos=window.RespiraDatos?.estadoPanel(cur,usuario.r);
+ const aviso=datos?.error?`<div class="alert warn" role="status">${I.alert}<div>
+  <p>${datos.listo?'No se han podido actualizar los datos. Se muestran los últimos datos recibidos.':'No se han podido cargar los datos de esta sección.'}</p>
+  <button type="button" class="btn sm sec" data-act="reintentarPanel">Reintentar</button>
+ </div></div>`:'';
+ return `<div class="panel-municipal" data-ui>
+  <header class="tv tvh panel-cabecera">
+   <div class="tv-nav">
+    <div class="panel-marca">
+     <a class="tv-marca" href="#inicio" aria-label="Respira, inicio"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">${SYM()}</svg>Respira</a>
+     <span>Panel municipal</span>
+    </div>
+    ${botonTema(true)}
+    <button type="button" class="tv-burger" data-tv-mobile aria-controls="panel-menu" aria-expanded="false" aria-label="Abrir menú">${TV_BURGER(false)}</button>
+    <div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm sec" href="#mapa">Ver web pública</a></div>
+   </div>
+   <div class="tv-panel" id="panel-menu" data-tv-mobile inert>
+    <nav class="panel-enlaces" aria-label="Panel municipal">${enlaces}</nav>
+    <a class="btn sm sec" href="#mapa">Ver web pública</a>
+    ${cuenta}
+   </div>
+  </header>
+  <div class="panel">
+   <aside class="pside" data-tv-desktop>
+    <nav class="panel-enlaces" aria-label="Panel municipal">${enlaces}</nav>
+    ${cuenta}
+   </aside>
+   <main class="pmain" id="panel-contenido">${aviso}${inner}</main>
   </div>
-  <p class="note" style="margin:0">La cuenta se crea con el perfil <b>Trabajador municipal</b>: puede llevar un sensor asignado, pero <b>no tiene acceso al panel</b> ni a ninguna función de administración. La contraseña la crea el propio trabajador con el enlace de activación; administración no la ve nunca. El sensor se asigna aparte, en <a href="#panel-sensores">Sensores</a>.</p>
-  <div><button class="btn" type="submit">${I.users} Dar de alta</button></div>
- </form>
- <div class="tw"><table><thead><tr><th scope="col">Trabajador</th><th scope="col">ID de cuenta</th><th scope="col">Nº empleado</th><th scope="col">Servicio</th><th scope="col">Alta</th><th scope="col">Estado</th><th scope="col"><span class="hint" style="text-transform:none;letter-spacing:0">Acciones</span></th></tr></thead><tbody>
- ${TRAB().map(t=>`<tr><td><b>${esc(t.n)}</b><br><span class="hint">${esc(t.e)}</span></td><td class="mono">${t.id}</td><td class="mono">${t.emp}</td><td>${esc(t.serv)}</td><td>${t.alta}</td><td>${estTrab(t)}</td><td style="white-space:nowrap">${t.estado==='pendiente'?`<button class="link" data-act="reenviarActiv" data-arg="${t.id}">Reenviar enlace</button>`:'<span class="hint">—</span>'}</td></tr>`).join('')}
- </tbody></table></div>`)}
+ </div>`;
+}
+
+const panelTitulo=(titulo,descripcion='',accion='')=>`<div class="panel-titulo">
+ <div><h1>${titulo}</h1>${descripcion?`<p>${descripcion}</p>`:''}</div>${accion}
+</div>`;
+const panelDato=valor=>`<span class="panel-dato">${esc(valor)}</span>`;
+const panelAccion=(texto,accion,id,nombre='',peligro=false,deshabilitado=false)=>`<button type="button" class="panel-accion${peligro?' panel-accion-peligro':''}" data-act="${accion}" data-arg="${esc(id)}"${nombre?` aria-label="${esc(texto+' '+nombre)}"`:''}${deshabilitado?' disabled':''}>${texto}</button>`;
+const panelAcciones=(...acciones)=>`<div class="panel-acciones">${acciones.join('')}</div>`;
+
+function panelTabla(titulo,columnas,filas,vacio){
+ const celda=(valor,columna)=>`<td role="cell"><span class="panel-celda-etiqueta" aria-hidden="true">${columna}</span><div>${valor}</div></td>`;
+ return `<section class="panel-registros">
+  <h2>${titulo}</h2>
+  ${filas.length?`<div class="panel-tabla"><table role="table" aria-label="${titulo}">
+   <thead role="rowgroup"><tr role="row">${columnas.map(c=>`<th scope="col" role="columnheader">${c}</th>`).join('')}</tr></thead>
+   <tbody role="rowgroup">${filas.map(fila=>`<tr role="row">${fila.map((valor,i)=>celda(valor,columnas[i])).join('')}</tr>`).join('')}</tbody>
+  </table></div>`:`<p class="panel-vacio">${vacio}</p>`}
+ </section>`;
+}
+
+const stCell=s=>{
+ const [color,nombre]={activo:['var(--lv-bajo)','Activo'],prestado:['var(--primary)','Prestado'],disponible:['var(--ink-3)','Disponible'],mant:['var(--mant)','Mantenimiento']}[s.est]||['var(--ink-3)','Sin estado'];
+ return `<span class="st"><i aria-hidden="true" style="background:${color}"></i>${nombre}</span>`;
+};
+const portador=s=>s.tipo==='vol'?(s.est==='prestado'?`Prestado a <b>${esc(s.user)}</b>`:'<span class="hint">En el punto de reparto</span>'):esc(s.asig);
+
+function vFlota(){
+ const consulta=S.fQ.trim().toLowerCase();
+ const pendientes=new Set(pendDev().map(l=>l.code));
+ const retrasados=SENS.filter(sinDatos);
+ const enServicio=SENS.filter(s=>s.est!=='mant').length;
+ const activos=SENS.filter(s=>['activo','prestado'].includes(s.est)&&!sinDatos(s)).length;
+ const estados={todos:()=>true,sindatos:sinDatos,pend:s=>pendientes.has(s.code),mant:s=>s.est==='mant'};
+ const visibles=SENS.filter(s=>(S.fT==='todos'||s.tipo===S.fT)&&estados[S.fE](s)&&
+  (!consulta||[s.code,s.asig,s.user].join(' ').toLowerCase().includes(consulta)));
+ const filtros=(rotulo,act,valor,opciones)=>`<div class="panel-filtro">
+  <span>${rotulo}</span><div class="chips" role="group" aria-label="${rotulo}">
+  ${opciones.map(([id,nombre])=>`<button type="button" class="chip" data-act="${act}" data-arg="${id}" aria-pressed="${id===valor}">${nombre}</button>`).join('')}
+  </div></div>`;
+ const filas=visibles.map(s=>[
+  `<b>${panelDato(s.code)}</b>`,TIPOS[s.tipo],
+  portador(s)+(pendientes.has(s.code)?' <span class="badge b-alto">Fuera de plazo</span>':''),
+  (s.ult==null?'<span class="hint">Nunca</span>':hace(s.ult))+(sinDatos(s)?' <span class="badge b-medio">Sin datos</span>':''),
+  stCell(s),
+ ]);
+ return pshell('panel',`
+  ${panelTitulo('Estado de la flota',`${SENS.length} sensores · Datos a ${new Date().toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}`,
+    '<a class="btn sec" href="#panel-sensores">Gestionar sensores</a>')}
+  <div class="panel-indicadores" aria-label="Resumen de la flota">
+   <div><span>Con datos en 24 h</span><strong>${activos}</strong><small>De ${enServicio} en servicio</small></div>
+   <button type="button" data-act="fE" data-arg="sindatos" aria-pressed="${S.fE==='sindatos'}">
+    <span>Sin datos en 24 h</span><strong class="panel-aviso">${retrasados.length}</strong><small>Filtrar sensores</small>
+   </button>
+   <button type="button" data-act="fE" data-arg="pend" aria-pressed="${S.fE==='pend'}">
+    <span>Fuera de plazo</span><strong class="panel-peligro">${pendientes.size}</strong><small>Ver préstamos vencidos</small>
+   </button>
+  </div>
+  <p class="panel-nota">Un sensor sin datos puede estar inactivo. Si lleva varios días sin enviar mediciones, conviene revisarlo.</p>
+  <div class="panel-filtros">
+   <div class="field panel-buscar"><label for="f-q">Buscar sensor</label>
+    <input class="input" type="search" id="f-q" data-bind="fQ" data-live="1" value="${esc(S.fQ)}" placeholder="Código, línea, servicio o ID"></div>
+   ${filtros('Portador','fT',S.fT,[['todos','Todos'],...Object.entries(TIPOS)])}
+   ${filtros('Estado','fE',S.fE,[['todos','Todos'],['sindatos','Sin datos en 24 h'],['pend','Fuera de plazo'],['mant','Mantenimiento']])}
+  </div>
+  ${panelTabla(visibles.length===1?'1 sensor':visibles.length+' sensores',['Código','Portador','Asignación','Último dato','Estado'],filas,'Ningún sensor cumple estos filtros.')}`);
+}
+
+function vSensores(){
+ const admin=S.user.r==='admin';
+ const filas=SENS.map(s=>[
+  `<b>${panelDato(s.code)}</b>`,s.mags.map(m=>MAG[m]?.ab).filter(Boolean).join(' · '),TIPOS[s.tipo],
+  portador(s)+(s.est==='mant'&&s.motivo?`<p class="hint panel-apunte">${esc(s.motivo)}</p>`:''),
+  stCell(s),panelAcciones(panelAccion('Editar','editar',s.code,s.code),
+   admin?panelAccion('Dar de baja','baja',s.code,s.code,true,s.est==='prestado'):''),
+ ]);
+ return pshell('panel-sensores',`
+  ${panelTitulo('Sensores','Alta, asignación y mantenimiento'+(admin?' de la flota.':'.'),
+   '<button type="button" class="btn" data-act="editar">Nuevo sensor</button>')}
+  ${panelTabla('Inventario de sensores',['Código','Magnitudes','Portador','Asignación','Estado','Acciones'],filas,'Todavía no hay sensores registrados.')}
+  <p class="panel-nota">${admin?'Para dar de baja un sensor prestado, registra antes su devolución.':'Dar de baja un sensor solo puede hacerlo Administración.'}</p>`);
+}
+
+function vEditar(){
+ const e=S.edit;
+ if(!e){location.hash='panel-sensores';return ''}
+ const nuevo=!e.orig;
+ const prestado=!nuevo&&byCode(e.orig)?.est==='prestado';
+ const indicaciones={
+  vol:'Se presta en los puntos de reparto',
+  trab:'Asignado a un servicio, nunca a una persona',
+  bici:'Va fijo en una bici o moto',
+  bus:'Va fijo en un autobús, con corriente',
+ };
+ const asignacion={
+  trab:['Servicio','Ej.: Limpieza · Brigada de parques 2'],
+  bus:['Línea y vehículo','Ej.: Línea 2 · Bus 214'],
+  bici:['Vehículo o estación','Ej.: Bici compartida · Estación 8'],
+ }[e.tipo];
+ return pshell('panel-editar',`
+  <nav class="crumb" aria-label="Ruta"><a href="#panel-sensores">Sensores</a> › ${nuevo?'Nuevo sensor':esc(e.orig)}</nav>
+  ${panelTitulo(nuevo?'Nuevo sensor':'Editar '+esc(e.orig),'Configura las magnitudes, el portador y el estado del dispositivo.')}
+  <form id="f-sensor" class="panel-formulario panel-edicion" novalidate>
+   <div class="formgrid">
+    <div class="field"><label for="e-code-in">Código del sensor</label>
+     <input class="input panel-codigo" id="e-code-in" data-bind="edit.code" value="${esc(e.code)}" placeholder="RSP-XXXX" ${nuevo?'':'disabled'}
+      aria-describedby="sensor-codigo-ayuda${S.e.code?' e-code':''}"${S.e.code?' aria-invalid="true"':''}>
+     <span class="hint" id="sensor-codigo-ayuda">${nuevo?'RSP- y 4 letras o números. Es el que va impreso en la carcasa.':'El código no se puede cambiar.'}</span>
+     ${err('code')}
+    </div>
+    <fieldset class="panel-grupo">
+     <legend>Magnitudes que mide</legend>
+     <div class="chips">${Object.keys(MAG).map(k=>`<button type="button" class="check" role="checkbox"
+      aria-checked="${e.mags.includes(k)}" data-act="emag" data-arg="${k}"${S.e.mags?' aria-invalid="true" aria-describedby="e-mags"':''}>
+      <span class="b" aria-hidden="true">${e.mags.includes(k)?I.check:''}</span>${MAG[k].n}</button>`).join('')}</div>
+     ${err('mags')}
+    </fieldset>
+    <fieldset class="panel-grupo full"${prestado?' disabled':''}>
+     <legend>Tipo de portador</legend>
+     <div class="panel-radios">${Object.entries(TIPOS).map(([k,n])=>`
+      <label class="panel-radio"><input type="radio" id="portador-${k}" name="panel-portador" data-bind="edit.tipo" data-rr="1" value="${k}"${e.tipo===k?' checked':''}>
+       <span><b>${n}</b><span class="hint">${indicaciones[k]}</span></span></label>`).join('')}</div>
+     ${prestado?'<p class="hint panel-apunte">Registra la devolución antes de cambiar el portador.</p>':''}
+    </fieldset>
+    ${asignacion?`<div class="field full"><label for="ed-asig">${asignacion[0]}</label>
+     <input class="input" id="ed-asig" data-bind="edit.asig" value="${esc(e.asig||'')}" placeholder="${asignacion[1]}" ${inv('asig')}>${err('asig')}</div>`:''}
+    <fieldset class="panel-grupo full">
+     <legend>Estado</legend>
+     <div class="chips">${[['ok','En servicio'],['mant','En mantenimiento']].map(([k,n])=>`<button type="button" class="chip"
+      data-act="eest" data-arg="${k}" aria-pressed="${e.estado===k}"${prestado&&k==='mant'?' disabled aria-describedby="sensor-devolucion"':''}>${n}</button>`).join('')}</div>
+     ${prestado?'<p class="hint panel-apunte" id="sensor-devolucion">Registra la devolución antes de pasar el sensor a mantenimiento.</p>':''}
+    </fieldset>
+    ${e.estado==='mant'?`<div class="field full"><label for="ed-mot">Motivo del mantenimiento</label>
+     <input class="input" id="ed-mot" data-bind="edit.motivo" value="${esc(e.motivo||'')}" placeholder="Ej.: Carcasa rota al devolverlo" ${inv('motivo')}>${err('motivo')}</div>`:''}
+   </div>
+   <div class="panel-acciones"><button class="btn" type="submit">${nuevo?'Dar de alta':'Guardar cambios'}</button>
+    <a class="btn ghost" href="#panel-sensores">Cancelar</a></div>
+  </form>`);
+}
+
+function vPrestamos(){
+ const f=S.f;
+ const abiertos=LOANS.filter(l=>!l.fin);
+ const pendientes=new Set(pendDev());
+ const disponibles=SENS.filter(s=>s.tipo==='vol'&&s.est==='disponible');
+ const filas=abiertos.map(l=>[
+  `<b>${panelDato(l.code)}</b>`,panelDato(l.user),esc(l.ini),esc(l.lim||'—'),esc(l.punto),
+  pendientes.has(l)?'<span class="badge b-alto">Fuera de plazo</span>':'<span class="badge b-real">En curso</span>',
+ ]);
+ const devoluciones=LOANS.filter(l=>l.fin).map(l=>[
+  panelDato(l.code),panelDato(l.user),esc(l.ini),esc(l.lim||l.fin),esc(l.estDev),
+ ]);
+ return pshell('panel-prestamos',`
+  ${panelTitulo('Préstamos de sensores',S.user.punto?'Punto de reparto: '+esc(S.user.punto):'Todos los puntos de reparto')}
+  <div class="panel-formularios">
+   <form id="f-prestar" class="panel-formulario" novalidate>
+    <h2>Prestar un sensor</h2>
+    <div class="field"><label for="p-user">ID de usuario de la app</label>
+     <input class="input panel-codigo" id="p-user" data-bind="f.puser" value="${esc(f.puser||'')}" placeholder="U-XXXXX" ${inv('puser')}>${err('puser')}</div>
+    <div class="field"><label for="p-code">Código del sensor</label>
+     <input class="input panel-codigo" id="p-code" data-bind="f.pcode" value="${esc(f.pcode||'')}" placeholder="RSP-XXXX" ${inv('pcode')}>${err('pcode')}</div>
+    <div class="field"><label for="p-punto">Punto de recogida</label>
+     <select class="input" id="p-punto" data-bind="f.ppunto" aria-describedby="p-plazo${S.e.ppunto?' e-ppunto':''}"${S.e.ppunto?' aria-invalid="true"':''}>
+      ${PUNTOS_REPARTO.map(p=>`<option${(f.ppunto||PUNTOS_REPARTO[0][0])===p[0]?' selected':''}>${esc(p[0])}</option>`).join('')}
+     </select>${err('ppunto')}
+     <span class="hint" id="p-plazo">Plazo de 10 días para devolverlo en cualquier punto de reparto.</span>
+    </div>
+    <p class="panel-nota"><b>Disponibles ahora</b> ${disponibles.map(s=>panelDato(s.code)).join(', ')||'Ninguno'}</p>
+    <button class="btn" type="submit"${PUNTOS_REPARTO.length?'':' disabled'}>Registrar préstamo</button>
+    ${PUNTOS_REPARTO.length?'':'<p class="panel-nota">No hay puntos de reparto disponibles.</p>'}
+   </form>
+   <form id="f-devolver" class="panel-formulario" novalidate>
+    <h2>Registrar una devolución</h2>
+    <div class="field"><label for="d-code">Código del sensor</label>
+     <input class="input panel-codigo" id="d-code" data-bind="f.dcode" value="${esc(f.dcode||'')}" placeholder="RSP-XXXX" ${inv('dcode')}>${err('dcode')}</div>
+    <fieldset class="panel-grupo"><legend>¿Cómo llega?</legend>
+     <div class="panel-radios panel-radios-col">${[['Correcto','Listo para volver a prestarse'],['Defectuoso','Pasa a mantenimiento']].map(([estado,ayuda])=>`
+      <label class="panel-radio"><input type="radio" id="devolucion-${estado.toLowerCase()}" name="panel-devolucion" data-bind="f.dest" value="${estado}"${(f.dest||'Correcto')===estado?' checked':''}>
+       <span><b>${estado}</b><span class="hint">${ayuda}</span></span></label>`).join('')}</div>
+    </fieldset>
+    <button class="btn sec" type="submit">Registrar devolución</button>
+   </form>
+  </div>
+  ${panelTabla('En préstamo ahora ('+abiertos.length+')',['Sensor','Usuario','Desde','Devolver antes de','Punto','Estado'],filas,'No hay sensores prestados.')}
+  ${panelTabla('Devoluciones recientes',['Sensor','Usuario','Prestado','Fecha límite','Cómo llegó'],devoluciones,'Todavía no hay devoluciones registradas.')}`);
+}
+
+function vPuntos(){
+ const reglas=S.rules;
+ const ejemplo=Math.min(RULES.max,Math.floor(120/RULES.min)+Math.floor(40/RULES.min)*(RULES.mult-1));
+ const filas=SOSP.map(d=>[
+  panelDato(d.user),esc(d.d),panelDato(d.min),`<b>${panelDato(d.pts)}</b>`,
+  esc(d.mot)+(d.razon?`<p class="hint panel-apunte">${esc(d.razon)}</p>`:''),
+  d.estado==='pend'?'<span class="badge b-medio">Pendiente</span>':d.estado==='ok'?'<span class="badge b-bajo">Aprobado</span>':'<span class="badge b-alto">Anulado</span>',
+  d.estado==='pend'?panelAcciones(panelAccion('Aprobar','aprobar',d.id,d.user),panelAccion('Anular','anular',d.id,d.user,true)):'<span class="hint">Revisado</span>',
+ ]);
+ const regla=(id,campo,nombre,ayuda)=>`<div class="field"><label for="r-${id}">${nombre}</label>
+  <input class="input" id="r-${id}" data-bind="rules.${id}" value="${esc(reglas[id])}" inputmode="numeric"
+   aria-describedby="r-${id}-ayuda${S.e[campo]?' e-'+campo:''}"${S.e[campo]?' aria-invalid="true"':''}>
+  <span class="hint" id="r-${id}-ayuda">${ayuda}</span>${err(campo)}</div>`;
+ return pshell('panel-puntos',`
+  ${panelTitulo('Puntos del voluntariado','El cálculo se hace cada noche con los datos válidos del día.')}
+  <div class="panel-formularios panel-formularios-asim">
+   <form id="f-rules" class="panel-formulario" novalidate>
+    <h2>Reglas de cálculo</h2>
+    <div class="formgrid">
+     ${regla('min','rmin','Minutos válidos por punto','Entre 1 y 60.')}
+     ${regla('mult','rmult','Multiplicador en parques','Entre 1 y 5.')}
+     ${regla('max','rmax','Máximo de puntos al día','Entre 10 y 500.')}
+    </div>
+    <p class="panel-nota">Se descartan los datos con el sensor parado más de 15 minutos o a más de 25 km/h. Los cambios se aplican desde el día siguiente.</p>
+    <button class="btn" type="submit">Guardar reglas</button>
+   </form>
+   <aside class="panel-ejemplo">
+    <h2>Ejemplo con las reglas actuales</h2>
+    <p>Un voluntario con 120 minutos válidos, 40 de ellos en parques.</p>
+    <strong>${ejemplo} <small>puntos</small></strong>
+   </aside>
+  </div>
+  ${panelTabla('Días para revisar',['Usuario','Día','Min. válidos','Puntos','Motivo','Estado','Acciones'],filas,'No hay días para revisar.')}
+  <p class="panel-nota">El voluntario ve el resultado en su historial de puntos. Al anular, se le restan los puntos de ese día.</p>`);
+}
+
+function vRegalos(){
+ const admin=S.user.r==='admin';
+ const canje=S.canje;
+ const regalo=canje&&(GIFTS.find(x=>x.id===canje.gift)||{n:canje.giftN||'Regalo retirado'});
+ const catalogo=GIFTS.map(x=>[
+  `<b>${esc(x.n)}</b>`,panelDato(x.c+' pts'),panelDato(x.stock),
+  x.stock?'<span class="badge b-bajo">Disponible</span>':'<span class="badge b-none">Agotado</span>',
+  panelAcciones(panelAccion('Editar','editRegalo',x.id,x.n),panelAccion('Retirar','retirarRegalo',x.id,x.n,true)),
+ ]);
+ const canjes=CANJES.map(x=>[
+  panelDato(x.code),panelDato(x.user),esc((GIFTS.find(y=>y.id===x.gift)||{n:x.giftN||'Regalo retirado'}).n),
+  esc(fecha(x.cad)),
+  x.estado==='entregado'?'<span class="badge b-bajo">Entregado</span>':x.cad<TODAY?'<span class="badge b-none">Caducado · puntos devueltos</span>':'<span class="badge b-medio">Pendiente</span>',
+ ]);
+ return pshell('panel-regalos',`
+  ${panelTitulo(admin?'Regalos y canjes':'Entregar regalos',admin?'Catálogo que ven los voluntarios en la app.':'Comprueba el código que enseña el voluntario.',
+    admin?'<button type="button" class="btn" data-act="nuevoRegalo">Nuevo regalo</button>':'')}
+  <form class="panel-formulario panel-edicion" id="f-canje" novalidate>
+   <h2>Entregar un regalo canjeado</h2>
+   <div class="field"><label for="c-code">Código de recogida</label><div class="panel-canje">
+    <input class="input panel-codigo" id="c-code" data-bind="f.ccode" value="${esc(S.f.ccode||'')}" placeholder="CJ-XXXX" ${inv('ccode')}>
+    <button class="btn" type="submit">Comprobar</button></div>${err('ccode')}</div>
+   ${canje?`<div class="alert ok panel-resultado-canje" role="status">${I.gift}<span><b>${esc(regalo.n)}</b> para <b>${esc(canje.user)}</b> · válido hasta el ${fecha(canje.cad)}</span>
+    <button type="button" class="btn sm" data-act="entregar">Marcar como entregado</button></div>`:''}
+   ${window.RespiraDatos?.conApi()?'':'<p class="panel-nota">Códigos de demostración: CJ-8R2T, CJ-2K9L y CJ-5P7Q.</p>'}
+  </form>
+  ${admin?
+    panelTabla('Catálogo',['Regalo','Coste','Existencias','En la app','Acciones'],catalogo,'Todavía no hay regalos en el catálogo.')+
+    panelTabla('Canjes',['Código','Usuario','Regalo','Caduca','Estado'],canjes,'Todavía no hay canjes registrados.')
+   :''}`);
+}
+
+const estTrab=t=>t.estado==='activo'?'<span class="badge b-bajo">Activa</span>':t.caduca<Date.now()?'<span class="badge b-alto">Enlace caducado</span>':'<span class="badge b-medio">Pendiente de activar</span>';
+
+function vTrabajadores(){
+ if(!S.user||S.user.r!=='admin')return '';
+ const f=S.f;
+ const ok=S.altaOk;
+ const avisoCorreo=ok?.demo?'Invitación de demostración.':ok?.correoEnviado===true
+  ?`Enlace enviado a <b>${esc(ok.email)}</b>.`
+  :ok?.correoEnviado===false?'El servidor no pudo enviar el correo. Comparte el enlace por un canal municipal.'
+   :'La invitación está preparada. Puedes compartir el enlace por un canal municipal.';
+ const filas=TRAB().map(t=>[
+  `<b>${esc(t.n)}</b><p class="hint panel-apunte">${esc(t.e)}</p>`,
+  panelDato(t.id),panelDato(t.emp),esc(t.serv),esc(t.alta),estTrab(t),
+  t.estado==='pendiente'?panelAccion('Reenviar enlace','reenviarActiv',t.id,'a '+t.n):'<span class="hint">—</span>',
+ ]);
+ return pshell('panel-trabajadores',`
+  ${panelTitulo('Trabajadores municipales','Gestiona las cuentas del personal que lleva sensores.')}
+  ${ok?`<div class="alert ${ok.correoEnviado===false?'warn':'ok'} panel-alta" role="status">${ok.correoEnviado===false?I.alert:I.check}<div>
+   <b>${esc(ok.nombre)} · ${panelDato(ok.id)}</b>
+   <p>${avisoCorreo} El enlace caduca en ${ACTIV_H} h y solo se puede usar una vez.</p>
+   ${ok.demo?`<a class="btn sm sec" href="${esc(ok.enlace)}">Abrir activación de prueba</a>`:
+    ok.correoEnviado!==true&&ok.enlace?`<div class="field"><label for="panel-enlace-activacion">Enlace de activación</label>
+     <input class="input" id="panel-enlace-activacion" value="${esc(ok.enlace)}" readonly></div>`:''}
+  </div></div>`:''}
+  <form class="panel-formulario panel-edicion" id="f-trab" novalidate>
+   <h2>Dar de alta un trabajador</h2>
+   <div class="formgrid">
+    <div class="field"><label for="t-n">Nombre y apellidos</label>
+     <input class="input" id="t-n" data-bind="f.tn" value="${esc(f.tn||'')}" autocomplete="off" maxlength="80" required ${inv('tn')}>${err('tn')}</div>
+    <div class="field"><label for="t-e">Correo municipal</label>
+     <input class="input" id="t-e" type="email" data-bind="f.te" value="${esc(f.te||'')}" placeholder="nombre@ayto.es" autocomplete="off" required ${inv('te')}>${err('te')}</div>
+    <div class="field"><label for="t-emp">Número de empleado</label>
+     <input class="input" id="t-emp" data-bind="f.temp" value="${esc(f.temp||'')}" placeholder="6 cifras" inputmode="numeric" maxlength="6" required ${inv('temp')}>${err('temp')}</div>
+    <div class="field"><label for="t-s">Servicio</label>
+     <select class="input" id="t-s" data-bind="f.ts" required ${inv('ts')}><option value="">Elige un servicio…</option>
+      ${SERVICIOS.map(x=>`<option${f.ts===x?' selected':''}>${x}</option>`).join('')}</select>${err('ts')}</div>
+   </div>
+   <p class="panel-nota">El trabajador crea su contraseña con el enlace de activación. Su cuenta sirve para usar la app y carece de permisos de administración. La asignación se hace en <a href="#panel-sensores">Sensores</a>.</p>
+   <button type="submit" class="btn">Dar de alta</button>
+  </form>
+  ${panelTabla('Cuentas de trabajadores',['Trabajador','ID de cuenta','Nº empleado','Servicio','Alta','Estado','Acciones'],filas,'Todavía no hay trabajadores registrados.')}`);
+}
 
 function vActivar(){
- const t=enlaceAct();
- const art=`<div class="art"><a class="logo" href="#inicio" aria-label="Respira, inicio">${LOGO(36,'#FFFFFF','#FFFFFF','#5FC4C0')}</a><div style="display:flex;flex-direction:column;gap:14px"><h2>${t&&t.tipo==='recuperar'?'Crea una contraseña nueva':'Activa tu cuenta de trabajador municipal'}</h2><span style="display:inline-flex;gap:8px;align-items:center;color:#B9CFC4">Un servicio de ${NODIA(22,'#FFFFFF')}<b style="letter-spacing:.08em;color:#fff">NODIA</b></span></div><a href="#mapa" style="color:#9EE3C9">← Ir al mapa público</a></div>`;
- let b;
- if(S.activOk)b=`<div style="width:min(420px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert ok">${I.check}<span><b>${S.activTipo==='recuperar'?'Contraseña cambiada.':'Cuenta activada.'}</b> Ya puedes entrar ${['admin','tecnico','reparto'].includes(S.activRol)?'en el panel':'en la app Respira'} con <b>${esc(S.activOk)}</b> y la contraseña que acabas de crear.</span></div>${S.activTipo==='recuperar'?'':'<p class="note" style="margin:0">Tu cuenta es de <b>trabajador municipal</b>: sirve para llevar el sensor que te asigne tu servicio. No da acceso al panel de gestión.</p>'}</div>`;
- else if(t===undefined&&window.RespiraDatos&&RespiraDatos.conApi())b=`<div style="width:min(420px,100%)"><p class="muted">Comprobando el enlace…</p></div>`;else if(!t)b=`<div style="width:min(420px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert bad" role="alert">${I.alert}<span><b>Este enlace no es válido.</b> Puede que ya se haya usado o que administración haya enviado uno nuevo. Pide que te lo reenvíen.</span></div></div>`;
- else if(t.caduca<Date.now())b=`<div style="width:min(420px,100%);display:flex;flex-direction:column;gap:14px"><div class="alert bad" role="alert">${I.alert}<span><b>El enlace ha caducado</b> (dura ${ACTIV_H} h). Pide a administración que te envíe uno nuevo.</span></div></div>`;
- else b=`<form id="f-activar" novalidate><div><span class="lbl">Trabajador municipal</span><h1 style="font-size:30px">Hola, ${esc(t.n.split(' ')[0])}</h1></div><p class="muted" style="margin:0">Crea la contraseña de tu cuenta <b class="mono">${t.id}</b> (${esc(t.e)}).</p>
-  <div class="field"><label for="ac-p1">Contraseña nueva</label><input class="input" id="ac-p1" type="password" data-bind="f.ap1" value="" autocomplete="new-password" ${inv('ap1')}>${err('ap1')}<span class="hint">${t.rol==='vecino'?'Mínimo 8 caracteres.':'Mínimo 10 caracteres, con letras y números.'}</span></div>
-  <div class="field"><label for="ac-p2">Repite la contraseña</label><input class="input" id="ac-p2" type="password" data-bind="f.ap2" value="" autocomplete="new-password" ${inv('ap2')}>${err('ap2')}</div>
-  <button class="btn" type="submit">Activar cuenta</button></form>`;
- return `<div class="login">${art}<div class="formside">${b}</div></div>`}
+ const enlace=enlaceAct();
+ const recuperacion=enlace?.tipo==='recuperar'||S.activTipo==='recuperar';
+ const conocido=Boolean(enlace||S.activOk);
+ const titulo=!conocido?'Enlace de acceso':recuperacion?'Crea una contraseña nueva':'Activa tu cuenta de trabajador municipal';
+ const descripcion=!conocido?'Activación y recuperación de cuenta de Respira.':recuperacion?'Una vez cambiada, podrás volver a iniciar sesión.':'Usa el enlace que te ha enviado tu ayuntamiento para crear tu contraseña.';
+ let contenido;
+
+ if(S.activOk){
+  const enPanel=['admin','tecnico','reparto'].includes(S.activRol);
+  contenido=`<p class="alert ok" role="status">${I.check}<span><b>${recuperacion?'Contraseña cambiada.':'Cuenta activada.'}</b>
+   Ya puedes entrar ${enPanel?'en el panel':'en la app Respira'} con <b>${esc(S.activOk)}</b> y la contraseña que acabas de crear.</span></p>
+   ${enPanel?'<a class="btn" href="#acceso">Iniciar sesión</a>':'<a class="btn sec" href="#mapa">Ver el mapa</a>'}
+   ${recuperacion?'':'<p class="note">Tu cuenta de trabajador municipal sirve para llevar el sensor que te asigne tu servicio. La gestión de sensores se hace desde el panel municipal.</p>'}`;
+ }else if(enlace===undefined&&window.RespiraDatos?.conApi()){
+  contenido='<p class="muted" role="status">Comprobando el enlace…</p>';
+ }else if(enlace===false){
+  contenido=`<p class="alert warn" role="status">${I.alert}<span>No se ha podido comprobar el enlace. Inténtalo de nuevo.</span></p>
+   <button type="button" class="btn" data-act="reintentarEnlace">Reintentar</button>`;
+ }else if(!enlace||enlace.caduca<Date.now()){
+  const mensaje=enlace?'<b>El enlace ha caducado.</b>':'<b>Este enlace no es válido.</b> Puede que ya se haya usado o que administración haya enviado uno nuevo.';
+  const siguiente=recuperacion?'<a class="btn" href="#recuperar">Solicitar otro enlace</a>':'<p class="note">Pide a administración que te reenvíe el enlace de activación. Si querías cambiar tu contraseña, <a href="#recuperar">solicita otro enlace de recuperación</a>.</p>';
+  contenido=`<p class="alert bad" role="alert">${I.alert}<span>${mensaje}</span></p>${siguiente}`;
+ }else{
+  const norma=enlace.rol==='vecino'?'Mínimo 8 caracteres.':'Mínimo 10 caracteres, con letras y números, sin incluir tu nombre de usuario.';
+  const horas=enlace.horas??ACTIV_H;
+  contenido=`<form id="f-activar" novalidate>
+   <h2>Hola, ${esc(enlace.n.split(' ')[0])}</h2>
+   <p class="muted">Crea la contraseña de tu cuenta <b class="mono">${esc(enlace.id)}</b> (${esc(enlace.e)}).</p>
+   <div class="field">
+    <label for="ac-p1">Contraseña nueva</label>
+    <input class="input" id="ac-p1" type="password" data-bind="f.ap1" autocomplete="new-password" required
+     aria-describedby="ac-norma${S.e.ap1?' e-ap1':''}" ${S.e.ap1?'aria-invalid="true"':''}>
+    <span class="hint" id="ac-norma">${norma}</span>
+    ${err('ap1')}
+   </div>
+   <div class="field">
+    <label for="ac-p2">Repite la contraseña</label>
+    <input class="input" id="ac-p2" type="password" data-bind="f.ap2" autocomplete="new-password" required ${inv('ap2')}>
+    ${err('ap2')}
+   </div>
+   <button class="btn" type="submit">${recuperacion?'Cambiar contraseña':'Activar cuenta'}</button>
+   <p class="note">El enlace se puede usar una vez y caduca ${horas===1?'una hora':horas+' horas'} después de su envío.</p>
+  </form>`;
+ }
+ return accesoMunicipal(titulo,descripcion,contenido);
+}
 
 /* ---------- modales ---------- */
 function modal(){const m=S.modal;if(!m)return '';let b='';
@@ -894,11 +1485,41 @@ function modal(){const m=S.modal;if(!m)return '';let b='';
  if(m.k==='anular'){b=`<h2>Anular los puntos del ${SOSP.find(d=>d.id===m.id).d}</h2><form id="f-anular" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="a-mot">Motivo (lo verá el voluntario)</label><textarea class="input" id="a-mot" data-bind="f.amot" maxlength="200" ${inv('amot')}>${esc(S.f.amot||'')}</textarea>${err('amot')}</div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn danger" type="submit">Anular puntos</button></div></form>`}
  if(m.k==='regalo'){b=`<h2>${m.id?'Editar regalo':'Nuevo regalo'}</h2><form id="f-regalo" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="g-n">Nombre</label><input class="input" id="g-n" data-bind="f.gn" value="${esc(S.f.gn||'')}" ${inv('gn')}>${err('gn')}</div><div class="formgrid"><div class="field"><label for="g-c">Coste en puntos</label><input class="input mono" id="g-c" data-bind="f.gc" value="${esc(S.f.gc||'')}" inputmode="numeric" ${inv('gc')}>${err('gc')}</div><div class="field"><label for="g-s">Existencias</label><input class="input mono" id="g-s" data-bind="f.gs" value="${esc(S.f.gs||'')}" inputmode="numeric" ${inv('gs')}>${err('gs')}</div></div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn" type="submit">Guardar</button></div></form>`}
  if(m.k==='guia'){b=`<div class="gv-modal-top"><div><span class="lbl">Guía</span><h2>Qué significan los valores</h2></div><button type="button" class="btn ghost sm" data-act="closeModal" aria-label="Cerrar">${I.x}</button></div>${guiaHTML()}`}
- if(m.k==='confirm'){b=`<h2>${m.t}</h2><p class="muted" style="margin:0">${m.p}</p><div class="acts"><button class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn ${m.danger?'danger':''}" data-act="confirmOk">${m.ok}</button></div>`}
- return `<div class="modal" data-act="backdrop"><div class="box${m.k==='guia'?' gv-box':''}" role="dialog" aria-modal="true"${m.k==='guia'?' aria-label="Qué significan los valores"':''}>${b}</div></div>`}
+ if(m.k==='confirm'){b=`<h2>${esc(m.t)}</h2><p class="muted" style="margin:0">${m.p}</p><div class="acts"><button class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn ${m.danger?'danger':''}" data-act="confirmOk">${m.ok}</button></div>`}
+ return `<div class="modal" data-act="backdrop"><div class="box${m.k==='guia'?' gv-box':''}" role="dialog" aria-modal="true" aria-labelledby="dialogo-titulo" tabindex="-1">${b.replace('<h2>','<h2 id="dialogo-titulo">')}</div></div>`}
 
 /* ---------- render ---------- */
 const $r=document.getElementById('root');
+let origenDialogo;
+function localizarFoco(elemento){
+ if(!elemento||!$r.contains(elemento))return null;
+ if(elemento.id)return '#'+CSS.escape(elemento.id);
+ const {act,arg}=elemento.dataset;
+ if(!act)return null;
+ return `[data-act="${CSS.escape(act)}"]`+(arg===undefined?':not([data-arg])':`[data-arg="${CSS.escape(arg)}"]`);
+}
+function enfocarSeccion(elemento){
+ if(!elemento)return;
+ elemento.setAttribute('tabindex','-1');
+ elemento.focus({preventScroll:true});
+}
+function sincronizarDialogo(selectorFoco,habiaDialogo,activar){
+ const dialogo=$r.querySelector('.modal [role="dialog"]');
+ for(const elemento of $r.children){
+  if(!elemento.classList.contains('modal'))elemento.inert=Boolean(dialogo);
+ }
+ if(dialogo){
+  if(!habiaDialogo)origenDialogo=selectorFoco;
+  const anterior=habiaDialogo&&selectorFoco&&dialogo.querySelector(selectorFoco);
+  (anterior||dialogo.querySelector('[data-act="closeModal"]')||dialogo).focus({preventScroll:true});
+ }else if(habiaDialogo){
+  const origen=origenDialogo&&[...$r.querySelectorAll(origenDialogo)].find(el=>el.getClientRects().length&&!el.disabled);
+  origenDialogo=null;
+  if(origen)origen.focus({preventScroll:true});
+  else if(activar)enfocarSeccion($r.querySelector('main h1'));
+ }
+}
+
 // Actualiza los controles y los resultados sin desmontar el mapa de Google.
 function renderMapaEnSitio(html){
  const plantilla=document.createElement('template');
@@ -919,26 +1540,27 @@ function renderMapaEnSitio(html){
 function render(){const r=route();
  if(PAN.includes(r)&&!S.user){location.replace('#acceso');S.e={};S.f.notice=true;return}
  if(PAN.includes(r)&&!ACCESS[S.user.r].includes(r)){location.replace('#'+HOME[S.user.r]);toast('Tu rol no tiene acceso a esa sección');return}
- const V={inicio:vInicio,mapa:()=>{S.layer='zonas';return vMapa()},comunidad:()=>{S.layer='comunidad';S.sel=null;return vMapa()},historial:vHist,comparar:vCmp,'como-funciona':vComo,privacidad:vPriv,acceso:()=>vAcceso(false),recuperar:()=>vAcceso(true),panel:vFlota,'panel-sensores':vSensores,'panel-editar':vEditar,'panel-prestamos':vPrestamos,'panel-puntos':vPuntos,'panel-regalos':vRegalos,'panel-trabajadores':vTrabajadores,activar:vActivar};
+ const V={inicio:vInicio,mapa:()=>{S.layer='zonas';S.avSel=null;return vMapa()},comunidad:()=>{S.layer='comunidad';S.sel=null;return vMapa()},historial:vHist,comparar:vCmp,'como-funciona':vComo,privacidad:vPriv,acceso:()=>vAcceso(false),recuperar:()=>vAcceso(true),panel:vFlota,'panel-sensores':vSensores,'panel-editar':vEditar,'panel-prestamos':vPrestamos,'panel-puntos':vPuntos,'panel-regalos':vRegalos,'panel-trabajadores':vTrabajadores,activar:vActivar};
  const ae=document.activeElement;const keep=ae&&ae.id&&ae.dataset&&ae.dataset.live?[ae.id,ae.selectionStart]:null;
  const mapaAbierto=r==='mapa'||r==='comunidad';
  const listaAnterior=$r.querySelector('.mapview .side');
  const scrollLista=listaAnterior?.scrollTop||0;
- const controlMapa=mapaAbierto&&ae?.closest('.mapa-pagina')&&ae.dataset.act?[ae.dataset.act,ae.dataset.arg]:null;
+ const habiaDialogo=Boolean($r.querySelector('.modal'));
+ const selectorFoco=r==='inicio'?null:localizarFoco(ae);
  if(r!=='inicio'&&TV.limpiar)TV.limpiar();
- const html=V[r]()+modal();
+ const datosPanel=PAN.includes(r)?window.RespiraDatos?.estadoPanel(r,S.user.r):null;
+ const html=datosPanel&&!datosPanel.listo?pshell(r,`<h1>Panel municipal</h1>${datosPanel.error?'':'<p role="status">Cargando datos…</p>'}`):V[r]()+modal();
  if(mapaAbierto&&listaAnterior)renderMapaEnSitio(html);
  else $r.innerHTML=html;
  if(mapaAbierto){
   GMAP().montar();
   $r.querySelector('.mapview .side').scrollTop=scrollLista;
-  if(controlMapa){
-   const [accion,arg]=controlMapa;
-   const control=[...$r.querySelectorAll('.mapa-pagina button[data-act]')]
-    .find(el=>el.dataset.act===accion&&el.dataset.arg===arg&&!el.hidden);
-   control?.focus({preventScroll:true});
-  }
  }
+ if (!S.modal&&!habiaDialogo&&selectorFoco&&!S.focusErr&&!document.activeElement?.closest('#root')){
+  const control=[...$r.querySelectorAll(selectorFoco)].find(el=>el.getClientRects().length&&!el.disabled);
+  control?.focus({preventScroll:true});
+ }
+ if(S.modal||habiaDialogo)sincronizarDialogo(selectorFoco,habiaDialogo,r!=='inicio');
  if(S.modal&&S.modal.k==='guia'&&S.modal.foco){const k=S.modal.foco;S.modal.foco=null;requestAnimationFrame(()=>{const el=document.querySelector('.gv-box .gv[data-k="'+k+'"]');if(!el)return;el.scrollIntoView({block:'nearest'});el.classList.add('gv-foco');setTimeout(()=>el.classList.remove('gv-foco'),2200)})}
  if(r==='inicio')montarInicio();
  if(keep){const el=document.getElementById(keep[0]);if(el){el.focus();try{el.setSelectionRange(keep[1],keep[1])}catch(_){}}}
@@ -950,8 +1572,29 @@ function render(){const r=route();
 // Panel con servidor: si hay API, la acción la hace datos-api.js (y devuelve true)
 const SRV=(k,d)=>{const D=window.RespiraDatos;if(!D||!D.conApi())return false;D.accion(k,d);return true};
 const enlaceAct=()=>window.RespiraDatos&&RespiraDatos.conApi()?RespiraDatos.enlace(S.tok):STAFF.find(x=>x.r==='trabajador'&&x.token&&x.token===S.tok);
+const codigoCanje=()=>String(S.f.ccode||'').trim().toUpperCase();
+function limpiarCanje(){
+ S.canje=null;
+ $r.querySelector('.panel-resultado-canje')?.remove();
+}
 const vEmail=v=>/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v);
 const A={
+ pausaParque:(_,boton)=>{
+  const ahora=performance.now();
+  if(TV.pausaEn===null){
+   TV.pausaEn=ahora;
+   if(TV.raf)cancelAnimationFrame(TV.raf);
+   TV.raf=null;
+  }else{
+   TV.inicioEscena+=ahora-TV.pausaEn;
+   TV.pausaEn=null;
+  }
+  TV.globo?.actualizarPausa?.();
+  const pausa=TV.pausaEn!==null;
+  boton.setAttribute('aria-label',etiquetaParque(pausa));
+  boton.title=etiquetaParque(pausa);
+  boton.innerHTML=iconoParque(pausa);
+ },
  tema:(_,boton)=>{
   const cambiar=()=>{
    TEMA=TEMA==='oscuro'?'claro':'oscuro';
@@ -967,17 +1610,52 @@ const A={
  sel:seleccionarZona,
  zoom:()=>GMAP().reset(),
  tilt:()=>GMAP().perspectiva(),
- avf:a=>{S.avf=+a;render()},
- avt:a=>{S.avt=a;S.avf=0;render()},
+ avf:a=>{S.avf=+a;S.avSel=null;render()},
+ avt:a=>{S.avt=a;S.avf=0;S.avSel=null;render()},
+ buscarZona:()=>document.getElementById('q')?.focus(),
+ verPercepcion:id=>{
+  S.avSel=id;
+  render();
+  if(matchMedia('(max-width: 780px)').matches)document.getElementById('aviso-'+id)?.focus();
+ },
  tabIni:a=>{S.tabIni=a;document.querySelectorAll('[data-act=tabIni]').forEach(b=>{const seleccionada=b.dataset.arg===a;b.setAttribute('aria-selected',seleccionada);b.tabIndex=seleccionada?0:-1});document.querySelectorAll('.ic-panel').forEach(p=>p.hidden=p.id!=='icp-'+a)},
  verZona:a=>{S.q='';S.sel=a;nav('mapa')},
  toHist:a=>{S.hist={id:a,mag:S.mag==='gen'?'o3':S.mag,per:'24h',desde:'',hasta:''};S.sel=null;nav('historial')},
- toCmp:a=>{S.cmp.a=a;if(S.cmp.b===a)S.cmp.b=ZONAS.find(z=>z.id!==a&&est(z)==='ok').id;S.sel=null;nav('comparar')},
+ toCmp:a=>{
+  const desdeHistorial=route()==='historial';
+  const mag=desdeHistorial?S.hist.mag:S.mag;
+  S.cmp.a=a;
+  S.cmp.mag=mag==='gen'?'o3':mag;
+  if(desdeHistorial&&PERIODOS_SERIE.some(([per])=>per===S.hist.per))S.cmp.per=S.hist.per;
+  if(S.cmp.b===a)S.cmp.b=ZONAS.find(z=>z.id!==a&&est(z)==='ok').id;
+  S.sel=null;
+  nav('comparar');
+ },
  hmag:a=>{S.hist.mag=a;render()}, hper:a=>{S.hist.per=a;S.e={};render()},
  swap:()=>{const c=S.cmp;[c.a,c.b]=[c.b,c.a];render()},
- showPass:()=>{S.showPass=!S.showPass;render()}, unlock:()=>{S.lock=false;S.tries=0;S.e={};render()}, recBack:()=>{S.recOk=false},
- logout:()=>{window.RespiraDatos&&RespiraDatos.cerrarSesion();S.user=null;S.f={};S.altaOk=null;toast('Has cerrado sesión');nav('acceso')},
- reenviarActiv:id=>{if(!S.user||S.user.r!=='admin'){toast('Solo administración puede hacerlo');return}if(SRV('reenviar',{id}))return;const t=STAFF.find(x=>x.id===id&&x.r==='trabajador'&&x.estado==='pendiente');if(!t)return;t.token=nuevoToken();t.caduca=Date.now()+ACTIV_H*36e5;S.altaOk=t.id;render();toast(`Enlace nuevo enviado a ${t.e}. El anterior ya no sirve.`)},
+ usarCuentaPrueba:rol=>{
+  const cuenta=CUENTAS_PANEL_PRUEBA.find(c=>c.r===rol);
+  if(!cuenta)return;
+  S.f.mail=cuenta.e;
+  S.f.pass=cuenta.p;
+  S.e={};
+  render();
+  $r.querySelector('#f-login button[type="submit"]')?.focus();
+ },
+ showPass:()=>{S.showPass=!S.showPass;render()}, recBack:()=>{S.recOk=false},
+ logout:()=>{window.RespiraDatos&&RespiraDatos.cerrarSesion();S.user=null;S.f={};S.altaOk=null;S.edit=null;S.canje=null;toast('Has cerrado sesión');nav('acceso')},
+ reintentarPanel:()=>window.RespiraDatos?.reintentarPanel(),
+ reintentarEnlace:()=>window.RespiraDatos?.reintentarEnlace(S.tok),
+ reenviarActiv:id=>{
+  if(S.user?.r!=='admin'){toast('Solo administración puede hacerlo');return}
+  if(SRV('reenviar',{id}))return;
+  const t=TRAB().find(x=>x.id===id&&x.estado==='pendiente');
+  if(!t)return;
+  t.token=nuevoToken();
+  t.caduca=Date.now()+ACTIV_H*36e5;
+  S.altaOk={id:t.id,nombre:t.n,email:t.e,enlace:'#activar/'+t.token,demo:true};
+  render();toast('Enlace de prueba renovado. El anterior ya no sirve.');
+ },
  fT:a=>{S.fT=a;render()}, fE:a=>{S.fE=S.fE===a&&a!=='todos'?'todos':a;if(route()!=='panel')nav('panel');else render()},
  editar:a=>{const s=a&&byCode(a);S.edit=s?{orig:s.code,code:s.code,mags:[...s.mags],tipo:s.tipo,asig:s.asig||'',estado:s.est==='mant'?'mant':'ok',motivo:s.motivo||''}:{orig:null,code:'',mags:[],tipo:'vol',asig:'',estado:'ok',motivo:''};S.e={};nav('panel-editar')},
  emag:a=>{const m=S.edit.mags;const i=m.indexOf(a);i>=0?m.splice(i,1):m.push(a);delete S.e.mags;render()},
@@ -990,7 +1668,7 @@ const A={
  nuevoRegalo:()=>{S.f.gn='';S.f.gc='';S.f.gs='';S.e={};S.modal={k:'regalo',id:null};render()},
  editRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.f.gn=g.n;S.f.gc=String(g.c);S.f.gs=String(g.stock);S.e={};S.modal={k:'regalo',id:a};render()},
  retirarRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.modal={k:'confirm',t:`¿Retirar «${g.n}»?`,p:'Dejará de verse en la app. Los canjes pendientes de este regalo se podrán seguir entregando.',ok:'Retirar',danger:true,fn:()=>{if(SRV('retirar',{id:a}))return;GIFTS=GIFTS.filter(x=>x.id!==a);toast('Regalo retirado del catálogo')}};render()},
- entregar:()=>{const c=S.canje;if(SRV('entregar',{codigo:c.code}))return;const g=GIFTS.find(x=>x.id===c.gift);c.estado='entregado';if(g)g.stock=Math.max(0,g.stock-1);S.canje=null;S.f.ccode='';render();toast(g&&g.stock===0?`Entregado. «${g.n}» queda agotado en la app.`:'Regalo entregado')},
+ entregar:(_,boton)=>{const c=S.canje;if(!c||c.code!==codigoCanje())return;if(SRV('entregar',{codigo:c.code})){boton.disabled=true;return}const g=GIFTS.find(x=>x.id===c.gift);c.estado='entregado';if(g)g.stock=Math.max(0,g.stock-1);S.canje=null;S.f.ccode='';render();toast(g&&g.stock===0?`Entregado. «${g.n}» queda agotado en la app.`:'Regalo entregado')},
  closeModal:()=>{S.modal=null;S.e={};render()},
  guia:()=>{S.modal={k:'guia'};render()},
  aValores:k=>{S.modal={k:'guia',foco:k};render()},
@@ -1017,6 +1695,17 @@ document.addEventListener('click',e=>{
  const t=e.target.closest('[data-act]');if(!t||t.disabled)return;if(t.dataset.act==='backdrop'&&e.target!==t)return;const f=A[t.dataset.act];if(!f)return;if(!e.target.closest('a[href]'))e.preventDefault();f(t.dataset.arg,t,e);
 });
 document.addEventListener('keydown',e=>{
+ const dialogo=S.modal&&$r.querySelector('.modal [role="dialog"]');
+ if(dialogo&&e.key==='Tab'){
+  const controles=[...dialogo.querySelectorAll('a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')]
+   .filter(el=>!el.disabled&&el.tabIndex>=0&&el.getClientRects().length);
+  const indice=controles.indexOf(document.activeElement);
+  if(indice<0||e.shiftKey&&indice===0||!e.shiftKey&&indice===controles.length-1){
+   e.preventDefault();
+   (controles[e.shiftKey?controles.length-1:0]||dialogo).focus();
+  }
+  return;
+ }
  const pestaña=e.target.closest('[data-act="tabIni"]');
  if(pestaña&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
   const pestañas=[...pestaña.parentElement.querySelectorAll('[role="tab"]')];
@@ -1037,19 +1726,20 @@ document.addEventListener('keydown',e=>{
 function setPath(b,v){const p=b.split('.');let o=S;for(let i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=v}
 const ERRKEY={'f.mail':'mail','f.pass':'pass','f.rmail':'rmail','f.puser':'puser','f.pcode':'pcode','f.dcode':'dcode','f.ccode':'ccode','f.bconf':'bconf','f.amot':'amot','f.gn':'gn','f.gc':'gc','f.gs':'gs','edit.code':'code','edit.asig':'asig','edit.motivo':'motivo','rules.min':'rmin','rules.mult':'rmult','rules.max':'rmax','hist.desde':'desde','hist.hasta':'hasta'};
 $r.addEventListener('input',e=>{const el=e.target,b=el.dataset.bind;if(!b||el.tagName==='SELECT')return;setPath(b,el.value);
+ if(b==='f.ccode'&&S.canje&&S.canje.code!==codigoCanje())limpiarCanje();
  if(el.dataset.live){if(b==='q'&&S.sel&&!zonaCoincide(byZ(S.sel)))S.sel=null;render();return}
  const key=ERRKEY[b];if(key&&S.e[key]){delete S.e[key];el.removeAttribute('aria-invalid');const x=document.getElementById('e-'+key);x&&x.remove()}});
 $r.addEventListener('change',e=>{const el=e.target;const b=el.dataset.bind;if(!b)return;setPath(b,el.value);if(el.dataset.rr)render();});
 $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const er={};const ok=()=>{S.e=er;if(Object.keys(er).length){S.focusErr=true;render();return false}S.e={};return true};const up=v=>(v||'').trim().toUpperCase();
  if(id==='f-login'){const m=(S.f.mail||'').trim().toLowerCase(),p=S.f.pass||'';
-  if(!m)er.mail='Escribe tu correo.';else if(!vEmail(m))er.mail='El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';else if(!m.endsWith('@ayto.es'))er.mail='Usa tu correo municipal (termina en @ayto.es).';
-  if(!p)er.pass='Escribe tu contraseña.';else if(p.length<8)er.pass=`La contraseña tiene al menos 8 caracteres (has escrito ${p.length}).`;
+  if(!m)er.mail='Escribe tu correo.';else if(!vEmail(m))er.mail='El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';
+  if(!p)er.pass='Escribe tu contraseña.';
   if(!ok())return;
   if(SRV('login',{email:m,clave:p}))return;
   const u=STAFF.find(x=>x.e===m&&x.p!=null&&x.p===p);
-  if(!u){S.tries++;S.f.pass='';if(S.tries>=5){S.lock=true}else S.e={login:`<b>Correo o contraseña incorrectos.</b> Te quedan ${5-S.tries} intento${5-S.tries===1?'':'s'} antes del bloqueo temporal.`};render();return}
-  if(u.r==='trabajador'){S.tries=0;S.f.pass='';S.e={login:'<b>Tu cuenta es de trabajador municipal.</b> No tiene acceso al panel de gestión: entra en la app Respira con este correo.'};render();return}
-  S.user=u;S.tries=0;S.f={};S.e={};toast(`Hola, ${u.n.split(' ')[0]}`);nav(HOME[u.r]);return}
+  if(!u){S.f.pass='';S.e={login:'Correo o contraseña incorrectos.'};render();return}
+  if(u.r==='trabajador'){S.f.pass='';S.e={login:'Tu cuenta es de trabajador municipal. Entra en la app Respira con este correo.'};render();return}
+  S.user=u;S.f={};S.e={};toast(`Hola, ${u.n.split(' ')[0]}`);nav(HOME[u.r]);return}
  if(id==='f-trab'){
   if(!S.user||S.user.r!=='admin'){toast('Solo una cuenta de administración puede dar de alta trabajadores');return}
   const n=(S.f.tn||'').trim().replace(/\s+/g,' '),m=(S.f.te||'').trim().toLowerCase(),emp=(S.f.temp||'').trim(),sv=S.f.ts||'';
@@ -1061,7 +1751,9 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
   if(SRV('trabajador',{nombre:n,email:m,num_empleado:emp,servicio:sv}))return;
   const num=Math.max(0,...TRAB().map(x=>+x.id.slice(2)))+1,cid='T-'+String(num).padStart(4,'0');
   const t={n,e:m,p:null,r:'trabajador',id:cid,emp,serv:sv,estado:'pendiente',alta:'4 nov',por:S.user.e,token:nuevoToken(),caduca:Date.now()+ACTIV_H*36e5};
-  STAFF.push(t);S.altaOk=cid;S.f.tn='';S.f.te='';S.f.temp='';S.f.ts='';render();toast(`Trabajador ${cid} dado de alta`);return}
+  STAFF.push(t);
+  S.altaOk={id:cid,nombre:n,email:m,enlace:'#activar/'+t.token,demo:true};
+  S.f.tn='';S.f.te='';S.f.temp='';S.f.ts='';render();toast(`Trabajador ${cid} dado de alta`);return}
  if(id==='f-activar'){const t=enlaceAct();
   if(!t||t.caduca<Date.now()){render();return}
   const p1=S.f.ap1||'',p2=S.f.ap2||'';
@@ -1071,14 +1763,30 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
   if(SRV('activar',{token:S.tok,clave:p1}))return;
   t.p=p1;t.estado='activo';t.token=null;t.caduca=null;S.activOk=t.e;S.f.ap1='';S.f.ap2='';render();return}
  if(id==='f-rec'){const m=(S.f.rmail||'').trim();if(!m)er.rmail='Escribe tu correo.';else if(!vEmail(m))er.rmail='El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';if(!ok())return;if(SRV('recuperar',{email:m}))return;S.recOk=true;render();return}
- if(id==='f-rango'){const h=S.hist;if(!h.desde)er.desde='Elige la fecha de inicio.';else if(h.desde<'2026-06-01')er.desde='No hay datos antes del 01/06/2026.';else if(h.desde>TODAY)er.desde='No puede ser una fecha futura.';
-  if(!h.hasta)er.hasta='Elige la fecha de fin.';else if(h.hasta>TODAY)er.hasta='No puede ser una fecha futura.';else if(h.desde&&h.hasta<h.desde)er.hasta='La fecha de fin debe ser posterior a la de inicio.';
-  else if(h.desde&&(new Date(h.hasta)-new Date(h.desde))/864e5>90)er.hasta='El rango máximo es de 90 días.';if(!ok())return;render();toast(`Mostrando del ${h.desde.split('-').reverse().join('/')} al ${h.hasta.split('-').reverse().join('/')}`);return}
+ if(id==='f-rango'){
+  const h=S.hist,{desde,hasta}=h;
+  const fechaUTC=d=>Date.parse(d+'T00:00:00Z');
+  const hoyUTC=new Date().toISOString().slice(0,10);
+  if(!desde)er.desde='Elige la fecha de inicio.';
+  else if(desde<'2026-06-01')er.desde='No hay datos antes del 01/06/2026.';
+  else if(desde>hoyUTC)er.desde='No puede ser una fecha futura.';
+  if(!hasta)er.hasta='Elige la fecha de fin.';
+  else if(hasta>hoyUTC)er.hasta='No puede ser una fecha futura.';
+  else if(desde&&hasta<desde)er.hasta='La fecha de fin debe ser igual o posterior a la de inicio.';
+  else if(desde&&fechaUTC(hasta)-fechaUTC(desde)>=90*864e5)er.hasta='El rango máximo es de 90 días.';
+  if(!Object.keys(er).length&&!modeloSerie(byZ(h.id),h.mag,'custom',{desde,hasta}))er.hasta='Elige un rango de fechas válido.';
+  if(!ok())return;
+  h.rango={desde,hasta};
+  render();
+  toast(`Mostrando del ${desde.split('-').reverse().join('/')} al ${hasta.split('-').reverse().join('/')}`);
+  return
+ }
  if(id==='f-sensor'){const s=S.edit;const c=up(s.code);
   if(!s.orig){if(!c)er.code='Escribe el código del sensor.';else if(!/^RSP-[A-Z0-9]{4}$/.test(c))er.code='Formato no válido: RSP- y 4 letras o números, por ejemplo RSP-7Z2K.';else if(byCode(c))er.code=`Ya existe un sensor con el código ${c}.`}
   if(!s.mags.length)er.mags='Marca al menos una magnitud.';
   if(s.tipo!=='vol'&&(s.asig||'').trim().length<3)er.asig='Indica a qué servicio, línea o vehículo va asignado (mínimo 3 caracteres).';
-  if(s.estado==='mant'&&(s.motivo||'').trim().length<5)er.motivo='Explica el motivo del mantenimiento (mínimo 5 caracteres).';
+  if(s.estado==='mant'&&byCode(s.orig)?.est==='prestado')er.motivo='Registra la devolución antes de pasar el sensor a mantenimiento.';
+  else if(s.estado==='mant'&&(s.motivo||'').trim().length<5)er.motivo='Explica el motivo del mantenimiento (mínimo 5 caracteres).';
   if(!ok())return;
   if(SRV('sensor',{orig:s.orig,codigo:c,tipo:s.tipo,mags:s.mags,asig:s.asig,mant:s.estado==='mant',motivo:s.motivo}))return;
   const asig=s.tipo==='vol'?null:s.asig.trim();
@@ -1102,7 +1810,7 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
   if(n.length<3)er.gn='Escribe un nombre de al menos 3 caracteres.';else if(GIFTS.some(g=>g.n.toLowerCase()===n.toLowerCase()&&g.id!==S.modal.id))er.gn='Ya hay un regalo con ese nombre.';
   if(!/^\d+$/.test(c)||+c<1||+c>5000)er.gc='Entre 1 y 5000 puntos.';if(!/^\d+$/.test(st)||+st>999)er.gs='Entre 0 y 999 unidades.';
   if(!ok())return;if(SRV('regalo',{id:S.modal.id,nombre:n,coste:c,stock:st}))return;if(S.modal.id){Object.assign(GIFTS.find(g=>g.id===S.modal.id),{n,c:+c,stock:+st})}else GIFTS.push({id:'g'+Date.now(),n,c:+c,stock:+st});S.modal=null;render();toast('Catálogo actualizado');return}
- if(id==='f-canje'){const c=up(S.f.ccode);S.canje=null;if(c&&/^CJ-[A-Z0-9]{4}$/.test(c)&&SRV('comprobarCanje',{codigo:c}))return;const x=CANJES.find(y=>y.code===c);
+ if(id==='f-canje'){const c=codigoCanje();limpiarCanje();if(c&&/^CJ-[A-Z0-9]{4}$/.test(c)&&SRV('comprobarCanje',{codigo:c}))return;const x=CANJES.find(y=>y.code===c);
   if(!c)er.ccode='Escribe el código que enseña el voluntario.';else if(!/^CJ-[A-Z0-9]{4}$/.test(c))er.ccode='Formato no válido: CJ- y 4 letras o números.';else if(!x)er.ccode=`No existe ningún canje ${c}.`;else if(x.estado==='entregado')er.ccode=`El canje ${c} ya se entregó.`;else if(x.cad<TODAY)er.ccode=`El canje ${c} caducó el ${fecha(x.cad)}: los puntos ya se devolvieron al usuario.`;
   if(!ok())return;S.canje=x;render();return}
 });

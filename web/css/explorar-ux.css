@@ -1,0 +1,87 @@
+/* El encabezado recibe foco al navegar entre vistas interiores. */
+main:not(.tv-main) h1[tabindex="-1"]:focus{outline:none}
+
+/* Historial y comparación */
+.serie-pagina{padding-block:clamp(24px,4vw,54px) 48px}
+.serie-pagina .inner{gap:clamp(14px,2vw,22px)}
+.serie-pagina .crumb{color:var(--ink-2)}
+.serie-pagina .mapa-encabezado h1{font-size:clamp(2rem,4.4vw,4.4rem)}
+.serie-filtros{display:flex;align-items:flex-end;flex-wrap:wrap;gap:14px 20px;padding:14px 0;border-bottom:1px solid var(--line)}
+.serie-filtros .field{min-width:min(160px,100%);max-width:100%;gap:4px}
+.serie-filtros .field:has(select[id="h-id"],select[id="c-a"],select[id="c-b"]){flex:1 1 195px;max-width:min(300px,100%)}
+.serie-filtros select{width:100%}
+.serie-filtros .mapa-label{margin-bottom:0}
+.serie-rango{flex-basis:100%;display:flex;align-items:flex-start;gap:10px 14px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--line)}
+.serie-rango .field{flex:1 1 148px;max-width:225px}
+.serie-rango .btn{align-self:flex-start;margin-top:25px}
+.serie-rango > .hint{flex-basis:100%;color:var(--ink-2)}
+.serie-contexto{display:flex;align-items:center;flex-wrap:wrap;gap:7px 14px;color:var(--ink-2);font-size:.875rem}
+.serie-resumen{margin:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 14px}
+.serie-resumen div{min-width:0;padding:10px 14px;background:var(--surface-2);border-radius:9px}
+.serie-resumen dt{color:var(--ink-2);font-size:.85rem}
+.serie-resumen dd{margin:0;font:750 clamp(1.2rem,2vw,1.85rem)/1.35 var(--f-display);font-variant-numeric:tabular-nums}
+.serie-resumen dd small,.serie-panel h2 small{font-size:.6em;color:var(--ink-2);font-weight:600}
+.serie-resultados{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,300px);align-items:start;gap:16px}
+.serie-panel{min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:clamp(12px,2vw,22px)}
+.serie-panel h2{font-size:clamp(1.1rem,2vw,1.4rem);letter-spacing:-.02em}
+.serie-panel-cab{display:flex;align-items:baseline;justify-content:space-between;gap:8px 14px;flex-wrap:wrap;margin-bottom:14px}
+.serie-comparacion,.serie-leyenda{display:flex;gap:6px 14px;flex-wrap:wrap;color:var(--ink-2);font-size:.85rem}
+.serie-comparacion span,.serie-leyenda li{display:inline-flex;align-items:center;gap:6px}
+.serie-muestra{width:20px;border-top:3px solid var(--primary)}
+.serie-muestra.serie-b{border-top:3px dashed var(--sim)}
+.serie-muestra.serie-estimada{border-top:3px dotted var(--ink-2)}
+.serie-muestra.serie-ausente{height:12px;border:1px solid var(--line);background:var(--surface-3)}
+.serie-leyenda{list-style:none;margin:12px 0 0;padding:0}
+.serie-grafica{display:grid;grid-template-columns:3.3rem minmax(0,1fr);gap:6px;--alto-grafica:clamp(205px,33vw,342px)}
+.serie-valores{height:var(--alto-grafica);position:relative}
+.serie-valores span{position:absolute;right:0;transform:translateY(-50%);color:var(--ink-2);font-size:.78rem;font-variant-numeric:tabular-nums}
+.serie-dibujo svg{display:block;width:100%;height:var(--alto-grafica);border:1px solid var(--line);border-radius:5px}
+.serie-hueco{fill:var(--surface-3);fill-opacity:.83}
+.serie-umbral{stroke:var(--ink-2);stroke-opacity:.45;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.serie-trazos path{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.serie-eje{display:flex;justify-content:space-between;gap:4px;margin-top:4px;color:var(--ink-2);font-size:.76rem;white-space:nowrap}
+.serie-panel > .hint,.serie-eventos > .hint{margin:8px 0;color:var(--ink-2);display:block}
+.serie-eventos h3{font-family:var(--f-body);font-size:.9rem;margin-top:12px}
+.serie-eventos ul{list-style:none;margin:2px 0 0;padding:0;max-height:210px;overflow:auto}
+.serie-eventos li{display:flex;flex-direction:column;gap:2px;padding:6px 0;font-size:.83rem}
+.serie-eventos li + li{border-top:1px solid var(--line)}
+.serie-eventos li span{color:var(--ink-2)}
+.serie-tabla summary{cursor:pointer;color:var(--primary);font-weight:700;padding-block:7px}
+.serie-tabla-scroll{max-height:370px;overflow:auto;scrollbar-width:thin}
+.serie-tabla th,.serie-tabla td,.serie-contraste th,.serie-contraste td{padding:7px 9px;white-space:normal}
+.serie-tabla td,.serie-contraste td{font-variant-numeric:tabular-nums}
+.serie-tabla td small{font-size:.75em;color:var(--primary)}
+.serie-contraste{width:100%;margin-top:8px;line-height:1.3;font-size:.85rem}
+.serie-contraste :is(th,td):not(:first-child){text-align:right}
+.serie-contraste tbody th{font-weight:600;text-transform:none;letter-spacing:normal}
+@media(max-width:930px){.serie-resultados{grid-template-columns:1fr}}
+@media(max-width:560px){
+ .serie-filtros{gap:10px}
+ .serie-filtros .field:has(select){flex:1 1 148px;max-width:none}
+ .serie-filtros .field:has(.chips){flex:1 1 100%}
+ .serie-resumen{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .serie-grafica{grid-template-columns:2.6rem minmax(0,1fr)}
+ .serie-eje span:nth-child(even){display:none}
+}
+@media(max-width:400px){.serie-rango .btn{margin-top:0}}
+
+/* Acciones y estados del mapa */
+.mapa-saltar{display:none}
+.mapa-efectos{margin-top:9px;padding-top:7px;border-top:1px solid var(--line);font-size:.875rem}
+.mapa-efectos summary{cursor:pointer;color:var(--primary);font-weight:700}
+.mapa-efectos p{overflow-wrap:anywhere}
+.mapa-punto.gm-old,.gm-etq.antigua .gm-marca{border:2px dashed var(--ink-2);background:var(--surface)}
+.mapa-avisos li{padding:0;display:block;border:0}
+.mapa-avisos li+li{border-top:1px solid var(--line)}
+.mapa-avisos li .srow{border:0;min-height:48px}
+.gm-av{padding:0;cursor:pointer}
+.gm-av.sel,.gm-av:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.public-nav .tv-auth > a[aria-current="page"],.public-nav .tv-panel-pie > a[aria-current="page"]{background:var(--primary-soft)}
+@media(max-width:780px){.mapa-saltar{display:inline-flex;min-height:40px}}
+@media(max-width:780px){
+ .mapa-filtros:has(.mapa-saltar){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}
+ .mapa-filtros:has(.mapa-saltar) .mapa-capas{justify-self:start}
+ .mapa-filtros:has(.mapa-saltar) .mapa-chips{grid-column:1/-1;grid-row:2}
+ .mapa-saltar{grid-column:2;grid-row:1;padding-inline:10px}
+}
+@media(max-width:400px){.mapa-saltar span{display:none}}

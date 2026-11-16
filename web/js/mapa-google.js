@@ -9,13 +9,44 @@
   const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const posicion = ([lng, lat]) => ({ lat, lng });
   const colorNivel = nivel => css(nivel === 'none' ? '--lv-none' : '--lv-' + nivel);
+  const temaActual = () => document.documentElement.dataset.tema === 'oscuro' ? 'oscuro' : 'claro';
+
+  const PALETAS = {
+    claro: {
+      terreno: '#eef4f1', manzanas: '#e8efec', parques: '#d4e6dc', agua: '#acd7dd',
+      calle: '#ffffff', avenida: '#fcfdfc', borde: '#cbdad7', carretera: '#b3c8c5',
+      texto: '#365154', halo: '#f6faf8', textoAgua: '#265968',
+    },
+    oscuro: {
+      terreno: '#1b2a2c', manzanas: '#223438', parques: '#263e35', agua: '#132e39',
+      calle: '#3d5255', avenida: '#536d70', borde: '#253b3e', carretera: '#647e80',
+      texto: '#ccdfde', halo: '#19282b', textoAgua: '#9ebdcb',
+    },
+  };
+
+  function estiloCallejero({ terreno, manzanas, parques, agua, calle, avenida, borde, carretera, texto, halo, textoAgua }) {
+    return [
+      { elementType: 'geometry', stylers: [{ color: terreno }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: texto }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: halo }] },
+      { featureType: 'landscape.man_made', elementType: 'geometry.fill', stylers: [{ color: manzanas }] },
+      { featureType: 'poi.park', elementType: 'geometry.fill', stylers: [{ color: parques }] },
+      { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: calle }] },
+      { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: borde }] },
+      { featureType: 'road.arterial', elementType: 'geometry.fill', stylers: [{ color: avenida }] },
+      { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: carretera }] },
+      { featureType: 'water', elementType: 'geometry.fill', stylers: [{ color: agua }] },
+      { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: textoAgua }] },
+    ];
+  }
 
   const contenedor = document.createElement('div');
   contenedor.id = 'gmap';
 
   let estado = clave && !/pon_aqui/i.test(clave) ? 'pendiente' : 'sin-clave';
   let mapa, ambito, timer, Etiqueta;
-  let ultimaFirma, ultimaSeleccion;
+  let ultimaFirma, ultimaSeleccion, ultimoAviso, estiloMapa;
   const etiquetasZonas = new Map();
   let avisos = [];
 
@@ -50,6 +81,14 @@
     mapa.fitBounds(ambito, { top: 36, bottom: 36, left: 32, right: 32 });
   }
 
+  function actualizarCallejero() {
+    if (mapId) return;
+    const estilo = mapa.getMapTypeId() === google.maps.MapTypeId.ROADMAP ? temaActual() : null;
+    if (estilo === estiloMapa) return;
+    estiloMapa = estilo;
+    mapa.setOptions({ styles: estilo ? estiloCallejero(PALETAS[estilo]) : [] });
+  }
+
   function crear() {
     const opciones = {
       center: { lat: 39.002, lng: -0.165 },
@@ -67,9 +106,14 @@
       },
     };
     if (mapId) opciones.mapId = mapId;
+    else {
+      estiloMapa = temaActual();
+      opciones.styles = estiloCallejero(PALETAS[estiloMapa]);
+    }
     mapa = new google.maps.Map(contenedor, opciones);
     mapa.data.addGeoJson(window.RespiraGrauPlatja);
     mapa.addListener('zoom_changed', () => contenedor.classList.toggle('gmap-detalle', mapa.getZoom() >= 16));
+    mapa.addListener('maptypeid_changed', actualizarCallejero);
 
     ambito = new google.maps.LatLngBounds();
     mapa.data.forEach(feature => feature.getGeometry().forEachLatLng(p => ambito.extend(p)));
@@ -117,11 +161,12 @@
       const z = R().byZ(id);
       const nivel = zonaMapa(z).l;
       const seleccionada = S.sel === id;
+      const antigua = est(z) === 'old';
       const color = colorNivel(nivel);
       return {
         visible: visibles.has(id),
         strokeColor: color,
-        strokeOpacity: seleccionada ? 1 : .92,
+        strokeOpacity: seleccionada ? 1 : antigua ? .65 : .92,
         strokeWeight: seleccionada ? 4 : 2,
         fillColor: color,
         fillOpacity: seleccionada ? .55 : nivel === 'none' ? .17 : .32,
@@ -134,7 +179,7 @@
       const seleccionada = S.sel === z.id;
       const antigua = est(z) === 'old';
       boton.hidden = !visibles.has(z.id);
-      boton.className = 'gm-etq gm-' + zm.l + (seleccionada ? ' sel' : '');
+      boton.className = 'gm-etq gm-' + zm.l + (antigua ? ' antigua' : '') + (seleccionada ? ' sel' : '');
       boton.setAttribute('aria-pressed', String(seleccionada));
       boton.setAttribute('aria-label', z.n + ', ' + zm.texto + (antigua ? ', dato antiguo' : ''));
       boton.innerHTML = `<span class="gm-marca" aria-hidden="true"></span>
@@ -144,13 +189,19 @@
 
   function dibujarAvisos(mostrar) {
     avisos.forEach(etiqueta => etiqueta.setMap(null));
-    const { AVISOS, PERC, avOk } = R();
+    const { AVISOS, PERC, S, avOk } = R();
     avisos = mostrar ? AVISOS.filter(avOk).map(a => {
-      const el = document.createElement('div');
-      el.className = 'gm-av';
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.dataset.act = 'verPercepcion';
+      el.dataset.arg = a.id;
+      el.setAttribute('aria-pressed', String(S.avSel === a.id));
+      el.className = 'gm-av' + (S.avSel === a.id ? ' sel' : '');
       el.style.background = colorNivel(['', 'bajo', 'medio', 'alto'][a.niv]);
       el.textContent = { ruido: 'R', temp: 'T', aire: 'A' }[a.tipo];
-      el.title = PERC[a.tipo].n + ' · ' + a.dir;
+      const nombre = PERC[a.tipo].n + ', ' + PERC[a.tipo].lv[a.niv - 1] + ' · ' + a.dir;
+      el.title = nombre;
+      el.setAttribute('aria-label', nombre);
       const etiqueta = new Etiqueta(a.ancla, el);
       etiqueta.setMap(mapa);
       return etiqueta;
@@ -158,9 +209,10 @@
   }
 
   function actualizar() {
+    actualizarCallejero();
     const { S, byZ } = R();
     const comunidad = S.layer === 'comunidad';
-    const firma = [S.layer, S.mag, S.q, S.sel, S.avt, S.avf, document.documentElement.dataset.tema].join('|');
+    const firma = [S.layer, S.mag, S.q, S.sel, S.avt, S.avf, S.avSel, document.documentElement.dataset.tema].join('|');
     if (firma !== ultimaFirma) {
       ultimaFirma = firma;
       dibujarZonas(!comunidad);
@@ -169,7 +221,12 @@
     if (!comunidad && S.sel && S.sel !== ultimaSeleccion) {
       mapa.panTo(posicion(byZ(S.sel).ancla));
     }
+    if (comunidad && S.avSel && S.avSel !== ultimoAviso) {
+      const aviso = R().AVISOS.find(a => a.id === S.avSel);
+      if (aviso) mapa.panTo(posicion(aviso.ancla));
+    }
     ultimaSeleccion = S.sel;
+    ultimoAviso = S.avSel;
   }
 
   window.RespiraMapa = {
@@ -198,6 +255,7 @@
     reset() {
       if (!mapa) return;
       R().S.sel = null;
+      R().S.avSel = null;
       encuadrar();
       R().render();
     },
