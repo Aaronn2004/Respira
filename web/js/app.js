@@ -588,6 +588,7 @@ const iconoParque=pausa=>sv(pausa?'<path d="m8 5 12 7-12 7z"/>':'<path d="M9 6v1
 const etiquetaParque=pausa=>pausa?'Reanudar animación del parque':'Pausar animación del parque';
 function vInicio(){
  const origen='Datos simulados del Grau i Platja';
+ const escalaParques={bajo:'Favorable',medio:'Intermedio',alto:'Desfavorable'};
  const pausa=TV.pausaEn!==null;
  const aytosVerificados=window.RespiraDatos?.ayuntamientosVerificados();
  const MED=[['o3','Ozono','Se forma con el sol y el tráfico. Irrita ojos y vías respiratorias, sobre todo las tardes de verano.'],['temp','Temperatura','Las calles sin sombra acumulan calor. Medirla por zonas muestra dónde faltan árboles y refugios climáticos.'],['ruido','Ruido','El tráfico y el ocio nocturno afectan al descanso y a la salud. Se mide en decibelios.']];
@@ -627,20 +628,39 @@ function vInicio(){
  <section class="tv-sec" id="parques" aria-labelledby="portada-parques"><div class="tv-in">
   <div class="tv-head rv">
    <h2 id="portada-parques">Los parques ahora, de mejor a peor</h2>
-   <p>Ordenados por su estado general en el mapa. La etiqueta de nivel resume el ozono, la temperatura y el ruido de cada parque.</p>
+   <p>Consulta las medias de ozono, temperatura y ruido de la última hora.</p>
    <p class="tv-datos" role="status">${origen}</p>
   </div>
-  <ul class="pq-leyenda" aria-label="Leyenda de niveles">
-   ${Object.entries(NIV).map(([clave,nombre])=>`<li><i class="pq-punto pq-punto-${clave}" aria-hidden="true"></i>${nombre}</li>`).join('')}
-   <li class="pq-umbrales"><a class="pq-todos" href="#colores">Ver umbrales por medición</a></li>
-  </ul>
+  <div class="pq-guia">
+   <ul class="pq-claves" aria-label="Escala de Respira">
+    ${Object.entries(escalaParques).map(([clave,nombre])=>`<li><span class="badge b-${clave}">${nombre}</span></li>`).join('')}
+   </ul>
+   <p>En la escala de Respira, menos ozono, menos calor y menos ruido son más favorables. La etiqueta del parque combina las mediciones disponibles.</p>
+   <details class="pq-limites">
+    <summary>Ver rangos de cada medición</summary>
+    <table class="pq-leyenda" aria-label="Rangos por medición">
+     <thead><tr><th scope="col">Medición</th>
+      ${Object.values(escalaParques).map(nombre=>`<th scope="col">${nombre}</th>`).join('')}
+     </tr></thead>
+     <tbody>${Object.entries(MAG).map(([clave,{n,u}])=>{
+      const [medio,alto]=LIM[clave].map(valor=>(clave==='o3'?fmt(valor,clave):String(valor)).replace('.',','));
+      return `<tr><th scope="row">${n} <small>${u}</small></th><td>Menos de ${medio}</td><td>${medio} a menos de ${alto}</td><td>${alto} o más</td></tr>`;
+     }).join('')}</tbody>
+    </table>
+    <a class="pq-todos" href="#colores">Más sobre los niveles y sus efectos</a>
+   </details>
+  </div>
   ${parques.length?'':'<p class="note">Ahora mismo ningún parque tiene datos de la última hora.</p>'}
   <div class="pq-fila">${parques.map(z=>{
    const nivelZona=nivelGeneral(z);
    return `<button type="button" class="pq" data-act="verZona" data-arg="${esc(z.id)}">
-   <span class="pq-cab"><b>${esc(z.n)}</b><span class="badge b-${nivelZona}">Nivel ${NIV[nivelZona].toLowerCase()}</span></span>
+   <span class="pq-cab"><b>${esc(z.n)}</b><span class="badge b-${nivelZona}">${escalaParques[nivelZona]}</span></span>
    <svg class="pq-sil" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="${esc(siluetaZona(z))}" class="pq-g-${nivelZona}"/></svg>
-   <span class="pq-vals">${Object.keys(MAG).map(k=>`<span><small>${MAG[k].n}</small>${z[k]==null?'<span>Sin datos</span>':`<b class="pq-v-${nivel(k,z[k])}">${fmt(z[k],k)}</b> <small>${MAG[k].u}</small>`}</span>`).join('')}</span>
+   <span class="pq-vals">${Object.entries(MAG).map(([k,{n,u}])=>{
+    const valor=z[k],estado=nivel(k,valor);
+    return `<span><span>${n}</span><b class="pq-v-${estado}">${escalaParques[estado]||'Sin datos'}</b>
+     ${valor==null?'':`<small>${fmtSerie(valor,k).replace('.',',')} ${u}</small>`}</span>`;
+   }).join('')}</span>
    <span class="pq-nota">Media simulada de la última hora</span>
   </button>`}).join('')}</div>
   <p class="tv-parques-enlace"><a class="pq-todos" href="#mapa">Ver todos en el mapa</a></p>
@@ -652,8 +672,8 @@ function vInicio(){
   ${EF_B.map(e=>{const k=e.k,v=mediaCosta(k),l=LIM[k],txt=(MED.find(m=>m[0]===k)||[])[2]||'';return `<div class="ic-panel" role="tabpanel" id="icp-${k}" aria-labelledby="ict-${k}"${S.tabIni===k?'':' hidden'}>
    <div><h3>${e.lema}</h3><p class="tv-mut">${txt}</p>
     <div class="ic-escala" aria-hidden="true"><span class="b"></span><span class="m"></span><span class="a"></span>${v!=null?`<i style="left:${escalaPos(k,v).toFixed(1)}%"></i>`:''}</div>
-    <div class="ic-et"><span><span class="badge b-bajo">Bajo</span><small>menos de ${fmt(l[0],k)} ${MAG[k].u}</small></span><span><span class="badge b-medio">Medio</span><small>de ${fmt(l[0],k)} a menos de ${fmt(l[1],k)} ${MAG[k].u}</small></span><span><span class="badge b-alto">Alto</span><small>desde ${fmt(l[1],k)} ${MAG[k].u}</small></span></div>
-    <p class="ic-ahora">${v!=null?`Media simulada del Grau i Platja: <b class="mono">${fmt(v,k)} ${MAG[k].u}</b>, nivel ${NIV[nivel(k,v)].toLowerCase()}.`:'Sin valores simulados.'}</p></div>
+    <div class="ic-et"><span><span class="badge b-bajo">${escalaParques.bajo}</span><small>menos de ${fmt(l[0],k)} ${MAG[k].u}</small></span><span><span class="badge b-medio">${escalaParques.medio}</span><small>de ${fmt(l[0],k)} a menos de ${fmt(l[1],k)} ${MAG[k].u}</small></span><span><span class="badge b-alto">${escalaParques.alto}</span><small>desde ${fmt(l[1],k)} ${MAG[k].u}</small></span></div>
+    <p class="ic-ahora">${v!=null?`Media simulada del Grau i Platja: <b class="mono">${fmt(v,k)} ${MAG[k].u}</b>, nivel ${escalaParques[nivel(k,v)].toLowerCase()}.`:'Sin valores simulados.'}</p></div>
    <div><ol class="ic-pasos">${e.pasos.map(([nv,val,t,x])=>`<li class="${nv}"><b>${EF_NV[nv]}</b><span>${x}</span><small class="mono">${val}${t?', '+t:''}</small></li>`).join('')}</ol>
     <p class="ic-hacer"><b>Qué hacer:</b> ${e.hacer}.</p><p class="ic-hacer"><b>Más sensibles:</b> ${e.peor.join(', ').toLowerCase()}.</p></div></div>`}).join('')}
   <p class="tv-nota">${EF_AVISO_B} <a class="pq-todos" href="#valores">Guía completa en «Cómo funciona»</a>.</p>
@@ -1054,34 +1074,46 @@ function vAcceso(rec){
   return accesoMunicipal('Recuperar contraseña','Te enviaremos un enlace para crear una nueva.',contenido);
  }
  const demoVisible=!apiConfigurada||window.RESPIRA_CONFIG?.MOSTRAR_CUENTAS_PRUEBA===true;
- const contenido=`<form id="f-login" novalidate>
-  <h2>Iniciar sesión</h2>
-  ${S.e.login?`<div class="alert bad" role="alert">${I.alert}<span>${S.e.login}</span></div>`:''}
-  <div class="field">
-   <label for="l-mail">Correo municipal</label>
-   <input class="input" id="l-mail" type="email" data-bind="f.mail" value="${esc(S.f.mail||'')}" placeholder="nombre@ayto.es" autocomplete="username" autocapitalize="none" spellcheck="false" required ${inv('mail')}>
-   ${err('mail')}
-  </div>
-  <div class="field">
-   <label for="l-pass">Contraseña</label>
-   <div class="acceso-clave">
-    <input class="input" id="l-pass" type="${S.showPass?'text':'password'}" data-bind="f.pass" value="${esc(S.f.pass||'')}" autocomplete="current-password" required ${inv('pass')}>
-    <button type="button" class="acceso-ver" id="l-ver" data-act="showPass" aria-controls="l-pass" aria-label="${S.showPass?'Ocultar':'Mostrar'} contraseña">${S.showPass?'Ocultar':'Mostrar'}</button>
+ return `<main class="login">
+  <aside class="art">
+   <a class="logo" href="#inicio" aria-label="Respira, inicio">${LOGO(36,'#FFFFFF','#FFFFFF','#5FC4C0')}</a>
+   <div class="login-presentacion">
+    <h2>Panel de gestión de sensores, préstamos y puntos</h2>
+    <p>Un servicio de ${NODIA(22,'#FFFFFF')}<b>NODIA</b></p>
    </div>
-   ${err('pass')}
+   <a class="login-mapa" href="#mapa">← Volver al mapa público</a>
+  </aside>
+  <div class="formside">
+   <form id="f-login" novalidate>
+    <div><span class="lbl">Acceso restringido</span><h1 class="login-titulo">Personal municipal</h1></div>
+    ${S.e.login?`<div class="alert bad" role="alert">${I.alert}<span>${S.e.login}</span></div>`:''}
+    <div class="field">
+     <label for="l-mail">Correo</label>
+     <input class="input" id="l-mail" type="email" data-bind="f.mail" value="${esc(S.f.mail||'')}" placeholder="nombre@ayto.es" autocomplete="username" autocapitalize="none" spellcheck="false" required ${inv('mail')}>
+     ${err('mail')}
+    </div>
+    <div class="field">
+     <label for="l-pass">Contraseña</label>
+     <div class="acceso-clave">
+      <input class="input" id="l-pass" type="${S.showPass?'text':'password'}" data-bind="f.pass" value="${esc(S.f.pass||'')}" autocomplete="current-password" required ${inv('pass')}>
+      <button type="button" class="link acceso-ver" id="l-ver" data-act="showPass" aria-controls="l-pass" aria-label="${S.showPass?'Ocultar':'Mostrar'} contraseña">${S.showPass?'Ocultar':'Mostrar'}</button>
+     </div>
+     ${err('pass')}
+    </div>
+    <button class="btn" type="submit">Entrar</button>
+    <a class="login-recuperar" href="#recuperar">¿Has olvidado la contraseña?</a>
+    ${demoVisible?`<section class="demo-creds acceso-prueba" aria-labelledby="acceso-prueba-titulo">
+     <h3 id="acceso-prueba-titulo">Acceso de prueba</h3>
+     <ul>
+      ${CUENTAS_PANEL_PRUEBA.map(cuenta=>`<li>
+       <div><b>${ROL[cuenta.r]}</b><br><code>${esc(cuenta.e)}</code> · <code>${esc(cuenta.p)}</code></div>
+       <button class="btn sm ghost" type="button" data-act="usarCuentaPrueba" data-arg="${cuenta.r}" aria-label="Usar cuenta de ${ROL[cuenta.r]}">Usar</button>
+      </li>`).join('')}
+     </ul>
+    </section>`:''}
+   </form>
   </div>
-  <button class="btn" type="submit">Entrar</button>
-  <a class="acceso-enlace" href="#recuperar">¿Has olvidado la contraseña?</a>
- </form>${demoVisible?`<section class="acceso-prueba" aria-labelledby="acceso-prueba-titulo">
-  <h3 id="acceso-prueba-titulo">Acceso de prueba</h3>
-  <ul>
-   ${CUENTAS_PANEL_PRUEBA.map(cuenta=>`<li>
-    <div><b>${ROL[cuenta.r]}</b><code>${esc(cuenta.e)}</code><code>${esc(cuenta.p)}</code></div>
-    <button class="btn sm ghost" type="button" data-act="usarCuentaPrueba" data-arg="${cuenta.r}" aria-label="Usar cuenta de ${ROL[cuenta.r]}">Usar</button>
-   </li>`).join('')}
-  </ul>
- </section>`:''}`;
- return accesoMunicipal('Personal municipal','Panel de gestión de sensores, préstamos y puntos.',contenido);
+ </main>`;
 }
 /* ---------- panel municipal ---------- */
 const pendDev=()=>LOANS.filter(l=>!l.fin&&l.ini!==undefined&&(l.limMs!=null?Date.now()>l.limMs:/^1 nov|^31 oct/.test(l.ini)));
@@ -1090,19 +1122,22 @@ const sinDatos=s=>['activo','prestado'].includes(s.est)&&(s.ult==null||s.ult>144
 function pshell(cur,inner){
  const usuario=S.user;
  const secciones=[
-  ['panel','Flota'],
-  ['panel-sensores','Sensores'],
-  ['panel-prestamos','Préstamos',pendDev().length],
-  ['panel-puntos','Puntos',SOSP.filter(d=>d.estado==='pend').length],
-  ['panel-regalos','Regalos y canjes'],
-  ['panel-trabajadores','Trabajadores'],
+  ['panel','Flota',I.grid],
+  ['panel-sensores','Sensores',I.pin],
+  ['panel-prestamos','Préstamos',I.box,pendDev().length],
+  ['panel-puntos','Puntos',I.coin,SOSP.filter(d=>d.estado==='pend').length],
+  ['panel-regalos','Regalos y canjes',I.gift],
+  ['panel-trabajadores','Trabajadores',I.users,TRAB().filter(t=>t.estado==='pendiente').length],
  ].filter(([ruta])=>ACCESS[usuario.r].includes(ruta));
- const enlaces=secciones.map(([ruta,nombre,pendientes])=>{
+ const enlaces=secciones.map(([ruta,nombre,icono,pendientes])=>{
   const activa=cur===ruta||(ruta==='panel-sensores'&&cur==='panel-editar');
-  return `<a href="#${ruta}"${activa?' aria-current="page"':''}>${nombre}${pendientes?`<span class="panel-pendientes" aria-label="${pendientes} pendientes">${pendientes}</span>`:''}</a>`;
+  return `<a href="#${ruta}"${activa?' aria-current="page"':''}>${icono}${nombre}${pendientes?`<span class="panel-pendientes" aria-label="${pendientes} pendientes">${pendientes}</span>`:''}</a>`;
  }).join('');
  const rol=ROL[usuario.r]+(usuario.punto?' · '+esc(usuario.punto):'');
- const cuenta=`<div class="panel-cuenta"><b>${esc(usuario.n)}</b><span>${rol}</span>
+ const marca=`<a class="logo panel-marca" href="#${HOME[usuario.r]}" aria-label="Respira, panel municipal">
+  ${LOGO(26,'#FFFFFF','#FFFFFF','#5FC4C0')}<span>Panel municipal</span></a>`;
+ const cuenta=movil=>`<div class="panel-cuenta"><b>${esc(usuario.n)}</b><span>${rol}</span>
+  <div class="panel-cuenta-enlaces"><a href="#mapa">Ver web pública</a>${movil?'':botonTema(false)}</div>
   <button type="button" class="link" data-act="logout">Cerrar sesión</button></div>`;
  const datos=window.RespiraDatos?.estadoPanel(cur,usuario.r);
  const aviso=datos?.error?`<div class="alert warn" role="status">${I.alert}<div>
@@ -1110,26 +1145,22 @@ function pshell(cur,inner){
   <button type="button" class="btn sm sec" data-act="reintentarPanel">Reintentar</button>
  </div></div>`:'';
  return `<div class="panel-municipal" data-ui>
-  <header class="tv tvh panel-cabecera">
+  <header class="tv tvh panel-cabecera" data-tv-mobile>
    <div class="tv-nav">
-    <div class="panel-marca">
-     <a class="tv-marca" href="#inicio" aria-label="Respira, inicio"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">${SYM()}</svg>Respira</a>
-     <span>Panel municipal</span>
-    </div>
+    ${marca}
     ${botonTema(true)}
     <button type="button" class="tv-burger" data-tv-mobile aria-controls="panel-menu" aria-expanded="false" aria-label="Abrir menú">${TV_BURGER(false)}</button>
-    <div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm sec" href="#mapa">Ver web pública</a></div>
    </div>
    <div class="tv-panel" id="panel-menu" data-tv-mobile inert>
     <nav class="panel-enlaces" aria-label="Panel municipal">${enlaces}</nav>
-    <a class="btn sm sec" href="#mapa">Ver web pública</a>
-    ${cuenta}
+    ${cuenta(true)}
    </div>
   </header>
   <div class="panel">
    <aside class="pside" data-tv-desktop>
+    ${marca}
     <nav class="panel-enlaces" aria-label="Panel municipal">${enlaces}</nav>
-    ${cuenta}
+    ${cuenta(false)}
    </aside>
    <main class="pmain" id="panel-contenido">${aviso}${inner}</main>
   </div>
@@ -1394,6 +1425,7 @@ function vTrabajadores(){
  if(!S.user||S.user.r!=='admin')return '';
  const f=S.f;
  const ok=S.altaOk;
+ const enviando=window.RespiraDatos?.altaTrabajadorEnCurso();
  const avisoCorreo=ok?.demo?'Invitación de demostración.':ok?.correoEnviado===true
   ?`Enlace enviado a <b>${esc(ok.email)}</b>.`
   :ok?.correoEnviado===false?'El servidor no pudo enviar el correo. Comparte el enlace por un canal municipal.'
@@ -1414,7 +1446,7 @@ function vTrabajadores(){
   </div></div>`:''}
   <form class="panel-formulario panel-edicion" id="f-trab" novalidate>
    <h2>Dar de alta un trabajador</h2>
-   <div class="formgrid">
+   <fieldset class="panel-grupo formgrid" aria-label="Datos del trabajador"${enviando?' disabled':''}>
     <div class="field"><label for="t-n">Nombre y apellidos</label>
      <input class="input" id="t-n" data-bind="f.tn" value="${esc(f.tn||'')}" autocomplete="off" maxlength="80" required ${inv('tn')}>${err('tn')}</div>
     <div class="field"><label for="t-e">Correo municipal</label>
@@ -1424,9 +1456,10 @@ function vTrabajadores(){
     <div class="field"><label for="t-s">Servicio</label>
      <select class="input" id="t-s" data-bind="f.ts" required ${inv('ts')}><option value="">Elige un servicio…</option>
       ${SERVICIOS.map(x=>`<option${f.ts===x?' selected':''}>${x}</option>`).join('')}</select>${err('ts')}</div>
-   </div>
+   </fieldset>
    <p class="panel-nota">El trabajador crea su contraseña con el enlace de activación. Su cuenta sirve para usar la app y carece de permisos de administración. La asignación se hace en <a href="#panel-sensores">Sensores</a>.</p>
-   <button type="submit" class="btn">Dar de alta</button>
+   <button type="submit" class="btn"${enviando?' disabled':''}>${enviando?'Registrando…':'Dar de alta'}</button>
+   ${enviando?'<span class="hint" role="status">Se está enviando el alta.</span>':''}
   </form>
   ${panelTabla('Cuentas de trabajadores',['Trabajador','ID de cuenta','Nº empleado','Servicio','Alta','Estado','Acciones'],filas,'Todavía no hay trabajadores registrados.')}`);
 }

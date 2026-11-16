@@ -1,46 +1,67 @@
-/* Panel municipal: tipografía, superficies y acento compartidos con Respira. */
+/* Panel municipal: navegación verde y contenido compacto. */
 .panel-municipal {
   background: var(--bg);
   min-height: 100svh;
 }
 
-.panel-cabecera .tv-nav {
+.panel-municipal .panel-cabecera {
+  --tv-panel: var(--side);
+}
+
+.panel-municipal .panel-cabecera .tv-nav {
   padding-inline: max(var(--margen-lateral), env(safe-area-inset-left)) max(var(--margen-lateral), env(safe-area-inset-right));
+  background: var(--side);
+  border-bottom-color: var(--side-hover);
 }
 
-.panel-marca {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-width: 0;
+.panel-municipal .panel-marca {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: fit-content;
 }
 
-.panel-marca > span {
-  border-inline-start: 1px solid var(--line);
-  padding-inline-start: 16px;
-  color: var(--ink-2);
-  font-size: .9rem;
-  line-height: 1.2;
+.panel-municipal .panel-marca > span {
+  color: var(--side-ink);
+  font-size: .72rem;
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.panel-municipal :is(.pside, .panel-cabecera) .tv-tema {
+  color: var(--side-ink);
+  border-color: var(--side-hover);
+}
+
+.panel-municipal .panel-cabecera .tv-burger {
+  color: var(--side-ink);
+}
+
+.panel-municipal :is(.pside, .panel-cabecera) :is(a, button):focus-visible {
+  outline-color: var(--side-ink);
+}
+
+.panel-municipal .panel-cabecera .tv-panel {
+  color: var(--side-ink);
+  border-color: var(--side-hover);
 }
 
 .panel-municipal .panel {
-  grid-template-columns: clamp(168px, 17vw, 222px) minmax(0, 1fr);
-  min-height: calc(100svh - 65px);
+  grid-template-columns: clamp(185px, 21vw, 250px) minmax(0, 1fr);
+  min-height: 100svh;
 }
 
 .panel-municipal .pside {
   position: sticky;
-  top: 65px;
-  height: calc(100svh - 65px);
-  padding: 26px 14px;
+  top: 0;
+  height: 100svh;
+  padding: 20px 14px;
   flex-direction: column;
   flex-wrap: nowrap;
   align-self: start;
-  gap: 24px;
+  gap: 4px;
   overflow-y: auto;
-  background: var(--surface);
-  color: var(--ink);
-  border-inline-end: 1px solid var(--line);
 }
 
 .panel-enlaces {
@@ -49,27 +70,29 @@
   gap: 3px;
 }
 
-.panel-municipal .panel-enlaces a {
+.panel-municipal :is(.pside, .panel-cabecera) .panel-enlaces a {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   min-height: 44px;
   padding: 8px 12px;
-  border-radius: 8px;
-  color: var(--ink-2);
+  border-radius: 10px;
+  color: var(--side-ink);
   text-decoration: none;
-  font-weight: 650;
+  font-weight: 600;
 }
 
-.panel-municipal .panel-enlaces a:hover {
-  background: var(--surface-2);
-  color: var(--ink);
+.panel-enlaces svg {
+  flex: none;
 }
 
-.panel-municipal .panel-enlaces a[aria-current="page"] {
-  background: var(--primary-soft);
-  color: var(--primary-deep);
+.panel-municipal :is(.pside, .panel-cabecera) .panel-enlaces a:hover {
+  background: var(--side-hover);
+}
+
+.panel-municipal :is(.pside, .panel-cabecera) .panel-enlaces a[aria-current="page"] {
+  background: var(--primary);
+  color: var(--primary-ink);
 }
 
 .panel-pendientes {
@@ -77,6 +100,7 @@
   justify-content: center;
   align-items: center;
   min-width: 1.55em;
+  margin-inline-start: auto;
   padding: 1px 5px;
   border-radius: 5px;
   background: var(--lv-medio-soft);
@@ -91,25 +115,35 @@
   gap: 2px;
   margin-top: auto;
   padding: 13px 11px 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--side-hover);
   font-size: .88rem;
   overflow-wrap: anywhere;
 }
 
 .panel-cuenta > span {
-  color: var(--ink-2);
+  color: var(--side-ink);
+}
+
+.panel-cuenta-enlaces {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.panel-municipal :is(.pside, .panel-cabecera) .panel-cuenta-enlaces > a {
+  padding: 8px 0;
+  color: #9ee3c9;
+  font-size: .9rem;
+  text-decoration: underline;
+  text-underline-offset: .2em;
 }
 
 .panel-cuenta > button {
   align-self: flex-start;
   min-height: 40px;
-  color: var(--primary);
+  color: #9ee3c9;
   font-size: .9rem;
-}
-
-.panel-municipal .pmain {
-  padding: clamp(22px, 4vw, 46px) var(--margen-lateral) 54px;
-  gap: clamp(18px, 2.8vw, 30px);
 }
 
 .panel-municipal .pmain > * {
@@ -125,26 +159,21 @@
 }
 
 .panel-municipal .panel-titulo h1 {
-  font-size: clamp(2rem, 3.6vw, 3.4rem);
-  line-height: 1.06;
-  letter-spacing: -.045em;
+  font-size: clamp(26px, 3.4vw, 38px);
+  line-height: 1.15;
   text-wrap: pretty;
 }
 
 .panel-titulo p {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   color: var(--ink-2);
-  font-size: 1rem;
+  font-size: .9rem;
 }
 
 .panel-indicadores {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  padding: 7px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  gap: 14px;
 }
 
 .panel-indicadores > * {
@@ -152,21 +181,21 @@
   flex-direction: column;
   justify-content: flex-start;
   align-items: flex-start;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
-  padding: 12px clamp(9px, 2vw, 22px);
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
   text-align: left;
 }
 
 .panel-indicadores > button {
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: none;
   cursor: pointer;
 }
 
 .panel-indicadores > button:hover {
-  background: var(--surface-2);
+  border-color: var(--primary);
 }
 
 .panel-indicadores > button[aria-pressed="true"] {
@@ -175,14 +204,14 @@
 }
 
 .panel-indicadores span {
-  color: var(--ink);
+  color: var(--ink-2);
   font-weight: 650;
   font-size: .92rem;
   line-height: 1.25;
 }
 
 .panel-indicadores strong {
-  font: 750 clamp(1.75rem, 3vw, 2.7rem)/1 var(--f-display);
+  font: 700 clamp(1.4rem, 3vw, 1.875rem)/1.1 var(--f-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -223,14 +252,14 @@
 }
 
 .panel-buscar {
-  width: min(100%, 340px);
+  width: min(100%, 240px);
 }
 
 .panel-tabla {
   overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
 }
 
 .panel-registros {
@@ -244,17 +273,14 @@
 }
 
 .panel-tabla th, .panel-tabla td {
-  padding: 11px clamp(10px, 1.4vw, 16px);
+  padding: 10px clamp(10px, 1.3vw, 14px);
   text-align: start;
   vertical-align: top;
 }
 
 .panel-tabla th {
   color: var(--ink-2);
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: .86rem;
-  background: var(--surface);
+  background: var(--surface-2);
 }
 
 .panel-tabla td {
@@ -303,9 +329,9 @@
   display: flex;
   flex-direction: column;
   gap: 15px;
-  padding: clamp(14px, 2.2vw, 26px);
+  padding: clamp(16px, 2.2vw, 20px);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface);
 }
 
@@ -484,13 +510,10 @@
 
 @media (min-width: 1071px) {
   .panel-filtros {
-    display: grid;
-    grid-template-columns: minmax(195px, .7fr) minmax(0, 2fr);
-    gap: 12px 22px;
-  }
-
-  .panel-buscar {
-    grid-row: span 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
   }
 }
 
@@ -550,7 +573,6 @@
   }
 
   .panel-municipal #panel-menu {
-    inset-inline: 0;
     max-height: calc(100svh - 86px);
     overflow: auto;
   }
@@ -565,22 +587,12 @@
 }
 
 @media (max-width: 430px) {
-  .panel-marca {
-    gap: 8px;
-  }
-
-  .panel-marca > span {
-    max-width: 8ch;
-    padding-inline-start: 8px;
-    font-size: .8rem;
-  }
-
   .panel-cabecera .tv-nav {
     gap: 8px;
   }
 
   .panel-indicadores {
-    padding: 3px;
+    gap: 6px;
   }
 
   .panel-indicadores > * {

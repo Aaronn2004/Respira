@@ -304,6 +304,9 @@
   // ==============================================================
   // Acciones del panel (las llama app.js después de validar)
   // ==============================================================
+  let altaTrabajadorPendiente = null;
+  D.altaTrabajadorEnCurso = () => altaTrabajadorPendiente !== null && altaTrabajadorPendiente === R().S.user;
+
   const ACC = {
     async login({ email, clave }) {
       const S = R().S;
@@ -455,19 +458,33 @@
     async trabajador({ nombre, email, num_empleado, servicio }) {
       const S = R().S;
       const usuario = S.user;
+      if (usuario?.r !== 'admin' || D.altaTrabajadorEnCurso()) return;
+      altaTrabajadorPendiente = usuario;
+      R().render();
+      let respuesta, error;
       try {
-        const j = await pedir('/panel/trabajadores', 'POST', { nombre, email, num_empleado, servicio });
+        respuesta = await pedir('/panel/trabajadores', 'POST', { nombre, email, num_empleado, servicio });
         if (S.user !== usuario) return;
         await cargarPanel();
-        if (S.user !== usuario) return;
-        const t = j.trabajador;
-        if (S.user?.r === 'admin' && location.hash === '#panel-trabajadores') {
-          S.altaOk = { id:t.id, nombre:t.nombre, email:t.email, enlace:j.enlace, correoEnviado:j.correo_enviado };
-          S.f.tn = ''; S.f.te = ''; S.f.temp = ''; S.f.ts = '';
-          R().render();
-        }
-        R().toast(`Trabajador ${t.id} dado de alta`);
-      } catch (e) { if (S.user === usuario) mostrarError('trabajador', e); }
+      } catch (e) {
+        error = e;
+      } finally {
+        if (altaTrabajadorPendiente === usuario) altaTrabajadorPendiente = null;
+      }
+      if (S.user !== usuario) return;
+      const enFormulario = location.hash === '#panel-trabajadores';
+      if (error) {
+        if (enFormulario) mostrarError('trabajador', error);
+        else R().toast(error.message);
+        return;
+      }
+      const t = respuesta.trabajador;
+      S.f.tn = ''; S.f.te = ''; S.f.temp = ''; S.f.ts = '';
+      if (enFormulario) {
+        S.altaOk = { id:t.id, nombre:t.nombre, email:t.email, enlace:respuesta.enlace, correoEnviado:respuesta.correo_enviado };
+        R().render();
+      }
+      R().toast(`Trabajador ${t.id} dado de alta`);
     },
 
     async reenviar({ id }) {

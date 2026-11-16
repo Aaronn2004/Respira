@@ -332,6 +332,32 @@
   justify-self: start;
 }
 
+.login-presentacion p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  color: #b9cfc4;
+}
+
+.login-presentacion b {
+  color: #fff;
+  letter-spacing: .08em;
+}
+
+.login-mapa {
+  color: #9ee3c9;
+}
+
+.login-titulo {
+  font-size: 30px;
+}
+
+.login-recuperar {
+  align-self: center;
+  text-underline-offset: .22em;
+}
+
 .acceso-clave {
   position: relative;
 }
@@ -358,11 +384,6 @@
   background: var(--surface-2);
 }
 
-.acceso-prueba {
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-
 .acceso-prueba h3 {
   font-size: 1rem;
 }
@@ -382,9 +403,8 @@
   gap: 12px;
 }
 
-.acceso-prueba code {
-  display: block;
-  color: var(--ink-2);
+.acceso-prueba li > div {
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 

@@ -688,19 +688,24 @@ html{scrollbar-gutter:stable}
 .pq-sil{width:100%;height:84px;display:block;border-radius:12px;background:var(--bg)}
 .pq-sil path{stroke-width:2.5;vector-effect:non-scaling-stroke;fill:var(--primary-soft);stroke:var(--primary)}
 .pq-sil path.pq-g-bajo{fill:var(--lv-bajo-soft);stroke:var(--lv-bajo)}.pq-sil path.pq-g-medio{fill:var(--lv-medio-soft);stroke:var(--lv-medio)}.pq-sil path.pq-g-alto{fill:var(--lv-alto-soft);stroke:var(--lv-alto)}
-.pq-vals b{font-size:17px}
 .pq-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
 .pq-cab b{font-size:17px;line-height:1.3}
 .pq-cab .badge{flex-shrink:0}
-.pq-vals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;font-size:15px}
-.pq-vals small{color:var(--ink-2);font-size:13px}
-.pq-vals>span>small:first-child{display:block}
+.pq-vals{display:grid;gap:4px;width:100%;font-size:.8125rem}
+.pq-vals>span{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:baseline;gap:6px}
+.pq-vals small{min-width:8ch;text-align:end;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .pq-nota{margin-top:auto;font-size:13px;color:var(--ink-2)}
 .pq-v-bajo{color:var(--lv-bajo-ink)}.pq-v-medio{color:var(--lv-medio-ink)}.pq-v-alto{color:var(--lv-alto-ink)}
-.pq-leyenda{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;list-style:none;margin:0 0 16px;padding:0;color:var(--ink);font-size:.9rem}
-.pq-leyenda li{display:flex;align-items:center;gap:6px}
-.pq-punto{width:10px;height:10px;border-radius:50%}
-.pq-punto-bajo{background:var(--lv-bajo)}.pq-punto-medio{background:var(--lv-medio)}.pq-punto-alto{background:var(--lv-alto)}
+.pq-guia{margin:0 0 20px;padding:12px 0;border-block:1px solid var(--line);font-size:.9rem}
+.pq-claves{display:flex;flex-wrap:wrap;gap:6px 8px;margin:0 0 6px;padding:0;list-style:none}
+.pq-claves .badge{font-size:.8125rem}
+.pq-guia p{max-width:76ch;margin:0;color:var(--ink-2)}
+.pq-limites{width:min(100%,44rem);border:0}
+.pq-limites summary{width:fit-content;align-items:center;padding:8px 0;color:var(--primary)}
+.pq-leyenda{width:min(100%,44rem);margin:6px 0 10px;font-size:inherit}
+.pq-leyenda :is(th,td){padding:5px 8px 5px 0;text-align:start;vertical-align:top;white-space:normal}
+.pq-leyenda th{background:none;color:var(--ink);font-size:inherit;letter-spacing:0;text-transform:none}
+.pq-leyenda td,.pq-leyenda small{color:var(--ink-2)}
 .tv-head .tv-datos{color:var(--ink);font-size:.875rem;font-weight:650}
 .tv-parques-enlace{margin:18px 0 0}
 .tv .tv-port{display:block;margin:0;border-top:1px solid var(--line)}
@@ -711,6 +716,9 @@ html{scrollbar-gutter:stable}
 @media (max-width:600px){
   .pq{gap:8px;padding:12px 14px}
   .pq-sil{display:none}
+  .pq-leyenda{font-size:.8rem}
+  .pq-leyenda :is(th,td){padding-inline-end:3px;overflow-wrap:anywhere}
+  .pq-leyenda small{display:block}
 }
 :root .tv a.pq-todos{color:var(--primary);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .ic-tabs{display:inline-flex;gap:4px;padding:4px;border-radius:14px;background:var(--surface-2);margin-bottom:18px;max-width:100%;overflow-x:auto}
@@ -724,8 +732,9 @@ html{scrollbar-gutter:stable}
 .ic-escala{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;height:12px;margin-top:24px}
 .ic-escala span{border-radius:4px}.ic-escala .b{background:var(--lv-bajo)}.ic-escala .m{background:var(--lv-medio)}.ic-escala .a{background:var(--lv-alto)}
 .ic-escala i{position:absolute;top:-7px;width:4px;height:26px;margin-left:-2px;border-radius:2px;background:var(--ink);box-shadow:0 0 0 3px var(--surface)}
-.ic-et{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:12px}
+.ic-et{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;margin-top:12px}
 .ic-et>span{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.ic-et .badge{max-width:100%;padding-inline:6px;white-space:normal;overflow-wrap:anywhere}
 .ic-et small{font-size:12.5px;color:var(--ink-2)}
 .ic-ahora{margin:20px 0 0;color:var(--ink-2)}.ic-ahora b{color:var(--ink)}
 .ic-pasos{list-style:none;margin:0;padding:0}
