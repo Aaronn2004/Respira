@@ -17,9 +17,8 @@ import com.nodia.respira.R;
 
 // ==============================================================
 // Notificaciones: canales y envío.
-// Las alertas las comprueba la app con los datos reales del servidor
-// cada vez que lee las zonas (Repositorio.comprobarAlertas). Con la
-// app cerrada no llegan: para eso haría falta push (FCM).
+// La aplicación comprueba alertas con datos de la API al leer las zonas
+// y periódicamente en segundo plano cuando Android lo permite.
 // ==============================================================
 public final class Notificaciones {
 

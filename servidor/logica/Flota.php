@@ -101,8 +101,10 @@ class Flota extends Base {
             $e['magnitudes'] = 'Marca al menos una magnitud.';
         }
         $asig = trim((string) ($d['asignado_a'] ?? ''));
-        if ($tipo !== 'voluntariado' && mb_strlen($asig) < 3) {
-            $e['asignado_a'] = 'Indica a qué servicio, línea o vehículo va asignado (mínimo 3 caracteres).';
+        if ($tipo === 'trabajador' && !in_array($asig, self::SERVICIOS_MUNICIPALES, true)) {
+            $e['asignado_a'] = 'Elige el servicio municipal al que se asigna el sensor.';
+        } elseif ($tipo !== 'voluntariado' && (mb_strlen($asig) < 3 || mb_strlen($asig) > 80)) {
+            $e['asignado_a'] = 'Indica el servicio, la línea o el vehículo con entre 3 y 80 caracteres.';
         }
         $mant = !empty($d['mantenimiento']);
         $motivo = trim((string) ($d['motivo'] ?? ''));
@@ -275,6 +277,12 @@ class Flota extends Base {
 
     // ---------- app: el sensor que voy a llevar ----------
 
+    public function sensorDeSuServicio(string $usuario, string $codigo): bool {
+        return $this->valor("SELECT n.codigo FROM {$this->p}nodo n
+            JOIN {$this->p}empleado e ON e.ayuntamiento_id = n.ayuntamiento_id AND e.servicio = n.asignado_a
+            WHERE n.codigo = ? AND n.tipo = 'trabajador' AND n.estado = 'activo' AND e.usuario_id = ?", [$codigo, $usuario]) !== null;
+    }
+
     // --------------------------------------------------------------
     // quien, codigo --> sensorParaLaApp() --> {codigo, magnitudes, desde}
     // Los mensajes son los que enseña la app debajo del campo del código.
@@ -294,13 +302,17 @@ class Flota extends Base {
         }
         $mags = $n['magnitudes'] === '' ? [] : explode(',', $n['magnitudes']);
         if ($quien['rol'] === 'trabajador') {
-            if ($n['tipo'] !== 'trabajador' || $n['estado'] !== 'activo') {
-                throw new ConflictoException("El sensor $c no está asignado a un servicio municipal. Pide a tu servicio el código correcto.", 'codigo');
+            if (!$this->sensorDeSuServicio($quien['id'], $c)) {
+                throw new ConflictoException("El sensor $c no está activo y asignado a tu servicio municipal. Pide a tu servicio el código correcto.", 'codigo');
             }
             return ['codigo' => $c, 'magnitudes' => $mags, 'desde' => null, 'hasta' => null];
         }
         $p = $this->fila("SELECT * FROM {$this->p}prestamo WHERE nodo = ? AND estado_devolucion = 'No devuelto'", [$c]);
         if ($p && $p['usuario_id'] === $quien['id']) {
+            $ahora = $this->ahora();
+            if (self::msDeFechaBD($p['inicio']) > $ahora || self::msDeFechaBD($p['fecha_limite']) < $ahora) {
+                throw new ConflictoException("El préstamo del sensor $c está fuera de plazo. Consulta tu punto de reparto.", 'codigo');
+            }
             return ['codigo' => $c, 'magnitudes' => $mags, 'desde' => self::isoDeBD($p['inicio']),
                 'hasta' => self::isoDeBD($p['fecha_limite'])];
         }

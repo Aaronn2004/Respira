@@ -56,8 +56,9 @@ prueba('percepción: máximo 3 por hora y cuenta; datos validados', function () 
     global $T, $LUCIA;
     [, $c] = entorno();
     for ($i = 0; $i < 3; $i++) {
-        $c->publicar($LUCIA, 'temp', 1, 38.96, -0.18, 'Pl. Mayor');
+        $p = $c->publicar($LUCIA, 'temp', 1, 38.96, -0.18, 'Pl. Mayor');
     }
+    $c->borrar($LUCIA, $p['id']);
     lanza(DemasiadasException::class, function () use ($c, $LUCIA) { $c->publicar($LUCIA, 'temp', 1, 38.96, -0.18, 'Pl. Mayor'); });
     lanza(DatosNoValidosException::class, function () use ($c) { $c->publicar(['id' => 'U-11902', 'rol' => 'vecino'], 'olor', 1, 38.96, -0.18, 'X'); });
     lanza(DatosNoValidosException::class, function () use ($c) { $c->publicar(['id' => 'U-11902', 'rol' => 'vecino'], 'aire', 4, 38.96, -0.18, 'X'); });
@@ -65,6 +66,19 @@ prueba('percepción: máximo 3 por hora y cuenta; datos validados', function () 
     $T += 61 * 60000;
     $c->publicar($LUCIA, 'aire', 3, 38.96, -0.18, 'Pl. Mayor');
     $T -= 61 * 60000;
+});
+
+prueba('percepción: los ejemplos simulados no aparecen como propios ni se guardan en la base', function () {
+    global $LUCIA;
+    [$bd, $c] = entorno();
+    $simuladas = $c->percepciones($LUCIA, true);
+    igual(8, count($simuladas));
+    foreach ($simuladas as $p) {
+        igual([true, false], [$p['simulado'], $p['mia']]);
+    }
+    igual($simuladas, $c->percepciones($LUCIA, true));
+    igual([], $c->mias($LUCIA));
+    igual(0, (int) $bd->query('SELECT COUNT(*) FROM percepcion')->fetchColumn());
 });
 
 prueba('percepción: solo la autora la edita (tipo y nivel) o la borra', function () {
@@ -155,11 +169,13 @@ prueba('devolución: defectuoso pasa a mantenimiento; la app avisa de que ya se 
 });
 
 prueba('préstamo: pasado el plazo sale «fuera de plazo» y se puede devolver en otro punto', function () {
-    global $T, $REPARTO;
+    global $T, $REPARTO, $LUCIA;
     [, , $f] = entorno();
     $f->prestar($REPARTO, 'U-48213', 'RSP-4F7K', 1);
     $T += 10 * 86400000 + 60000;
     igual(true, $f->prestamos($REPARTO)['abiertos'][0]['fuera_de_plazo']);
+    $e = lanza(ConflictoException::class, fn() => $f->sensorParaLaApp($LUCIA, 'RSP-4F7K'));
+    cierto(strpos($e->getMessage(), 'fuera de plazo') !== false, 'mensaje de plazo');
     $f->devolver($REPARTO, 'RSP-4F7K', 'Correcto');
     igual([[], 'Correcto'], [$f->prestamos($REPARTO)['abiertos'], $f->prestamos($REPARTO)['cerrados'][0]['estado_devolucion']]);
     $T -= 10 * 86400000 + 60000;
@@ -167,7 +183,9 @@ prueba('préstamo: pasado el plazo sale «fuera de plazo» y se puede devolver e
 
 prueba('app: mensajes del código (formato, no existe, sin prestar) y trabajadores', function () {
     global $ADMIN;
-    [, , $f] = entorno();
+    [$bd, , $f] = entorno();
+    $bd->exec("INSERT INTO empleado (usuario_id, ayuntamiento_id, num_empleado, servicio)
+        VALUES ('T-0001', 'gandia', '104233', 'Limpieza viaria')");
     $u = ['id' => 'U-48213', 'rol' => 'vecino'];
     lanza(DatosNoValidosException::class, function () use ($f, $u) { $f->sensorParaLaApp($u, 'ABC'); });
     lanza(NoEncontradoException::class, function () use ($f, $u) { $f->sensorParaLaApp($u, 'RSP-ZZZZ'); });
@@ -176,6 +194,8 @@ prueba('app: mensajes del código (formato, no existe, sin prestar) y trabajador
     $f->altaNodo($ADMIN, ['codigo' => 'RSP-L1MP', 'tipo' => 'trabajador', 'magnitudes' => ['o3'], 'asignado_a' => 'Limpieza viaria']);
     $t = ['id' => 'T-0001', 'rol' => 'trabajador'];
     igual('RSP-L1MP', $f->sensorParaLaApp($t, 'RSP-L1MP')['codigo']);
+    $f->altaNodo($ADMIN, ['codigo' => 'RSP-M7NT', 'tipo' => 'trabajador', 'magnitudes' => ['o3'], 'asignado_a' => 'Parques y jardines']);
+    lanza(ConflictoException::class, fn() => $f->sensorParaLaApp($t, 'RSP-M7NT'));
     lanza(ConflictoException::class, function () use ($f, $t) { $f->sensorParaLaApp($t, 'RSP-4F7K'); });
 });
 

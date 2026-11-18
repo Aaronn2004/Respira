@@ -28,6 +28,9 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.nodia.respira.R;
 import com.nodia.respira.datos.Nivel;
+import com.nodia.respira.datos.Magnitud;
+import com.nodia.respira.datos.Reglas;
+import com.nodia.respira.datos.Zona;
 
 // ==============================================================
 // Ui: piezas de interfaz reutilizables (tarjetas, filas, avisos...).
@@ -38,6 +41,29 @@ import com.nodia.respira.datos.Nivel;
 public final class Ui {
 
     public static final int BOTON_LLENO = 0;
+
+    public static void datoZona(LinearLayout tarjeta, Zona zona, Magnitud magnitud) {
+        Zona.Dato dato = zona.dato(magnitud);
+        String estado = zona.estado(magnitud);
+        Double valor = zona.valor(magnitud);
+        Nivel nivel = magnitud.nivel(valor);
+        String titulo = magnitud.nombre + (valor == null ? "" : " · " + magnitud.formatear(valor) + " " + magnitud.unidad);
+        String detalle = null;
+        String etiqueta = nivel.nombre;
+        if (valor == null) {
+            etiqueta = "Sin datos";
+        } else if ("estimado".equals(estado)) {
+            etiqueta = "Estimado";
+            detalle = "Nivel " + nivel.nombre.toLowerCase(java.util.Locale.ROOT);
+        } else {
+            if (Reglas.ESTADO_ANTIGUO.equals(estado)) etiqueta = "Antiguo";
+            String momento = dato.momento > 0 ? ZonaActivity.hora(dato.momento, true) : Reglas.haceTexto(zona.haceMin);
+            detalle = ("simulado".equals(dato.origen) ? "Dato simulado · " : "Última medición · ") + momento;
+            if (Reglas.ESTADO_ANTIGUO.equals(estado)) detalle += " · Nivel " + nivel.nombre.toLowerCase(java.util.Locale.ROOT);
+        }
+        LinearLayout fila = fila(tarjeta, titulo, detalle, null);
+        insignia(fila, etiqueta, Reglas.ESTADO_OK.equals(estado) ? nivel : Nivel.NINGUNO);
+    }
     public static final int BOTON_BORDE = 1;
     public static final int BOTON_TEXTO = 2;
 

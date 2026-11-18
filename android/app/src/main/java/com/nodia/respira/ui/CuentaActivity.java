@@ -55,16 +55,22 @@ public class CuentaActivity extends AppCompatActivity {
             Ui.nota(c, "Tu cuenta de trabajador la gestiona el ayuntamiento: para darla de baja, habla con tu servicio.");
             return;
         }
-        Ui.boton(c, "Borrar mi cuenta", Ui.BOTON_TEXTO, v -> Ui.confirmar(this, "¿Borrar tu cuenta?",
-                "Se borrarán tu cuenta, tus percepciones y tu historial. Perderás "
-                        + (cuenta == null ? 0 : cuenta.puntos) + " puntos sin canjear. No se puede deshacer.",
-                "Borrar cuenta", () -> {
-                    // Si tiene un sensor prestado, el servidor no deja: primero hay que devolverlo
-                    repo.borrarCuenta(Ui.hecho(this, () -> {
+        if (repo.sensorPrestado() != null) {
+            Ui.nota(c, "Devuelve el sensor prestado en un punto de reparto antes de borrar tu cuenta.");
+        }
+        Ui.boton(c, "Borrar mi cuenta", Ui.BOTON_TEXTO, v -> {
+            if (repo.sensorPrestado() != null) {
+                Toast.makeText(this, "Devuelve el sensor prestado antes de borrar tu cuenta.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            Ui.confirmar(this, "¿Borrar tu cuenta?",
+                    "Se borrarán tu cuenta, tus percepciones y tu historial. Perderás "
+                            + (cuenta == null ? 0 : cuenta.puntos) + " puntos sin canjear. No se puede deshacer.",
+                    "Borrar cuenta", () -> repo.borrarCuenta(Ui.hecho(this, () -> {
                         ServicioEscuharBeacons.detener(this);
                         Toast.makeText(this, "Cuenta borrada", Toast.LENGTH_SHORT).show();
                         finish();
-                    }));
-                }));
+                    })));
+        });
     }
 }

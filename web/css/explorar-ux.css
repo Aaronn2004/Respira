@@ -71,6 +71,12 @@ main:not(.tv-main) h1[tabindex="-1"]:focus{outline:none}
 .mapa-efectos summary{cursor:pointer;color:var(--primary);font-weight:700}
 .mapa-efectos p{overflow-wrap:anywhere}
 .mapa-punto.gm-old,.gm-etq.antigua .gm-marca{border:2px dashed var(--ink-2);background:var(--surface)}
+.mapa-punto.gm-estimada,.gm-etq.estimada .gm-marca{border:2px dotted var(--ink-2);background:var(--surface)}
+.mapa-punto.gm-none,.gm-etq.gm-none .gm-marca{background:repeating-linear-gradient(135deg,var(--surface) 0 2px,var(--line) 2px 4px)}
+.mapa-medicion-origen{display:block;font-size:.72rem}
+.mapa-datos-estado .btn{margin:4px 0}
+.serie-lectura-simulada{opacity:.58}
+.serie-eventos li .badge{align-self:flex-start}
 .mapa-avisos li{padding:0;display:block;border:0}
 .mapa-avisos li+li{border-top:1px solid var(--line)}
 .mapa-avisos li .srow{border:0;min-height:48px}

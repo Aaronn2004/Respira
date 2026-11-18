@@ -11,21 +11,20 @@
 // ==============================================================
 
 require_once __DIR__ . '/bd_prueba.php';
+require_once __DIR__ . '/../logica/Logica.php';
 
-$fichero = sys_get_temp_dir() . '/respira_api_test.sqlite';
-@unlink($fichero);
+$fichero = tempnam(sys_get_temp_dir(), 'respira_api_');
 $bdp = crearBDPrueba('sqlite:' . $fichero);
 crearUsuario($bdp, 'U-48213', 'vecino', 'lucia@correo.es', 'Respira2026', ['nombre' => 'lucia']);
 crearUsuario($bdp, 'A-0001', 'admin', 'admin@ayto.es', 'Admin2026!', ['nombre' => 'Ana García']);
 crearUsuario($bdp, 'A-0003', 'reparto', 'reparto@ayto.es', 'Reparto2026!', ['nombre' => 'Marta Ruiz']);
 $bdp = null;
-$correo = sys_get_temp_dir() . '/respira_api_correo.txt';
-@unlink($correo);
+$correo = tempnam(sys_get_temp_dir(), 'respira_correo_');
 
 $puerto = 18000 + random_int(0, 999);
 $raiz = realpath(__DIR__ . '/..');
-$cmd = sprintf('RESPIRA_CORREO_ARCHIVO=%s RESPIRA_DSN=%s php -S 127.0.0.1:%d -t %s > /dev/null 2>&1 & echo $!',
-    escapeshellarg($correo), escapeshellarg('sqlite:' . $fichero), $puerto, escapeshellarg($raiz));
+$cmd = sprintf('RESPIRA_CORREO_ARCHIVO=%s RESPIRA_DSN=%s %s -S 127.0.0.1:%d -t %s > /dev/null 2>&1 & echo $!',
+    escapeshellarg($correo), escapeshellarg('sqlite:' . $fichero), escapeshellarg(PHP_BINARY), $puerto, escapeshellarg($raiz));
 $pid = (int) shell_exec($cmd);
 usleep(600000);
 $BASE = "http://127.0.0.1:$puerto/api/index.php";
@@ -71,7 +70,7 @@ function cierto($v, string $que = ''): void {
 }
 
 $Z = json_decode(file_get_contents(__DIR__ . '/zonas_prueba.json'), true);
-$ahora = (int) round(microtime(true) * 1000);
+$ahora = time() * 1000;
 $m = ['nodo' => 'RSP-4F7K', 'tipo' => 11, 'valor' => 0.045, 'contador' => 3, 'medida_en' => $ahora - 60000,
     'lat' => $Z['central'][0], 'lng' => $Z['central'][1], 'precision' => 6, 'rssi' => -61];
 
@@ -107,14 +106,16 @@ try {
         igual(2, $j['guardadas'], 'guardadas');
         igual(1, $j['repetidas'], 'repetidas');
     });
-    prueba('GET /zonas trae la media de Parque Central', function () {
+    prueba('GET /zonas trae la media de Parque Central', function () use ($m) {
         [$c, $j] = pedir('GET', '/zonas');
         igual(200, $c, 'código');
         $central = array_values(array_filter($j, fn($z) => $z['id'] === 'central'))[0];
         igual(0.045, $central['o3'], 'o3');
         igual(22.5, $central['temp'], 'temp');
         igual(61.2, $central['ruido'], 'ruido');
-        igual(1, $central['hace_min'], 'hace_min');
+        igual(true, $central['hace_min'] >= 1 && $central['hace_min'] <= 60, 'antigüedad reciente');
+        igual(Logica::fechaISO($m['medida_en']), $central['detalle']['o3']['momento'], 'fecha exacta de lectura');
+        igual('reciente', $central['detalle']['o3']['estado'], 'estado');
     });
     prueba('GET /zonas/central/serie?magnitud=o3&periodo=24h', function () {
         [$c, $j] = pedir('GET', '/zonas/central/serie?magnitud=o3&periodo=24h');
@@ -193,7 +194,7 @@ try {
     });
     prueba('POST /mediciones con sesión: el portador es quien lleva el sensor', function () use (&$TOK, $m) {
         global $fichero;
-        pedir('POST', '/mediciones', array_merge($m, ['valor' => 0.077, 'medida_en' => $m['medida_en'] + 2000]), $TOK['lucia']);
+        pedir('POST', '/mediciones', array_merge($m, ['valor' => 0.077, 'medida_en' => (int) round(microtime(true) * 1000)]), $TOK['lucia']);
         $bd = new PDO('sqlite:' . $fichero);
         igual('U-48213', $bd->query('SELECT portador_id FROM medicion WHERE valor = 0.077')->fetchColumn());
     });
@@ -214,15 +215,37 @@ try {
         igual([200, 3], [$c, count(array_filter($l, fn($g) => $g['stock'] > 0))]);
         igual(409, pedir('POST', '/canjes', ['regalo' => 'g2'], $TOK['lucia'])[0]);
     });
-    prueba('trabajador: alta con contraseña y entra en la app al momento', function () use (&$TOK) {
+    prueba('trabajador: alta y cambio obligatorio de la contraseña antes de usar la app', function () use (&$TOK) {
         $datos = ['nombre' => 'Pablo Sanz Gil', 'email' => 'psanz@ayto.es', 'num_empleado' => '104233', 'servicio' => 'Limpieza viaria'];
         [$c, $j] = pedir('POST', '/panel/trabajadores', $datos + ['clave' => 'corta'], $TOK['admin']);
         igual([400, ['clave']], [$c, array_keys($j['errores'])]);
         [$c, $j] = pedir('POST', '/panel/trabajadores', $datos + ['clave' => 'Trabajo2026!'], $TOK['admin']);
         igual([201, 'T-0001'], [$c, $j['trabajador']['id']]);
         cierto(!isset($j['enlace']) && !isset($j['token']), 'ya no hay enlace de activación');
-        igual(201, pedir('POST', '/sesiones', ['email' => 'psanz@ayto.es', 'clave' => 'Trabajo2026!'])[0]);
+        [$c, $inicial] = pedir('POST', '/sesiones', ['email' => 'psanz@ayto.es', 'clave' => 'Trabajo2026!']);
+        igual([201, true], [$c, $inicial['usuario']['requiere_cambio_clave']]);
+        igual(403, pedir('GET', '/yo', null, $inicial['token'])[0]);
+        [$c, $nueva] = pedir('PUT', '/yo/clave', ['clave' => 'Personal2468!'], $inicial['token']);
+        igual([200, false], [$c, $nueva['usuario']['requiere_cambio_clave']]);
+        igual(401, pedir('GET', '/yo', null, $inicial['token'])[0]);
+        igual(200, pedir('GET', '/yo', null, $nueva['token'])[0]);
         igual(404, pedir('POST', '/panel/trabajadores/T-0001/enlace', [], $TOK['admin'])[0], 'la ruta de reenviar ya no existe');
+    });
+    prueba('aviso emitido: se registra una vez y el historial lo devuelve sin identidad de usuario', function () use (&$TOK) {
+        [, $zonas] = pedir('GET', '/zonas');
+        $zonas = array_column($zonas, 'detalle', 'id');
+        $lectura = $zonas['central']['o3'];
+        igual('reciente', $lectura['estado']);
+        $seguimiento = ['alertas' => [['zona' => 'central', 'magnitud' => 'o3', 'condicion' => 'custom', 'valor' => 0.020]]];
+        igual(200, pedir('PUT', '/yo/seguimiento', $seguimiento, $TOK['lucia'])[0]);
+        $aviso = ['zona' => 'central', 'magnitud' => 'o3', 'valor' => $lectura['valor'],
+            'momento' => str_replace('.000Z', 'Z', $lectura['momento']), 'origen' => $lectura['origen']];
+        igual(200, pedir('POST', '/yo/alertas/emitidas', $aviso, $TOK['lucia'])[0]);
+        igual(200, pedir('POST', '/yo/alertas/emitidas', $aviso, $TOK['lucia'])[0]);
+        [, $serie] = pedir('GET', '/zonas/central/serie?magnitud=o3');
+        igual(1, count($serie['eventos']['avisos']));
+        igual($lectura['momento'], $serie['eventos']['avisos'][0]['momento']);
+        cierto(!isset($serie['eventos']['avisos'][0]['usuario_id']));
     });
     prueba('recuperar: 202 siempre y el correo trae un enlace que funciona', function () {
         global $correo;

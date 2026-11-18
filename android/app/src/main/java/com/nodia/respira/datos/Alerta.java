@@ -18,6 +18,14 @@ public class Alerta {
         this.valor = valor;
     }
 
+    public String clave() {
+        return clave(zonaId, magnitud);
+    }
+
+    static String clave(String zonaId, Magnitud m) {
+        return zonaId + ":" + m.id;
+    }
+
     public String texto() {
         String m = magnitud.nombre.toLowerCase();
         switch (condicion) {

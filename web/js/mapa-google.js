@@ -48,6 +48,7 @@
   let mapa, ambito, timer, Etiqueta;
   let ultimaFirma, ultimaSeleccion, ultimoAviso, estiloMapa;
   const etiquetasZonas = new Map();
+  const contornos = new Map();
   let avisos = [];
 
   function fallo() {
@@ -111,12 +112,9 @@
       opciones.styles = estiloCallejero(PALETAS[estiloMapa]);
     }
     mapa = new google.maps.Map(contenedor, opciones);
-    mapa.data.addGeoJson(window.RespiraGrauPlatja);
     mapa.addListener('zoom_changed', () => contenedor.classList.toggle('gmap-detalle', mapa.getZoom() >= 16));
     mapa.addListener('maptypeid_changed', actualizarCallejero);
 
-    ambito = new google.maps.LatLngBounds();
-    mapa.data.forEach(feature => feature.getGeometry().forEachLatLng(p => ambito.extend(p)));
     mapa.data.addListener('click', ({ feature }) => R().seleccionarZona(feature.getId()));
     mapa.addListener('click', () => {
       if (R().S.sel) R().seleccionarZona(null);
@@ -150,26 +148,42 @@
       etiqueta.setMap(mapa);
       etiquetasZonas.set(zona.id, etiqueta);
     }
-    encuadrar();
+  }
+
+  function actualizarContornos() {
+    let cambio = false;
+    for (const zona of R().ZONAS) {
+      const firma = JSON.stringify(zona.geometry);
+      if (contornos.get(zona.id) === firma) continue;
+      const anterior = mapa.data.getFeatureById(zona.id);
+      if (anterior) mapa.data.remove(anterior);
+      const feature = { type: 'Feature', id: zona.id, geometry: zona.geometry, properties: {} };
+      mapa.data.addGeoJson({ type: 'FeatureCollection', features: [feature] });
+      contornos.set(zona.id, firma);
+      cambio = true;
+    }
+    if (!cambio) return;
+    ambito = new google.maps.LatLngBounds();
+    mapa.data.forEach(feature => feature.getGeometry().forEachLatLng(p => ambito.extend(p)));
+    if (!ultimaFirma) encuadrar();
   }
 
   function dibujarZonas(enMapa) {
-    const { S, ZONAS, zonaMapa, est, esc, zonaCoincide } = R();
+    const { S, ZONAS, zonaMapa, esc, zonaCoincide } = R();
     const visibles = new Set(enMapa ? ZONAS.filter(zonaCoincide).map(z => z.id) : []);
     mapa.data.setStyle(feature => {
       const id = feature.getId();
       const z = R().byZ(id);
-      const nivel = zonaMapa(z).l;
+      const { l: nivel, estado } = zonaMapa(z);
       const seleccionada = S.sel === id;
-      const antigua = est(z) === 'old';
       const color = colorNivel(nivel);
       return {
         visible: visibles.has(id),
         strokeColor: color,
-        strokeOpacity: seleccionada ? 1 : antigua ? .65 : .92,
+        strokeOpacity: seleccionada ? 1 : estado === 'antiguo' || estado === 'estimado' ? .65 : .92,
         strokeWeight: seleccionada ? 4 : 2,
         fillColor: color,
-        fillOpacity: seleccionada ? .55 : nivel === 'none' ? .17 : .32,
+        fillOpacity: seleccionada ? .55 : nivel === 'none' || estado === 'estimado' ? .17 : .32,
         zIndex: seleccionada ? 2 : 1,
       };
     });
@@ -177,13 +191,13 @@
       const boton = etiquetasZonas.get(z.id).el;
       const zm = zonaMapa(z);
       const seleccionada = S.sel === z.id;
-      const antigua = est(z) === 'old';
+      const estado = { antiguo: ' antigua', estimado: ' estimada' }[zm.estado] || '';
       boton.hidden = !visibles.has(z.id);
-      boton.className = 'gm-etq gm-' + zm.l + (antigua ? ' antigua' : '') + (seleccionada ? ' sel' : '');
+      boton.className = 'gm-etq gm-' + zm.l + estado + (seleccionada ? ' sel' : '');
       boton.setAttribute('aria-pressed', String(seleccionada));
-      boton.setAttribute('aria-label', z.n + ', ' + zm.texto + (antigua ? ', dato antiguo' : ''));
+      boton.setAttribute('aria-label', z.n + ', ' + zm.texto + (zm.nota ? ', ' + zm.nota : ''));
       boton.innerHTML = `<span class="gm-marca" aria-hidden="true"></span>
-        <span class="gm-nombre" aria-hidden="true">${esc(z.etiqueta)}<span class="gm-nivel">${esc(zm.l === 'none' ? 'Sin datos' : zm.valor)}</span></span>`;
+        <span class="gm-nombre" aria-hidden="true">${esc(z.etiqueta)}<span class="gm-nivel">${esc(zm.valor)}${zm.nota ? ' · ' + esc(zm.nota) : ''}</span></span>`;
     }
   }
 
@@ -199,7 +213,7 @@
       el.className = 'gm-av' + (S.avSel === a.id ? ' sel' : '');
       el.style.background = colorNivel(['', 'bajo', 'medio', 'alto'][a.niv]);
       el.textContent = { ruido: 'R', temp: 'T', aire: 'A' }[a.tipo];
-      const nombre = PERC[a.tipo].n + ', ' + PERC[a.tipo].lv[a.niv - 1] + ' · ' + a.dir;
+      const nombre = PERC[a.tipo].n + ', ' + PERC[a.tipo].lv[a.niv - 1] + ' · ' + a.dir + (a.simulado ? ' · Simulada' : '');
       el.title = nombre;
       el.setAttribute('aria-label', nombre);
       const etiqueta = new Etiqueta(a.ancla, el);
@@ -210,9 +224,12 @@
 
   function actualizar() {
     actualizarCallejero();
-    const { S, byZ } = R();
+    actualizarContornos();
+    const { S, byZ, AVISOS, avOk } = R();
     const comunidad = S.layer === 'comunidad';
-    const firma = [S.layer, S.mag, S.q, S.sel, S.avt, S.avf, S.avSel, document.documentElement.dataset.tema].join('|');
+    const visibles = comunidad ? AVISOS.filter(avOk).map(a => a.id + ':' + a.momento + ':' + a.tipo + ':' + a.niv) : [];
+    const firma = [S.layer, S.mag, S.q, S.sel, S.avt, S.avf, S.avSel, document.documentElement.dataset.tema,
+      window.RespiraDatos?.version, ...visibles].join('|');
     if (firma !== ultimaFirma) {
       ultimaFirma = firma;
       dibujarZonas(!comunidad);

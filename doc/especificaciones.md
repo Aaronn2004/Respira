@@ -10,7 +10,7 @@ Este documento recoge **solo lo que cambia o se añade** en este sprint respecto
 | Historial: alertas y picos | Ficha de zona › «Alertas y picos» | Historial › tarjeta «Alertas y picos» | `GET /zonas/{id}/serie` › `eventos` |
 | Mediciones valoradas, historial de cada zona | Insignia Bajo/Medio/Alto en cada valor y en cada alerta o pico | Igual | Límites en `Logica::LIMITES` |
 | Separar «Iniciar sesión» y «Crear cuenta» | Pantallas separadas (Login y Registro) | Solo acceso de trabajadores | `POST /sesiones` · `POST /usuarios` |
-| Los trabajadores los registra administración | — | Panel › Trabajadores (administración pone la contraseña; la cuenta queda activa) | `POST /panel/trabajadores` (solo admin) |
+| Los trabajadores los registra administración | Cambia la contraseña inicial al entrar por primera vez | Panel › Trabajadores (administración entrega la contraseña inicial en persona) | `POST /panel/trabajadores` (solo admin) · `PUT /yo/clave` |
 | Interpolar (aproximado) | Gráfica: línea de puntos | Gráfica: línea de puntos | `serie` › `aprox` |
 | Promedio de las mediciones en la info de cada zona | «Media de las últimas 24 h» | «Media de las últimas 24 h» | `GET /zonas` › `media_24h` |
 | Portada: parques de mejor a peor, mejor medida | — | Portada › «Los parques ahora» | `GET /zonas` › `mejor` |
@@ -44,7 +44,9 @@ Si todo está en Bajo, no se enseña nada (no hay nada de lo que avisar).
 
 **WEB-04.3.** Se quita el recuadro «Descarga la app». El criterio pasa a ser: la portada explica qué es Respira y lleva al mapa y a «Cómo funciona»; no enlaza a ninguna descarga mientras la app no esté publicada.
 
-**Inicio de sesión (app y panel).** Se quita el bloqueo de 15 minutos tras 5 contraseñas mal: ahora solo se avisa de «Correo o contraseña incorrectos».
+**Inicio de sesión (app y panel).** Se aplica el criterio APP-01b de Trello. Los cuatro primeros fallos muestran «Correo o contraseña incorrectos». El quinto bloquea el acceso durante 15 minutos.
+
+**Baja de cuenta (APP-01c).** Antes de confirmar se comprueba si hay un préstamo abierto. Para cerrar la cuenta primero hay que devolver el sensor en un punto de reparto.
 
 **Préstamos (panel).** Al prestar se elige el punto de recogida. El plazo para devolver el sensor es de 10 días desde la hora exacta de la recogida (por ejemplo, del 10 de enero a las 12:00 al 20 de enero a las 12:00), en cualquier punto de reparto. La devolución se registra como «Correcto» o «Defectuoso» (no se ha entregado en buenas condiciones: el sensor pasa a mantenimiento). Pasada la fecha límite, el panel lo marca «Fuera de plazo» y la app avisa a la persona.
 

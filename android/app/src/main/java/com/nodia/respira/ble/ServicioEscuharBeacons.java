@@ -20,6 +20,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
@@ -32,12 +33,11 @@ import androidx.core.content.ContextCompat;
 import com.nodia.respira.R;
 import com.nodia.respira.datos.Recorrido;
 import com.nodia.respira.datos.Repositorio;
+import com.nodia.respira.datos.Usuario;
 import com.nodia.respira.ui.MainActivity;
 import com.nodia.respira.ui.Notificaciones;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 // ==============================================================
@@ -59,7 +59,8 @@ public class ServicioEscuharBeacons extends Service {
     public static final String MODO_TODOS = "TODOS";
     public static final String MODO_NUESTRO = "NUESTRO";
 
-    private static final int MAX_PENDIENTES = 500;
+    private static final long ESPERA_SENSOR_MS = 15_000L;
+    private static boolean ejecutando;
 
     private static final String ETIQUETA_LOG = ">>>>";
     private static final int ID_NOTIFICACION = 7;
@@ -70,13 +71,20 @@ public class ServicioEscuharBeacons extends Service {
     private String uuidBuscado = null;
     private String codigoSensor = null;
 
-    private final LogicaFake laLogica = new LogicaFake(LogicaFake.URL_SERVIDOR);
+    private final Handler principal = new Handler(Looper.getMainLooper());
+    private String propietario;
+    private String modoSolicitado;
+    private long inicioEscucha, ultimaRecepcion;
 
     // La placa repite el mismo anuncio unas 10 veces por segundo durante 2 s.
     // Por cada tipo de medida solo se envía cuando cambia el contador.
     private final Map<Integer, Integer> ultimoContadorPorTipo = new HashMap<>();
-    private final List<Medicion> pendientes = new ArrayList<>();
-    private boolean enviandoPendientes = false;
+    private final Runnable vigilar = new Runnable() {
+        @Override public void run() {
+            actualizarEstado();
+            if (ejecutando) principal.postDelayed(this, 3_000L);
+        }
+    };
 
     private LocationManager gestorUbicacion;
     private Location ultimaUbicacion;
@@ -94,10 +102,14 @@ public class ServicioEscuharBeacons extends Service {
         public void onStatusChanged(String proveedor, int estado, android.os.Bundle extras) { }
 
         @Override
-        public void onProviderEnabled(@NonNull String proveedor) { }
+        public void onProviderEnabled(@NonNull String proveedor) {
+            actualizarEstado();
+        }
 
         @Override
-        public void onProviderDisabled(@NonNull String proveedor) { }
+        public void onProviderDisabled(@NonNull String proveedor) {
+            actualizarEstado();
+        }
     };
 
     // --------------------------------------------------------------
@@ -113,20 +125,32 @@ public class ServicioEscuharBeacons extends Service {
         contexto.stopService(new Intent(contexto, ServicioEscuharBeacons.class));
     }
 
+    public static boolean ejecutando() {
+        return ejecutando;
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String modo = (intent != null && intent.getStringExtra(EXTRA_MODO) != null)
                 ? intent.getStringExtra(EXTRA_MODO) : MODO_TODOS;
         Log.d(ETIQUETA_LOG, "ServicioEscuharBeacons.onStartCommand(): modo = " + modo);
 
-        Recorrido r = Repositorio.obtener(this).recorrido();
+        Repositorio repo = Repositorio.obtener(this);
+        Recorrido r = repo.recorrido();
+        Usuario usuario = repo.usuario();
+        propietario = usuario == null ? null : usuario.id;
         codigoSensor = r != null ? r.codigo : null;
         uuidBuscado = codigoSensor != null ? Medicion.uuidDelSensor(codigoSensor) : null;
+        modoSolicitado = modo;
 
         ponerEnPrimerPlano();
-        detenerEscaneo(); // si ya escaneaba en otro modo, se reinicia
-        arrancarUbicacion();
-        arrancarEscaneo(modo);
+        detenerEscaneo();
+        inicioEscucha = System.currentTimeMillis();
+        ultimaRecepcion = 0;
+        ultimoContadorPorTipo.clear();
+        ejecutando = true;
+        principal.removeCallbacks(vigilar);
+        vigilar.run();
         return START_NOT_STICKY;
     }
 
@@ -168,10 +192,8 @@ public class ServicioEscuharBeacons extends Service {
             Log.e(ETIQUETA_LOG, "Sin permiso de ubicación: los datos irán sin zona");
             return;
         }
-        gestorUbicacion = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        if (gestorUbicacion == null) {
-            return;
-        }
+        gestorUbicacion = getSystemService(LocationManager.class);
+        if (gestorUbicacion == null || !gestorUbicacion.isLocationEnabled()) return;
         for (String proveedor : new String[]{LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER}) {
             try {
                 if (gestorUbicacion.isProviderEnabled(proveedor)) {
@@ -187,6 +209,81 @@ public class ServicioEscuharBeacons extends Service {
         }
     }
 
+    @SuppressLint("MissingPermission")
+    public static boolean bluetoothActivado(Context contexto) {
+        if (!tienePermisoEscanear(contexto) || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                && ContextCompat.checkSelfPermission(contexto, Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED)) return false;
+        BluetoothManager gestor = contexto.getSystemService(BluetoothManager.class);
+        BluetoothAdapter adaptador = gestor == null ? null : gestor.getAdapter();
+        return adaptador != null && adaptador.isEnabled();
+    }
+
+    public static boolean ubicacionActivada(Context contexto) {
+        LocationManager gestor = contexto.getSystemService(LocationManager.class);
+        return ContextCompat.checkSelfPermission(contexto, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED && gestor != null && gestor.isLocationEnabled();
+    }
+
+    private boolean preparandoUbicacion;
+
+    private void actualizarEstado() {
+        Repositorio repo = Repositorio.obtener(this);
+        Usuario usuario = repo.usuario();
+        if (MODO_NUESTRO.equals(modoSolicitado) && (usuario == null || !usuario.id.equals(propietario))) {
+            stopSelf();
+            return;
+        }
+        if (!bluetoothActivado(this)) {
+            detenerEscaneo();
+            repo.estadoSensor(Recorrido.BLUETOOTH);
+            return;
+        }
+        if (!ubicacionActivada(this)) {
+            prepararUbicacionDeNuevo();
+            repo.estadoSensor(Recorrido.UBICACION);
+            return;
+        }
+        if (!preparandoUbicacion) {
+            arrancarUbicacion();
+            preparandoUbicacion = true;
+        }
+        if (elEscaner == null) {
+            inicioEscucha = System.currentTimeMillis();
+            arrancarEscaneo(modoSolicitado);
+        }
+        long ahora = System.currentTimeMillis();
+        if (ultimaRecepcion == 0) {
+            repo.estadoSensor(ahora - inicioEscucha >= ESPERA_SENSOR_MS ? Recorrido.SIN_ALCANCE : Recorrido.BUSCANDO);
+        } else if (ahora - ultimaRecepcion >= ESPERA_SENSOR_MS) {
+            repo.estadoSensor(Recorrido.SIN_ALCANCE);
+        } else {
+            repo.estadoSensor(ubicacionReciente(ahora) ? Recorrido.ACTIVO : Recorrido.LOCALIZANDO);
+        }
+    }
+
+    private void prepararUbicacionDeNuevo() {
+        detenerEscaneo();
+        detenerUbicacion();
+        preparandoUbicacion = false;
+        ultimaRecepcion = 0;
+        ultimaUbicacion = null;
+    }
+
+    private void detenerUbicacion() {
+        if (gestorUbicacion == null) return;
+        try {
+            gestorUbicacion.removeUpdates(oyenteUbicacion);
+        } catch (SecurityException ignored) {
+            Log.d(ETIQUETA_LOG, "Permiso de ubicación retirado");
+        }
+    }
+
+    private boolean ubicacionReciente(long ahora) {
+        return ultimaUbicacion != null && ahora - ultimaUbicacion.getTime() < 120_000L;
+    }
+
+    @SuppressLint("MissingPermission")
     private BluetoothLeScanner obtenerEscaner() {
         BluetoothManager gestor = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         BluetoothAdapter adaptador = gestor == null ? null : gestor.getAdapter();
@@ -227,7 +324,6 @@ public class ServicioEscuharBeacons extends Service {
         }
 
         modoActual = modo;
-        ultimoContadorPorTipo.clear();
 
         elCallbackDelEscaner = new ScanCallback() {
             @Override
@@ -242,13 +338,19 @@ public class ServicioEscuharBeacons extends Service {
             @Override
             public void onScanFailed(int codigoError) {
                 Log.e(ETIQUETA_LOG, "Error al escanear BLE. Código: " + codigoError);
+                detenerEscaneo();
             }
         };
 
         ScanSettings ajustes = new ScanSettings.Builder()
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .build();
-        elEscaner.startScan(null, ajustes, elCallbackDelEscaner);
+        try {
+            elEscaner.startScan(null, ajustes, elCallbackDelEscaner);
+        } catch (IllegalStateException | SecurityException e) {
+            detenerEscaneo();
+            return;
+        }
         Log.d(ETIQUETA_LOG, "Escaneo BLE arrancado en modo " + modo + (uuidBuscado == null ? "" : ", buscando " + uuidBuscado));
     }
 
@@ -270,84 +372,53 @@ public class ServicioEscuharBeacons extends Service {
         if (!trama.esIBeacon() || !uuidBuscado.equals(trama.getUUIDComoTexto())) {
             return;
         }
+        long ahora = System.currentTimeMillis();
+        ultimaRecepcion = ahora;
+        if (!ubicacionActivada(this) || !ubicacionReciente(ahora)) return;
         Integer anterior = ultimoContadorPorTipo.get(trama.getTipoMedicion());
-        if (anterior != null && anterior == trama.getContador()) {
-            return; // el mismo anuncio repetido: ya enviado
-        }
-        Medicion medicion = Medicion.desdeTrama(trama, codigoSensor, System.currentTimeMillis());
-        if (medicion == null) {
-            return; // tipo desconocido
-        }
-        ultimoContadorPorTipo.put(trama.getTipoMedicion(), trama.getContador());
-
+        if (anterior != null && anterior == trama.getContador()) return;
+        Medicion medicion = Medicion.desdeTrama(trama, codigoSensor, ahora);
+        if (medicion == null) return;
+        Repositorio repo = Repositorio.obtener(this);
+        Usuario usuario = repo.usuario();
+        if (usuario == null || !usuario.id.equals(propietario)) return;
         Location l = ultimaUbicacion;
-        if (l != null && System.currentTimeMillis() - l.getTime() < 120_000) {
-            medicion.conUbicacion(l.getLatitude(), l.getLongitude(), Math.round(l.getAccuracy()));
-        }
+        medicion.conUbicacion(l.getLatitude(), l.getLongitude(), Math.round(l.getAccuracy()));
         medicion.conRssi(resultado.getRssi());
-        final Repositorio repo = Repositorio.obtener(this);
-        // Con la sesión: el servidor comprueba que este sensor está prestado
-        // a esta cuenta y le cuenta los minutos (puntos)
-        laLogica.conToken(repo.token());
-        Log.d(ETIQUETA_LOG, "Medida del sensor: " + medicion);
-
-        final boolean enParque = l != null && repo.parqueEn(l.getLatitude(), l.getLongitude()) != null;
-        repo.anotarUltimoValor(medicion.getMagnitud(), medicion.getValor());
-        laLogica.guardarMedicion(medicion, (exito, codigo, detalle) -> {
-            Log.d(ETIQUETA_LOG, (exito ? "POST OK " : "POST FALLIDO ") + codigo + ": " + detalle);
-            if (exito) {
-                enviarPendientes();
-            } else if (codigo == -1 || codigo >= 500) {
-                guardarPendiente(medicion); // sin red o servidor caído: se reintenta luego
-            }
-            repo.registrarMedicion(enParque, exito);
-        });
-    }
-
-    private synchronized void guardarPendiente(Medicion m) {
-        if (pendientes.size() >= MAX_PENDIENTES) {
-            pendientes.remove(0);
-        }
-        pendientes.add(m);
-    }
-
-    // --------------------------------------------------------------
-    // enviarPendientes(): al volver la conexión manda el lote guardado
-    // --------------------------------------------------------------
-    private synchronized void enviarPendientes() {
-        if (pendientes.isEmpty() || enviandoPendientes) {
+        try {
+            EnvioMediciones.obtener(this).guardar(propietario, medicion);
+        } catch (android.database.sqlite.SQLiteException e) {
+            Log.e(ETIQUETA_LOG, "No se pudo guardar la lectura localmente", e);
+            repo.estadoSensor(Recorrido.PAUSA);
             return;
         }
-        enviandoPendientes = true;
-        final List<Medicion> lote = new ArrayList<>(pendientes);
-        laLogica.guardarMediciones(lote, (exito, codigo, detalle) -> {
-            synchronized (ServicioEscuharBeacons.this) {
-                if (exito) {
-                    pendientes.removeAll(lote);
-                    Repositorio.obtener(ServicioEscuharBeacons.this).marcarPendientesEnviadas(lote.size());
-                }
-                enviandoPendientes = false;
-            }
-            Log.d(ETIQUETA_LOG, "Pendientes: " + codigo + " " + detalle);
-        });
+        ultimoContadorPorTipo.put(trama.getTipoMedicion(), trama.getContador());
+        repo.anotarUltimoValor(medicion.getMagnitud(), medicion.getValor());
+        repo.estadoSensor(Recorrido.ACTIVO);
     }
 
     @SuppressLint("MissingPermission")
     private void detenerEscaneo() {
         if (elEscaner != null && elCallbackDelEscaner != null && tienePermisoEscanear(this)) {
-            elEscaner.stopScan(elCallbackDelEscaner);
-            Log.d(ETIQUETA_LOG, "Escaneo BLE detenido");
+            try {
+                elEscaner.stopScan(elCallbackDelEscaner);
+                Log.d(ETIQUETA_LOG, "Escaneo BLE detenido");
+            } catch (IllegalStateException | SecurityException e) {
+                Log.d(ETIQUETA_LOG, "Escáner apagado");
+            }
         }
+        elEscaner = null;
         elCallbackDelEscaner = null;
         modoActual = null;
     }
 
     @Override
     public void onDestroy() {
+        ejecutando = false;
+        principal.removeCallbacks(vigilar);
         detenerEscaneo();
-        if (gestorUbicacion != null) {
-            gestorUbicacion.removeUpdates(oyenteUbicacion);
-        }
+        Repositorio.obtener(this).estadoSensor(Recorrido.PAUSA);
+        detenerUbicacion();
         super.onDestroy();
     }
 

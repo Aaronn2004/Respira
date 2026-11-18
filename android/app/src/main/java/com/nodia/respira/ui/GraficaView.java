@@ -20,6 +20,7 @@ public class GraficaView extends View {
 
     private Double[] datos = new Double[0];
     private Double[] aprox = new Double[0];
+    private String[] origen;
     private Magnitud magnitud = Magnitud.O3;
     private boolean dia = true;
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -32,7 +33,8 @@ public class GraficaView extends View {
         super(c, a);
     }
 
-    public void mostrar(Double[] datos, Double[] aprox, Magnitud m, boolean dia) {
+    public void mostrar(Double[] datos, Double[] aprox, String[] origen, Magnitud m, boolean dia) {
+        this.origen = origen;
         this.datos = datos;
         this.aprox = aprox == null || aprox.length != datos.length ? new Double[datos.length] : aprox;
         this.magnitud = m;
@@ -126,26 +128,19 @@ public class GraficaView extends View {
         p.setStrokeWidth(Ui.dp(c, 2.4f));
         p.setStrokeJoin(Paint.Join.ROUND);
         p.setColor(Ui.color(c, R.color.primario));
-        Path tramo = null;
+        DashPathEffect trazoSimulado = new DashPathEffect(new float[]{Ui.dp(c, 8), Ui.dp(c, 4)}, 0);
         for (int i = 0; i < datos.length; i++) {
-            if (datos[i] == null) {
-                if (tramo != null) {
-                    canvas.drawPath(tramo, p);
-                }
-                tramo = null;
-                continue;
-            }
+            if (datos[i] == null) continue;
             float x = (float) X.applyAsDouble(i), y = (float) Y.applyAsDouble(datos[i]);
-            if (tramo == null) {
-                tramo = new Path();
-                tramo.moveTo(x, y);
-            } else {
-                tramo.lineTo(x, y);
+            if (i > 0 && datos[i - 1] != null) {
+                p.setPathEffect(simulado(i) || simulado(i - 1) ? trazoSimulado : null);
+                canvas.drawLine((float) X.applyAsDouble(i - 1), (float) Y.applyAsDouble(datos[i - 1]), x, y, p);
+            } else if (i == datos.length - 1 || datos[i + 1] == null) {
+                p.setPathEffect(null);
+                canvas.drawCircle(x, y, Ui.dp(c, 2), p);
             }
         }
-        if (tramo != null) {
-            canvas.drawPath(tramo, p);
-        }
+        p.setPathEffect(null);
 
         // huecos cortos aproximados: de punto real a punto real, en línea de puntos
         p.setStrokeWidth(Ui.dp(c, 2f));
@@ -193,6 +188,10 @@ public class GraficaView extends View {
             txt.setTextAlign(i == 0 ? Paint.Align.LEFT : i == et.length - 1 ? Paint.Align.RIGHT : Paint.Align.CENTER);
             canvas.drawText(et[i], x0 + i * (dcha - x0) / 4, h - Ui.dp(c, 6), txt);
         }
+    }
+
+    private boolean simulado(int i) {
+        return origen != null && i < origen.length && "simulado".equals(origen[i]);
     }
 
     private void banda(Canvas canvas, float x0, float x1, java.util.function.DoubleUnaryOperator Y,

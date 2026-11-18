@@ -146,6 +146,51 @@ prueba('zonas(): media de la última hora, minutos desde el último dato y zonas
     igual('gandia', $zonas['central']['ayuntamiento'], 'zona.ayuntamiento_id');
 });
 
+prueba('mapa: fecha y origen por magnitud y mínimos solo de la última hora móvil', function () {
+    global $AHORA;
+    $l = nueva();
+    $l->guardarMedicion(med(['valor' => 0.090, 'medida_en' => $AHORA - 65 * 60000]));
+    $l->guardarMedicion(med(['valor' => 0.030, 'medida_en' => $AHORA - 10 * 60000]));
+    $l->guardarMedicion(med(['magnitud' => 'temp', 'valor' => 21, 'medida_en' => $AHORA - 90 * 60000]));
+    $zona = array_column($l->zonas(), null, 'id')['central'];
+    igual(['valor' => 0.03, 'estado' => 'reciente', 'momento' => Logica::fechaISO($AHORA - 10 * 60000), 'origen' => 'real'],
+        $zona['detalle']['o3']);
+    igual('antiguo', $zona['detalle']['temp']['estado']);
+    igual(0.03, $zona['mejor']['o3']);
+    igual(null, $zona['mejor']['temp']);
+});
+
+prueba('mapa: conserva todas las partes de las zonas costeras y acepta una lectura en una segunda parte', function () {
+    $l = nueva();
+    $zona = array_column($l->zonas(), null, 'id')['clot'];
+    igual('MultiPolygon', $zona['geometria']['type']);
+    igual(2, count($zona['poligonos']));
+    $anillo = array_slice($zona['poligonos'][1][0], 0, -1);
+    $lat = array_sum(array_column($anillo, 0)) / count($anillo);
+    $lng = array_sum(array_column($anillo, 1)) / count($anillo);
+    igual('clot', $l->guardarMedicion(med(['lat' => $lat, 'lng' => $lng]))['zona']);
+});
+
+prueba('mapa: estima con dos vecinas observadas sin contaminar los mínimos ni encadenar valores', function () {
+    global $AHORA;
+    $bd = crearBDPrueba();
+    $l = new Logica($bd, '', fn() => $AHORA);
+    $insertar = $bd->prepare("INSERT INTO medicion (id_nodo,tipo,valor,fecha_medicion,lat,lng,zona_id,origen)
+        VALUES ('RSP-4F7K','o3',?,?,39,-0.16,?,'real')");
+    $insertar->execute([0.025, Logica::fechaBD($AHORA - 15 * 60000), 'oller']);
+    $unDato = array_column($l->zonas(), null, 'id')['ermita'];
+    igual('sin_datos', $unDato['detalle']['o3']['estado']);
+    $insertar->execute([0.039, Logica::fechaBD($AHORA - 10 * 60000), 'venecia']);
+    $estimada = array_column($l->zonas(), null, 'id')['ermita'];
+    igual('estimado', $estimada['detalle']['o3']['estado']);
+    igual('estimado', $estimada['detalle']['o3']['origen']);
+    igual(null, $estimada['detalle']['o3']['momento']);
+    igual(null, $estimada['mejor']['o3']);
+    if ($estimada['detalle']['o3']['valor'] <= 0.025 || $estimada['detalle']['o3']['valor'] >= 0.039) {
+        throw new Exception('La estimación debe quedar entre los valores que le sirven de apoyo');
+    }
+});
+
 prueba('una zona cuyo último dato tiene más de 24 h queda sin datos', function () {
     global $AHORA;
     $l = nueva();
@@ -176,6 +221,24 @@ prueba('serie de 7 y 30 días y por rango de fechas', function () {
     lanza('DatosNoValidosException', fn() => $l->serie('central', 'temp', 'rango', '2026-11-05', '2026-11-01'));
     lanza('DatosNoValidosException', fn() => $l->serie('central', 'temp', '1h'));
     lanza('NoEncontradoException', fn() => $l->serie('nada', 'temp', '24h'));
+});
+
+prueba('serie: valida fechas y conserva referencia, origen y estadísticos de lecturas', function () {
+    global $AHORA;
+    $l = nueva();
+    $l->guardarMedicion(med(['valor' => 0.030, 'medida_en' => $AHORA - 5 * 60000]));
+    $l->guardarMedicion(med(['valor' => 0.110, 'medida_en' => $AHORA - 8 * 60000]));
+    $ref = Logica::fechaISO($AHORA);
+    $izquierda = $l->serie('central', 'o3', '24h', null, null, $ref);
+    $derecha = $l->serie('ribera', 'o3', '24h', null, null, $ref);
+    igual($izquierda['desde'], $derecha['desde']);
+    igual($izquierda['hasta'], $derecha['hasta']);
+    igual('real', $izquierda['origen'][47]);
+    igual(['minimo' => 0.03, 'media' => 0.07, 'maximo' => 0.11, 'horas_sin_datos' => 23.5], $izquierda['resumen']);
+    igual('alto', $izquierda['eventos']['picos'][0]['nivel']);
+    lanza('DatosNoValidosException', fn() => $l->serie('central', 'temp', 'rango', '2026-02-30', '2026-03-01'));
+    lanza('DatosNoValidosException', fn() => $l->serie('central', 'temp', 'rango', '2026-12-01', '2026-12-01'));
+    lanza('DatosNoValidosException', fn() => $l->serie('central', 'temp', '24h', null, null, '2026-11-31T10:00:00.000Z'));
 });
 
 prueba('nodos(): último valor de cada magnitud y minutos desde el último dato', function () {

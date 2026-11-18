@@ -15,10 +15,12 @@ public class Percepcion {
     public final double lng;
     public final long cuando;      // ms
     public final String direccion;
+    public final boolean simulada;
     public final String autorId;   // null si es de otro vecino (demo)
 
     public Percepcion(long id, String tipo, int nivel, double lat, double lng,
-                      long cuando, String direccion, String autorId) {
+                      long cuando, String direccion, String autorId, boolean simulada) {
+        this.simulada = simulada;
         this.id = id;
         this.tipo = tipo;
         this.nivel = nivel;

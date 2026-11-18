@@ -28,14 +28,14 @@ Cuentas, préstamos, puntos, regalos, canjes y percepciones: también en el serv
 | Mapa con Google Maps (app y web) | Real (necesita clave, ver abajo) |
 | Medidas del sensor (O₃, temperatura, ruido) | **Reales** (`arduino/`), sin valores simulados. Ruido en dB aproximados (KY-037 calibrado con el móvil) |
 | Sensor → app → servidor | **Real**: la app escucha el beacon de SU sensor, añade ubicación y lo envía a `POST /mediciones`; sin red, lo guarda y lo manda en lote después |
-| Zonas y sus valores | En Android, la API proporciona zonas y series. La web muestra el escenario simulado del Grau i Platja en el mapa, el historial y la comparación. |
+| Zonas y sus valores | La API proporciona zonas y series para Android y la web. La web muestra los ocho espacios del Grau i Platja. |
 | Cuentas (app y panel) y sesión | **Servidor**: contraseñas con hash, token de sesión, roles comprobados en el servidor |
 | Préstamos, sensores del panel, puntos, regalos, canjes, trabajadores | **Servidor** (BD completa). Los puntos los calcula el servidor con las mediciones de quien lleva el sensor |
-| Percepciones (capa Comunidad) | La app consulta el servidor. La web muestra percepciones simuladas del Grau i Platja. |
-| Datos de partida | Los del prototipo, cargados en la BD (`esquema.sql`, sección demo). Solo RSP-4F7K manda datos reales |
+| Percepciones (capa Comunidad) | Android y web consultan el servidor. Las opiniones de ejemplo están identificadas y carecen de cuenta autora. |
+| Datos de partida | Datos de demostración del esquema y lecturas del simulador. Sirven para probar el sistema sin sensor físico. |
 | Zonas en el mapa web | Ocho espacios del Grau i Platja, con contornos de OpenStreetMap. |
-| Alertas | La app las comprueba con los datos reales al leer las zonas (con la app abierta). Sin push (FCM) no llegan con la app cerrada |
-| Favoritos y alertas | Se guardan en el móvil (no en el servidor) |
+| Alertas | Se comprueban al consultar las zonas y mediante una tarea periódica en segundo plano. Android determina el momento de ejecución según conectividad y batería. |
+| Favoritos y alertas | Se guardan en la cuenta. Cada parque admite una alerta por magnitud. |
 
 ## App Android (`android/`)
 
@@ -56,19 +56,19 @@ Estructura del código (`app/src/main/java/com/nodia/respira/`):
 - `ui/` · `SplashActivity` (carga ~3 s, «Developed by Nodia»), `OnboardingActivity`, `MainActivity` con 5 pestañas (Mapa · Parques · Sensor · Puntos · Más) y el resto de pantallas.
   - `Tema` + `RespiraApp`: modo claro (por defecto) u oscuro, en Más › Modo oscuro. Colores en `values/colors.xml` y `values-night/colors.xml` (los mismos que la web). En oscuro, Google Maps usa `res/raw/mapa_oscuro.json`.
   - `TextoActivity` (guía «Qué significan los valores») y `EfectosActivity` («Efectos en la salud»), con las piezas de `Bloques` y los textos de `datos/Salud`.
-  - Percepciones: al tocar una en el mapa sale su hoja; si es tuya, **Editar** (tipo y nivel; conserva lugar y hora) y **Borrar**. También en Más › Mis percepciones. Máximo 3 por hora y cuenta. Demo: Lucía tiene una en C/ Mayor, 43.
+  - Percepciones: al tocar una en el mapa sale su hoja; si es tuya, **Editar** (tipo y nivel; conserva lugar y hora) y **Borrar**. También en Más › Mis percepciones. Máximo 3 publicaciones por hora y cuenta.
 
 ## Web (`web/`)
 
 Páginas: portada (`#inicio`, con los ayuntamientos que usan Respira), mapa, comunidad, historial, comparar, cómo funciona, privacidad y panel municipal (`#acceso`).
 
 1. VS Code › **Open Folder** › `Respira/web` (o abre `respira.code-workspace`).
-2. Copia `web/js/config.example.js` como `web/js/config.js` y pon `MAPS_API_KEY` (clave con **Maps JavaScript API**) y `API_URL` (`https://ablabla.upv.edu.es/respira/api/index.php`). `API_URL` conecta la web con el panel municipal, los ayuntamientos y los puntos de reparto. `MAP_ID` (opcional, mapa vectorial) activa el botón 3D: sin él, Google Maps no permite inclinar el mapa.
+2. Copia `web/js/config.example.js` como `web/js/config.js` y pon `MAPS_API_KEY` (clave con **Maps JavaScript API**) y `API_URL` (`https://ablabla.upv.edu.es/respira/api/index.php`). Web y Android consultan sus datos en esa misma API. Si dejas `API_URL` vacío, la web funciona como demostración local. `MAP_ID` (opcional, mapa vectorial) activa el botón 3D.
 3. Abre con **Live Server** (extensión recomendada) en `http://127.0.0.1:5500`, o `npm start`.
 
 Diseño: fondo blanco con botón de modo oscuro en la cabecera (se recuerda en el navegador). En la ficha de cada zona del mapa, el botón «?» de cada medición abre la guía «Qué significan los valores»; en «Cómo funciona» están también la guía y «Qué te puede pasar» (efectos en la salud).
 
-La vista pública del Grau i Platja utiliza el mapa base de Google y contornos WGS84 de [OpenStreetMap (ODbL 1.0)](https://www.openstreetmap.org/copyright), recogidos en `web/js/grau-platja.js` con los identificadores de origen. Las mediciones y percepciones son simuladas. Si falta la clave o falla Google Maps, la lista y las fichas de zona siguen disponibles.
+La vista pública del Grau i Platja utiliza el mapa base de Google y contornos WGS84 de [OpenStreetMap (ODbL 1.0)](https://www.openstreetmap.org/copyright), recogidos en `web/js/grau-platja.js` con los identificadores de origen y cargados también en la base de datos. La interfaz identifica las lecturas y opiniones simuladas. Si falta la clave o falla Google Maps, la lista y las fichas de zona siguen disponibles.
 
 ## Claves de Google Maps
 
@@ -102,8 +102,7 @@ Resumen: BD `respira` → importar `servidor/bd/esquema.sql` (o `actualizar_desd
 ## Pendiente
 
 - Comprobar el contorno del Campus UPV y calibrar el ruido y el cero del ozono con el sensor montado.
-- Alertas push reales (FCM): hoy las alertas solo saltan con la app abierta.
-- Correo: depende de que Plesk pueda enviar (recuperar contraseña, activar trabajadores).
+- Correo de recuperación: requiere envío de correo configurado en Plesk.
 - Cambiar las contraseñas de demostración antes de un uso real.
 - Traducciones (valenciano, inglés).
-- Compilar con Gradle y probar en un móvil: el Java compila con `javac` contra `android.jar` 36 y las librerías del proyecto, pero no se ha hecho un build de Gradle completo (recursos y manifest) ni se ha probado en un móvil con el sensor.
+- Validar el envío Bluetooth en un móvil con el sensor físico.

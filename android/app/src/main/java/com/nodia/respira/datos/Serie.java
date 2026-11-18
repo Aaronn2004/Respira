@@ -17,9 +17,11 @@ public class Serie {
         public final long desde;      // ms (en los picos: el momento)
         public final long hasta;      // ms (en los picos: igual que desde)
         public final double valor;    // máximo del rato o valor del pico
-        public final String nivel;    // "alto" | "medio" (en los picos: null)
+        public final String nivel;
+        public final String origen;
 
-        public Evento(long desde, long hasta, double valor, String nivel) {
+        public Evento(long desde, long hasta, double valor, String nivel, String origen) {
+            this.origen = origen;
             this.desde = desde;
             this.hasta = hasta;
             this.valor = valor;
@@ -31,6 +33,18 @@ public class Serie {
     public final Double[] aprox;
     public final List<Evento> alertas = new ArrayList<>();
     public final List<Evento> picos = new ArrayList<>();
+    public final List<Evento> avisos = new ArrayList<>();
+    public String[] origen;
+    public Double minimo;
+    public Double media;
+    public Double maximo;
+    public boolean conResumen;
+
+    public boolean tieneSimulacion() {
+        if (origen == null) return false;
+        for (String o : origen) if ("simulado".equals(o)) return true;
+        return false;
+    }
 
     public Serie(Double[] valores, Double[] aprox) {
         this.valores = valores;

@@ -23,7 +23,9 @@ function aSQLite(string $sql): string {
         if ($t === '' || strpos($t, '--') === 0) {
             continue;
         }
-        if (preg_match('/^(UNIQUE )?KEY /', $t)) {
+        if (preg_match('/^UNIQUE KEY (\w+) (.*)$/', $t, $indice)) {
+            $t = "CONSTRAINT {$indice[1]} UNIQUE {$indice[2]}";
+        } elseif (preg_match('/^KEY /', $t)) {
             continue;                                   // los índices no hacen falta en los tests
         }
         if (preg_match('/^CONSTRAINT \w+ CHECK/', $t)) {

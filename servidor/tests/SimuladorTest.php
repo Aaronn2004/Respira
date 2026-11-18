@@ -25,7 +25,7 @@ prueba('aproximar: rellena huecos cortos con dato a los dos lados', function () 
     igual([null, 1.5, 2.0, 2.5, null], Logica::aproximar([1.0, null, null, null, 3.0], $media, 1));
     igual(array_fill(0, 7, null), Logica::aproximar([1.0, null, null, null, null, null, 3.0], $media, 1), 'más de 2 h: gris');
     igual([null, null, null], Logica::aproximar([null, null, 3.0], $media, 1), 'sin dato antes: gris');
-    igual([null, 2.0, null], Logica::aproximar([1.0, null, 3.0], 3 * 3600000, 1), 'tramos de 3 h: se aproxima 1 tramo');
+    igual([null, null, null], Logica::aproximar([1.0, null, 3.0], 3 * 3600000, 1), 'tramos de 3 h: el hueco queda sin aproximar');
 });
 
 prueba('eventos: ratos en Alto y picos en tramos no seguidos', function () {
@@ -53,7 +53,7 @@ prueba('valores: deterministas y dentro de lo normal para noviembre', function (
     }
 });
 
-prueba('simulador: todas las zonas con datos salvo oeste (Sin datos) y estacion (Antiguo)', function () use ($reloj) {
+prueba('simulador: zonas recientes, antiguas y estimadas según las lecturas cercanas', function () use ($reloj) {
     global $T;
     $bd = crearBDPrueba();
     $s = new Simulador($bd, '', $reloj);
@@ -66,7 +66,9 @@ prueba('simulador: todas las zonas con datos salvo oeste (Sin datos) y estacion 
     foreach ((new Logica($bd, '', $reloj))->zonas() as $z) {
         $zonas[$z['id']] = $z;
     }
-    igual(null, $zonas['oeste']['hace_min'], 'oeste sin datos');
+    igual(null, $zonas['oeste']['hace_min'], 'oeste sin lecturas');
+    igual(null, $zonas['marenys']['hace_min'], 'marenys no tiene lecturas propias');
+    igual('estimado', $zonas['marenys']['detalle']['o3']['estado'], 'marenys recibe una estimación de sus vecinas');
     cierto($zonas['estacion']['hace_min'] >= 180 && $zonas['estacion']['hace_min'] < 200, 'estacion antiguo');
     foreach (['central', 'centro', 'campus', 'norte'] as $id) {
         cierto($zonas[$id]['o3'] !== null && $zonas[$id]['ruido'] !== null && $zonas[$id]['media_24h']['temp'] !== null, $id);
@@ -81,6 +83,20 @@ prueba('simulador: todas las zonas con datos salvo oeste (Sin datos) y estacion 
     cierto((int) $bd->query('SELECT COUNT(*) FROM medicion')->fetchColumn() > $n, 'una hora después añade la hora');
     cierto((int) $bd->query("SELECT COUNT(*) FROM percepcion")->fetchColumn() === 0, 'sin cuentas de demo no inventa percepciones');
     $T -= 3600000;
+});
+
+prueba('simulador: una segunda petición respeta el bloqueo de una primera pasada', function () use ($reloj) {
+    $bd = crearBDPrueba();
+    $marca = tempnam(sys_get_temp_dir(), 'respira_sim_');
+    $archivo = fopen($marca, 'c+');
+    try {
+        cierto(flock($archivo, LOCK_EX), 'primera pasada conserva el bloqueo');
+        igual(0, (new Simulador($bd, '', $reloj, $marca))->alDia(true), 'segunda pasada no genera filas');
+        igual(0, (int) $bd->query('SELECT COUNT(*) FROM medicion')->fetchColumn(), 'sin duplicados');
+    } finally {
+        fclose($archivo);
+        unlink($marca);
+    }
 });
 
 prueba('los datos reales mandan sobre los simulados', function () use ($reloj) {

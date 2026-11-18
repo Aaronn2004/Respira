@@ -23,6 +23,7 @@ SET NAMES utf8mb4;
 SET time_zone = '+00:00';   -- todas las fechas se guardan en UTC
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS alerta_emitida;
 DROP TABLE IF EXISTS alerta;
 DROP TABLE IF EXISTS favorito;
 DROP TABLE IF EXISTS canje;
@@ -31,6 +32,7 @@ DROP TABLE IF EXISTS puntos_dia;
 DROP TABLE IF EXISTS revision;
 DROP TABLE IF EXISTS jornada;
 DROP TABLE IF EXISTS reglas_puntos;
+DROP TABLE IF EXISTS percepcion_envio;
 DROP TABLE IF EXISTS percepcion;
 DROP TABLE IF EXISTS prestamo;
 DROP TABLE IF EXISTS medicion;
@@ -39,6 +41,7 @@ DROP TABLE IF EXISTS invitacion;
 DROP TABLE IF EXISTS empleado;
 DROP TABLE IF EXISTS token_cuenta;
 DROP TABLE IF EXISTS sesion;
+DROP TABLE IF EXISTS acceso_intento;
 DROP TABLE IF EXISTS usuario;
 DROP TABLE IF EXISTS punto_reparto;
 DROP TABLE IF EXISTS ayuntamiento;
@@ -68,14 +71,14 @@ CREATE TABLE ayuntamiento (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Parques y barrios. «area» es el contorno en JSON: [[lat,lng], ...].
+-- Parques, barrios y playas. «area» conserva el anillo heredado o la geometria GeoJSON.
 -- Se listan por orden alfabetico (ORDER BY nombre): no hace falta un campo de orden.
 CREATE TABLE zona (
   id           VARCHAR(32)  NOT NULL,
   ayuntamiento_id VARCHAR(32) NOT NULL COMMENT 'a que ayuntamiento pertenece',
   nombre       VARCHAR(80)  NOT NULL,
-  tipo         ENUM('parque','barrio') NOT NULL,
-  area         TEXT         NOT NULL COMMENT 'contorno: JSON [[lat,lng],...] (minimo 3 puntos)',
+  tipo         ENUM('parque','barrio','playa') NOT NULL,
+  area         TEXT         NOT NULL COMMENT 'contorno: anillo [lat,lng] heredado o geometria GeoJSON',
   etiqueta_lat DECIMAL(9,6) NOT NULL COMMENT 'donde se escribe el nombre en el mapa',
   etiqueta_lng DECIMAL(9,6) NOT NULL,
   PRIMARY KEY (id),
@@ -131,10 +134,21 @@ CREATE TABLE usuario (
   email       VARCHAR(120) NOT NULL,
   clave_hash  VARCHAR(255) NOT NULL COMMENT 'bcrypt (password_hash)',
   alta        DATETIME(3)  NOT NULL,
+  requiere_cambio_clave TINYINT(1) NOT NULL DEFAULT 0,
+  nombre_vecino VARCHAR(20) GENERATED ALWAYS AS (CASE WHEN rol = 'vecino' THEN LOWER(nombre) ELSE NULL END) STORED,
   PRIMARY KEY (id),
   UNIQUE KEY usuario_email (email),
+  UNIQUE KEY usuario_nombre_vecino (nombre_vecino),
   KEY usuario_nombre (nombre),
   CONSTRAINT usuario_id_valido CHECK (id REGEXP '^(U-[0-9]{5}|T-[0-9]{4}|A-[0-9]{4})$')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE acceso_intento (
+  correo_hash CHAR(64) NOT NULL,
+  fallos TINYINT UNSIGNED NOT NULL,
+  vence DATETIME(3) NOT NULL,
+  PRIMARY KEY (correo_hash),
+  KEY acceso_intento_vence (vence)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Datos de empleado de los trabajadores municipales (una fila por trabajador)
@@ -284,6 +298,16 @@ CREATE TABLE percepcion (
   CONSTRAINT percepcion_nivel CHECK (nivel BETWEEN 1 AND 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- El límite de publicación cuenta también las percepciones que se han borrado.
+CREATE TABLE percepcion_envio (
+  percepcion_id BIGINT UNSIGNED NOT NULL,
+  usuario_id VARCHAR(8) NOT NULL,
+  creada DATETIME(3) NOT NULL,
+  PRIMARY KEY (percepcion_id),
+  KEY percepcion_envio_usuario (usuario_id, creada),
+  CONSTRAINT percepcion_envio_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- Seguimiento de parques (app): favoritos y alertas de la cuenta ----
 -- Antes vivían solo en el móvil; ahora se guardan en la cuenta y se
 -- recuperan al iniciar sesión en otro móvil.
@@ -296,15 +320,28 @@ CREATE TABLE favorito (
   CONSTRAINT favorito_zona_fk FOREIGN KEY (zona_id) REFERENCES zona (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Una alerta por parque seguido (el móvil la comprueba y avisa)
+-- Una alerta por magnitud de cada parque seguido.
 CREATE TABLE alerta (
   usuario_id VARCHAR(8)  NOT NULL,
   zona_id    VARCHAR(32) NOT NULL,
   magnitud   ENUM('o3','temp','ruido') NOT NULL,
   condicion  ENUM('bajo','medio','alto','custom') NOT NULL,
   valor      DECIMAL(8,3) NOT NULL DEFAULT 0 COMMENT 'límite; solo cuenta si condicion = custom',
-  PRIMARY KEY (usuario_id, zona_id),
+  PRIMARY KEY (usuario_id, zona_id, magnitud),
   CONSTRAINT alerta_favorito_fk FOREIGN KEY (usuario_id, zona_id) REFERENCES favorito (usuario_id, zona_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE alerta_emitida (
+  usuario_id VARCHAR(8) NOT NULL,
+  zona_id VARCHAR(32) NOT NULL,
+  magnitud ENUM('o3','temp','ruido') NOT NULL,
+  momento DATETIME(3) NOT NULL,
+  valor DECIMAL(8,3) NOT NULL,
+  origen ENUM('real','simulado','estimado') NOT NULL,
+  PRIMARY KEY (usuario_id, zona_id, magnitud, momento),
+  KEY alerta_emitida_serie (zona_id, magnitud, momento),
+  CONSTRAINT alerta_emitida_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE,
+  CONSTRAINT alerta_emitida_zona_fk FOREIGN KEY (zona_id) REFERENCES zona (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- @@TABLAS:FIN
 
@@ -345,6 +382,18 @@ INSERT INTO zona (id, nombre, tipo, area, etiqueta_lat, etiqueta_lng, ayuntamien
   ('campus', 'Campus UPV de Gandia', 'parque', '[[38.9978,-0.1679],[38.9978,-0.1639],[38.9948,-0.1639],[38.9948,-0.1679]]', 38.9963, -0.1659, 'gandia');
 
 -- Nodo real: el sensor montado (SPEC O3 + DHT11 + KY-037)
+-- Grau i Platja. Contornos © colaboradores de OpenStreetMap, ODbL 1.0.
+-- Fuente: https://www.openstreetmap.org/copyright (ver web/js/grau-platja.js).
+INSERT INTO zona (id, nombre, tipo, area, etiqueta_lat, etiqueta_lng, ayuntamiento_id) VALUES
+  ('clot', 'Parc del Clot de la Mota', 'parque', '{"type":"MultiPolygon","coordinates":[[[[-0.165423,39.002595],[-0.16651,39.003807],[-0.166647,39.003789],[-0.16788,39.00277],[-0.167887,39.002608],[-0.16775,39.002497],[-0.167404,39.002723],[-0.166798,39.002115],[-0.166856,39.001992],[-0.166825,39.001918],[-0.166798,39.001875],[-0.165423,39.002595]]],[[[-0.166385,39.003895],[-0.165285,39.002738],[-0.165114,39.002809],[-0.164706,39.003043],[-0.165794,39.004232],[-0.166344,39.003963],[-0.166385,39.003895]]]]}', 39.002841, -0.166719, 'gandia'),
+  ('baladre', 'Parc del Baladre', 'parque', '{"type":"Polygon","coordinates":[[[-0.170647,39.007575],[-0.170262,39.007066],[-0.169702,39.006333],[-0.169619,39.006224],[-0.16898,39.006556],[-0.169062,39.006658],[-0.169585,39.00734],[-0.17,39.007879],[-0.170647,39.007575]]]}', 39.007052, -0.169807, 'gandia'),
+  ('castell', 'Plaça del Castell', 'parque', '{"type":"Polygon","coordinates":[[[-0.172646,39.008985],[-0.17263,39.008884],[-0.172532,39.00882],[-0.172508,39.008732],[-0.1725,39.008667],[-0.172293,39.00868],[-0.172155,39.008733],[-0.17203,39.00877],[-0.171875,39.008816],[-0.171807,39.008852],[-0.171805,39.00888],[-0.17182,39.008906],[-0.171873,39.008937],[-0.171964,39.008982],[-0.172091,39.008993],[-0.172161,39.00902],[-0.172237,39.009068],[-0.172294,39.009132],[-0.172347,39.009138],[-0.172542,39.009046],[-0.172646,39.008985]]]}', 39.008903, -0.172225, 'gandia'),
+  ('ermita', 'Plaça de l’Ermita', 'parque', '{"type":"Polygon","coordinates":[[[-0.160679,38.991806],[-0.160609,38.991766],[-0.159182,38.992204],[-0.159238,38.992294],[-0.159527,38.992193],[-0.159582,38.992285],[-0.15982,38.992175],[-0.159965,38.99221],[-0.160278,38.992109],[-0.160679,38.991806]]]}', 38.99203, -0.160066, 'gandia'),
+  ('oller', 'Parc de l’Oller', 'parque', '{"type":"Polygon","coordinates":[[[-0.16137,38.989142],[-0.160862,38.988706],[-0.160353,38.988314],[-0.160117,38.988805],[-0.159997,38.989058],[-0.160216,38.989367],[-0.160306,38.989412],[-0.16137,38.989142]]]}', 38.988863, -0.160567, 'gandia'),
+  ('platja-nord', 'Platja Nord de Gandia', 'playa', '{"type":"MultiPolygon","coordinates":[[[[-0.156262,38.99839],[-0.156708,38.999012],[-0.156725,38.999439],[-0.15739,39.000557],[-0.157772,39.000888],[-0.157921,39.001323],[-0.158069,39.001632],[-0.158433,39.00196],[-0.158621,39.002188],[-0.158753,39.002339],[-0.158965,39.002676],[-0.159238,39.003056],[-0.1598,39.003607],[-0.160165,39.003907],[-0.160337,39.004094],[-0.1605,39.00432],[-0.161203,39.005333],[-0.161526,39.005734],[-0.161972,39.006005],[-0.162148,39.006408],[-0.162754,39.007253],[-0.162951,39.007442],[-0.163164,39.007851],[-0.163579,39.008275],[-0.164113,39.008829],[-0.164495,39.009295],[-0.166069,39.008987],[-0.165812,39.008664],[-0.165446,39.008203],[-0.165065,39.007724],[-0.164642,39.007192],[-0.164068,39.00647],[-0.163402,39.005632],[-0.162882,39.004977],[-0.162288,39.00423],[-0.161861,39.003693],[-0.16148,39.003214],[-0.161062,39.002688],[-0.161009,39.00262],[-0.160536,39.002096],[-0.160023,39.001511],[-0.159584,39.001017],[-0.159155,39.000534],[-0.15901,39.000371],[-0.158907,39.000418],[-0.158619,39.000088],[-0.158524,38.999966],[-0.15866,38.999894],[-0.158345,38.99949],[-0.158208,38.999325],[-0.158122,38.999368],[-0.157882,38.999024],[-0.15781,38.998927],[-0.157795,38.998907],[-0.157429,38.998413],[-0.157416,38.998396],[-0.15705,38.997943],[-0.157043,38.997935],[-0.156662,38.998102],[-0.156426,38.998216],[-0.156354,38.998251],[-0.156262,38.99839]]],[[[-0.166069,39.008987],[-0.164495,39.009295],[-0.164958,39.009785],[-0.16527,39.010265],[-0.16565,39.010643],[-0.165841,39.010827],[-0.16601,39.011183],[-0.16631,39.011517],[-0.166514,39.01184],[-0.166876,39.012491],[-0.167241,39.012947],[-0.167471,39.013312],[-0.167867,39.013812],[-0.168131,39.014123],[-0.16847,39.014456],[-0.169067,39.015269],[-0.169404,39.01562],[-0.17012,39.016578],[-0.170443,39.016999],[-0.170989,39.017844],[-0.17186,39.018978],[-0.172306,39.019539],[-0.172651,39.01986],[-0.173146,39.020482],[-0.173815,39.021392],[-0.174702,39.021115],[-0.174656,39.02104],[-0.174432,39.020648],[-0.174338,39.02038],[-0.174396,39.02023],[-0.174479,39.020177],[-0.174419,39.020098],[-0.174038,39.020246],[-0.17374,39.019821],[-0.17362,39.019593],[-0.173586,39.019283],[-0.173705,39.019119],[-0.173607,39.018968],[-0.173258,39.019116],[-0.173047,39.018814],[-0.17274,39.018471],[-0.17248,39.018026],[-0.172518,39.01791],[-0.172687,39.017854],[-0.172701,39.017866],[-0.172798,39.017815],[-0.172816,39.017751],[-0.17271,39.017613],[-0.172319,39.017779],[-0.171334,39.016613],[-0.170687,39.015787],[-0.170781,39.015332],[-0.170764,39.015306],[-0.170668,39.015186],[-0.170165,39.014508],[-0.169708,39.01389],[-0.169342,39.013397],[-0.169262,39.013288],[-0.16925,39.013272],[-0.168738,39.012582],[-0.168287,39.011973],[-0.167748,39.011245],[-0.167695,39.011174],[-0.166969,39.01029],[-0.166356,39.009402],[-0.166069,39.008987]]]]}', 39.003615, -0.160804, 'gandia'),
+  ('venecia', 'Platja de Venècia', 'playa', '{"type":"Polygon","coordinates":[[[-0.152638,38.991034],[-0.151749,38.991041],[-0.151579,38.99151],[-0.151472,38.991807],[-0.151975,38.991864],[-0.152022,38.991868],[-0.152081,38.991692],[-0.152149,38.991516],[-0.152181,38.991478],[-0.152274,38.991153],[-0.152442,38.991147],[-0.152608,38.991106],[-0.152638,38.991034]]]}', 38.991451, -0.151895, 'gandia'),
+  ('marenys', 'Platja dels Marenys de Rafalcaïd', 'playa', '{"type":"Polygon","coordinates":[[[-0.151573,38.989722],[-0.151547,38.989636],[-0.151541,38.989573],[-0.151541,38.989515],[-0.151541,38.989504],[-0.1515,38.989353],[-0.151421,38.989216],[-0.151335,38.989074],[-0.151182,38.988862],[-0.150921,38.988421],[-0.150777,38.988131],[-0.15077,38.988117],[-0.150547,38.987771],[-0.150405,38.987518],[-0.15032,38.987389],[-0.150178,38.987177],[-0.150141,38.987122],[-0.149669,38.986381],[-0.149656,38.986364],[-0.149112,38.985624],[-0.148804,38.985206],[-0.148601,38.984983],[-0.148578,38.98493],[-0.14857,38.98483],[-0.148603,38.984801],[-0.148093,38.984192],[-0.147844,38.983845],[-0.147637,38.983912],[-0.147279,38.983486],[-0.147182,38.983325],[-0.146991,38.983355],[-0.146901,38.983349],[-0.147076,38.983703],[-0.147502,38.984125],[-0.147583,38.984241],[-0.148092,38.984899],[-0.148278,38.985193],[-0.148467,38.985387],[-0.148565,38.985493],[-0.148934,38.986029],[-0.148952,38.986056],[-0.149769,38.98715],[-0.149806,38.987221],[-0.150194,38.987971],[-0.150524,38.988693],[-0.150886,38.989289],[-0.150923,38.989412],[-0.150983,38.98959],[-0.150922,38.989782],[-0.151592,38.989912],[-0.151573,38.989722]]]}', 38.986618, -0.149596, 'gandia');
+
 INSERT INTO nodo (codigo, tipo, magnitudes, estado, ayuntamiento_id) VALUES
   ('RSP-4F7K', 'voluntariado', 'o3,temp,ruido', 'disponible', 'gandia');
 -- @@BASE:FIN
@@ -383,8 +432,8 @@ INSERT INTO nodo (codigo, tipo, magnitudes, estado, asignado_a, incidencia, ayun
   ('RSP-5K8P', 'voluntariado', 'o3,temp',       'disponible', 'No asignado', 'Sin incidencias', 'gandia'),
   ('RSP-9C2D', 'voluntariado', 'o3,temp,ruido', 'disponible', 'No asignado', 'Sin incidencias', 'gandia'),
   ('RSP-X3QR', 'voluntariado', 'o3,temp',       'mant',       'No asignado', 'Carcasa rota al devolverlo', 'gandia'),
-  ('RSP-L1MP', 'trabajador', 'o3,temp,ruido', 'activo', 'Limpieza · Brigada de parques 2', 'Sin incidencias', 'gandia'),
-  ('RSP-M7NT', 'trabajador', 'o3,temp',       'activo', 'Mantenimiento de jardines', 'Sin incidencias', 'gandia'),
+  ('RSP-L1MP', 'trabajador', 'o3,temp,ruido', 'activo', 'Limpieza viaria', 'Sin incidencias', 'gandia'),
+  ('RSP-M7NT', 'trabajador', 'o3,temp',       'activo', 'Parques y jardines', 'Sin incidencias', 'gandia'),
   ('RSP-B12A', 'autobus', 'o3,temp,ruido', 'activo', 'Línea 2 · Bus 214', 'Sin incidencias', 'gandia'),
   ('RSP-B05C', 'autobus', 'o3,temp,ruido', 'activo', 'Línea 5 · Bus 231', 'Sin incidencias', 'gandia'),
   ('RSP-V08E', 'bici', 'o3,temp',       'activo', 'Bici compartida · Estación 8', 'Sin incidencias', 'gandia');
@@ -430,16 +479,7 @@ INSERT INTO canje (codigo, usuario_id, regalo_id, coste, creado, caduca, estado)
   ('CJ-2K9L', 'U-11902', 'g3', 250, UTC_TIMESTAMP(3) - INTERVAL 10 DAY, CURDATE() - INTERVAL 3 DAY, 'caducado'),
   ('CJ-5P7Q', 'U-30577', 'g2', 150, UTC_TIMESTAMP(3) - INTERVAL 6 DAY, CURDATE() + INTERVAL 1 DAY, 'entregado');
 
--- Percepciones de las últimas horas (desaparecen del mapa a las 24 h de importar)
-INSERT INTO percepcion (usuario_id, tipo, nivel, lat, lng, direccion, creada) VALUES
-  ('U-11902', 'ruido', 3, 38.968978, -0.197667, 'Av. del Río, 40',   UTC_TIMESTAMP(3) - INTERVAL 20 MINUTE),
-  ('U-30577', 'temp',  2, 38.971433, -0.177622, 'C/ del Molino, 18', UTC_TIMESTAMP(3) - INTERVAL 120 MINUTE),
-  ('U-11902', 'aire',  1, 38.962839, -0.188867, 'C/ Mayor, 61',      UTC_TIMESTAMP(3) - INTERVAL 300 MINUTE),
-  ('U-30577', 'ruido', 3, 38.964804, -0.178600, 'Pl. Mayor, 4',      UTC_TIMESTAMP(3) - INTERVAL 12 MINUTE),
-  ('U-11902', 'temp',  3, 38.972661, -0.165400, 'Av. Norte, 7',      UTC_TIMESTAMP(3) - INTERVAL 540 MINUTE),
-  ('U-30577', 'aire',  2, 38.977080, -0.192289, 'C/ Alta, 30',       UTC_TIMESTAMP(3) - INTERVAL 900 MINUTE),
-  ('U-11902', 'ruido', 1, 38.958420, -0.182022, 'C/ Poniente, 12',   UTC_TIMESTAMP(3) - INTERVAL 60 MINUTE),
-  ('U-48213', 'ruido', 2, 38.963700, -0.186500, 'C/ Mayor, 43',      UTC_TIMESTAMP(3) - INTERVAL 40 MINUTE);
+-- Los ejemplos de Comunidad los devuelve la API sin atribuirlos a usuarios.
 -- Lucía sigue dos parques y tiene una alerta de ruido en el Central
 INSERT INTO favorito (usuario_id, zona_id, creado) VALUES
   ('U-48213', 'ribera',  UTC_TIMESTAMP(3) - INTERVAL 20 DAY),

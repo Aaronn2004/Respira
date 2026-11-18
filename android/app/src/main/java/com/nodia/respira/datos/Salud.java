@@ -17,25 +17,23 @@ public final class Salud {
     // magnitud, nivel --> significado() --> Text (una frase)
     // --------------------------------------------------------------
     public static String significado(Magnitud m, Nivel n) {
-        switch (m) {
-            case O3:
-                return n == Nivel.BAJO ? "Aire sin problemas para nadie."
-                        : n == Nivel.MEDIO ? "Quien hace deporte intenso puede notarlo."
-                        : "Supera el umbral de información de la UE: evita el esfuerzo al aire libre.";
-            case TEMP:
-                return n == Nivel.BAJO ? "Temperatura agradable."
-                        : n == Nivel.MEDIO ? "Calor: busca sombra y bebe agua."
-                        : "Riesgo para mayores, niños y enfermos crónicos.";
-            default:
-                return n == Nivel.BAJO ? "Ambiente tranquilo."
-                        : n == Nivel.MEDIO ? "Ruido de tráfico habitual: molesta y cansa."
-                        : "Si es habitual, daña la salud (sueño, tensión, corazón).";
-        }
+        return n == Nivel.BAJO ? "Intervalo inferior de la escala de Respira."
+                : n == Nivel.MEDIO ? "Intervalo intermedio de la escala de Respira."
+                : "Intervalo superior de la escala de Respira.";
     }
 
     public static String fuenteGuia(Magnitud m) {
-        return m == Magnitud.O3 ? "Referencia europea de 120 y 180 µg/m³ (≈ 0,060 y 0,090 ppm)"
-                : "Valores de ejemplo del prototipo, pendientes de fuente oficial";
+        switch (m) {
+            case O3:
+                return "Referencia oficial (RD 102/2011): 120 µg/m³ en 8 h y 180 µg/m³ en 1 h. "
+                        + "La escala de Respira clasifica medias horarias en ppm.";
+            case TEMP:
+                return "La escala es orientativa. El Ministerio de Sanidad usa máximas diarias "
+                        + "y umbrales distintos por zona de meteosalud.";
+            default:
+                return "La escala es orientativa. Para tráfico vial la OMS usa 53 dB Lden y 45 dB Lnight, "
+                        + "indicadores de exposición a largo plazo.";
+        }
     }
 
     // --------------------------------------------------------------
@@ -90,27 +88,27 @@ public final class Salud {
     }
 
     public static final Efecto[] EFECTOS = {
-        new Efecto(Magnitud.O3, "Ozono", "Irrita los pulmones las tardes de sol", new Paso[]{
-            new Paso(MOLESTA, "0,060 ppm", "8 h", "Te ahogas antes si haces deporte"),
-            new Paso(DANA, "0,090 ppm", "1 h", "Ojos y garganta irritados, tos, duele respirar hondo"),
-            new Paso(PELIGRO, "0,120 ppm", "1 h", "Crisis de asma o EPOC; los pulmones rinden menos, también en sanos")},
+        new Efecto(Magnitud.O3, "Ozono", "Puede irritar las vías respiratorias", new Paso[]{
+            new Paso(MOLESTA, "Al respirar", "", "Puede causar tos o irritación de garganta."),
+            new Paso(DANA, "Con ejercicio", "", "La respiración rápida aumenta la exposición."),
+            new Paso(PELIGRO, "Personas sensibles", "", "Puede agravar el asma y otras enfermedades respiratorias.")},
             new String[]{"Niños", "Mayores", "Asma o EPOC", "Deportistas"},
-            "Nada de deporte fuera de 12 a 20 h",
-            "UE (RD 102/2011) · OMS 2021"),
-        new Efecto(Magnitud.TEMP, "Calor", "El cuerpo deja de poder enfriarse", new Paso[]{
-            new Paso(MOLESTA, "28–30 °C", "máxima", "Deshidratación, calambres y dolor de cabeza en personas sensibles"),
-            new Paso(DANA, "> 20 °C", "de noche", "No descansas: el cuerpo no se recupera y el corazón se fuerza"),
-            new Paso(PELIGRO, "> 40 °C", "en el cuerpo", "Golpe de calor: confusión y piel seca y ardiendo. Llama al 112")},
+            "Consulta los avisos oficiales y adapta el esfuerzo al aire libre.",
+            "OMS 2021 · RD 102/2011"),
+        new Efecto(Magnitud.TEMP, "Calor", "La exposición prolongada aumenta el riesgo", new Paso[]{
+            new Paso(MOLESTA, "Con calor", "", "Pueden aparecer calambres, dolor de cabeza o deshidratación."),
+            new Paso(DANA, "Con exposición intensa", "", "El calor puede causar agotamiento."),
+            new Paso(PELIGRO, "Golpe de calor", "", "La confusión o pérdida de consciencia pueden indicar una emergencia.")},
             new String[]{"Mayores de 65", "Bebés", "Embarazadas", "Enfermos crónicos"},
-            "Sombra, agua sin esperar a tener sed y evita las horas centrales",
-            "Ministerio de Sanidad, plan de calor 2026"),
-        new Efecto(Magnitud.RUIDO, "Ruido", "Te daña aunque te acostumbres", new Paso[]{
-            new Paso(MOLESTA, "45 dB", "noche", "Duermes peor aunque no llegues a despertarte"),
-            new Paso(DANA, "53–65 dB", "día", "Estrés, tensión alta y más riesgo de infarto con los años"),
-            new Paso(PELIGRO, "85 dB", "horas", "Pitidos y sordera que no tienen vuelta atrás")},
-            new String[]{"Niños", "Mayores", "Tensión alta o corazón"},
-            "Duerme en el cuarto más tranquilo y pasea por calles sin tráfico",
-            "OMS Europa 2018 · RD 286/2006"),
+            "Busca sombra, hidrátate y sigue los avisos de tu zona. Si hay síntomas graves, llama al 112.",
+            "Ministerio de Sanidad · Plan nacional de calor"),
+        new Efecto(Magnitud.RUIDO, "Ruido", "Los efectos dependen de intensidad y duración", new Paso[]{
+            new Paso(MOLESTA, "Por la noche", "", "El ruido puede interrumpir el sueño."),
+            new Paso(DANA, "Exposición habitual", "", "El ruido ambiental se asocia con molestias y efectos cardiovasculares."),
+            new Paso(PELIGRO, "Sonidos intensos", "", "La exposición intensa puede afectar a la audición.")},
+            new String[]{"Niños", "Mayores", "Personas con problemas de sueño o cardiovasculares"},
+            "Reduce la exposición cuando puedas y busca zonas tranquilas.",
+            "OMS Europa 2018 · Guías de ruido ambiental"),
     };
 
     public static final String AVISO = "Orientativo: no sustituye al médico. El mapa da medias de la última hora. "

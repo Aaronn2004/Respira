@@ -24,6 +24,9 @@ class Cuentas extends Base {
     const SESION_APP_MS = 90 * Base::DIA_MS;   // la app no pide la contraseña cada día
     const SESION_WEB_MS = 12 * Base::HORA_MS;  // el panel caduca en una jornada
     const RECUPERAR_MS = 1 * Base::HORA_MS;
+    const CLAVE_INICIAL_MS = 48 * Base::HORA_MS;
+    const BLOQUEO_MS = 15 * 60000;
+    const MAX_FALLOS = 5;
     const ROLES_PANEL = ['admin', 'tecnico', 'reparto'];
     const ROLES_APP = ['vecino', 'trabajador'];
     const SERVICIOS = ['Limpieza viaria', 'Parques y jardines', 'Mantenimiento urbano', 'Policía local',
@@ -57,7 +60,7 @@ class Cuentas extends Base {
         $servicio = $u['rol'] === 'trabajador'
             ? $this->valor("SELECT servicio FROM {$this->p}empleado WHERE usuario_id = ?", [$u['id']]) : null;
         return ['id' => $u['id'], 'rol' => $u['rol'], 'nombre' => $u['nombre'], 'email' => $u['email'],
-            'servicio' => $servicio, 'punto' => null];
+            'servicio' => $servicio, 'punto' => null, 'requiere_cambio_clave' => (bool) $u['requiere_cambio_clave']];
     }
 
     public function usuarioPorId(string $id): ?array {
@@ -73,8 +76,11 @@ class Cuentas extends Base {
         if ($clave === '') {
             return 'Escribe una contraseña.';
         }
+        if (strlen($clave) > 72 || strpos($clave, chr(0)) !== false) {
+            return 'La contraseña supera el tamaño admitido o contiene un carácter no válido.';
+        }
         if ($rol === 'vecino') {
-            return strlen($clave) < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : null;
+            return mb_strlen($clave) < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : null;
         }
         if (mb_strlen($clave) < 10) {
             return 'Tiene que tener al menos 10 caracteres (has escrito ' . mb_strlen($clave) . ').';
@@ -87,6 +93,26 @@ class Cuentas extends Base {
             return 'No puede contener tu nombre de usuario.';
         }
         return null;
+    }
+
+    private function altaSinColision(callable $insertar, callable $duplicados): array {
+        for ($intento = 0; $intento < 5; $intento++) {
+            try {
+                return $this->transaccion($insertar);
+            } catch (PDOException $e) {
+                if ($e->getCode() !== '23000') {
+                    throw $e;
+                }
+                $campos = $duplicados();
+                if ($campos) {
+                    throw new ErroresDeCamposException($campos);
+                }
+                if (stripos($e->getMessage(), 'duplicate') === false && stripos($e->getMessage(), 'unique') === false) {
+                    throw $e;
+                }
+            }
+        }
+        throw new ConflictoException('No se pudo reservar un identificador. Vuelve a intentarlo.');
     }
 
     // --------------------------------------------------------------
@@ -102,11 +128,13 @@ class Cuentas extends Base {
             $e['nombre'] = 'Elige un nombre de usuario.';
         } elseif (!preg_match('/^[A-Za-z0-9._]{3,20}$/', $n)) {
             $e['nombre'] = 'Usa de 3 a 20 letras, números, puntos o guiones bajos, sin espacios.';
-        } elseif ((int) $this->valor("SELECT COUNT(*) FROM {$this->p}usuario WHERE rol = 'vecino' AND LOWER(nombre) = ?", [strtolower($n)]) > 0) {
+        } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE nombre_vecino = ?", [strtolower($n)])) {
             $e['nombre'] = 'Ese nombre de usuario ya existe. Prueba con otro.';
         }
         if ($m === '') {
             $e['email'] = 'Escribe tu correo.';
+        } elseif (strlen($m) > 120) {
+            $e['email'] = 'El correo debe tener como máximo 120 caracteres.';
         } elseif (!self::esEmail($m)) {
             $e['email'] = 'El correo no tiene un formato válido. Ejemplo: nombre@correo.es';
         } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE email = ?", [$m])) {
@@ -123,23 +151,34 @@ class Cuentas extends Base {
             throw new ErroresDeCamposException($e);
         }
         $ahora = $this->ahora();
-        return $this->transaccion(function () use ($n, $m, $clave, $ahora) {
+        $hash = password_hash($clave, PASSWORD_DEFAULT);
+        return $this->altaSinColision(function () use ($n, $m, $hash, $ahora) {
             do {
                 $id = 'U-' . random_int(10000, 99999);
             } while ($this->usuarioPorId($id));
             // sin aceptar las condiciones no se llega aquí: «alta» es también el momento en que las aceptó
             $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, alta)
                 VALUES (?, 'vecino', ?, ?, ?, ?)",
-                [$id, $n, $m, password_hash($clave, PASSWORD_DEFAULT), self::fechaBD($ahora)]);
+                [$id, $n, $m, $hash, self::fechaBD($ahora)]);
             $u = $this->usuarioPorId($id);
             return ['token' => $this->abrirSesion($u, 'app'), 'usuario' => $this->perfil($u)];
+        }, function () use ($n, $m) {
+            $e = [];
+            if ($this->fila("SELECT id FROM {$this->p}usuario WHERE nombre_vecino = ?", [strtolower($n)])) {
+                $e['nombre'] = 'Ese nombre de usuario ya existe.';
+            }
+            if ($this->fila("SELECT id FROM {$this->p}usuario WHERE email = ?", [$m])) {
+                $e['email'] = 'Ya hay una cuenta con ese correo.';
+            }
+            return $e;
         });
     }
 
     private function abrirSesion(array $u, string $cliente): string {
         $token = self::tokenNuevo();
         $ahora = $this->ahora();
-        $dura = $cliente === 'web' ? self::SESION_WEB_MS : self::SESION_APP_MS;
+        $dura = $u['requiere_cambio_clave'] ? min(self::HORA_MS, self::msDeFechaBD($u['alta']) + self::CLAVE_INICIAL_MS - $ahora)
+            : ($cliente === 'web' ? self::SESION_WEB_MS : self::SESION_APP_MS);
         $this->ejecutar("INSERT INTO {$this->p}token (token_hash, usuario_id, tipo, caduca) VALUES (?, ?, ?, ?)",
             [self::hashToken($token), $u['id'], $cliente, self::fechaBD($ahora + $dura)]);
         // limpieza de sesiones caducadas (de paso). Los enlaces caducados se
@@ -155,10 +194,49 @@ class Cuentas extends Base {
     // --------------------------------------------------------------
     public function iniciarSesion(string $email, string $clave, string $cliente): array {
         $m = strtolower(trim($email));
-        $u = $this->fila("SELECT * FROM {$this->p}usuario WHERE email = ?", [$m]);
-        if (!$u || !password_verify($clave, $u['clave_hash'])) {
-            throw new NoAutorizadoException('Correo o contraseña incorrectos.');
+        $mensaje = 'Correo o contraseña incorrectos.';
+        if (strlen($m) > 120 || !self::esEmail($m)) {
+            throw new NoAutorizadoException($mensaje);
         }
+        $ahora = $this->ahora();
+        $caduca = self::fechaBD($ahora + self::BLOQUEO_MS);
+        $hashCorreo = hash('sha256', $m);
+        $sqlite = $this->bd->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        $this->ejecutar("DELETE FROM {$this->p}acceso_intento WHERE vence <= ?", [self::fechaBD($ahora)]);
+        $resultado = $this->transaccion(function () use ($m, $clave, $cliente, $hashCorreo, $caduca, $sqlite) {
+            $ignorar = $sqlite ? 'OR IGNORE' : 'IGNORE';
+            $bloqueo = $sqlite ? '' : ' FOR UPDATE';
+            $this->ejecutar("INSERT $ignorar INTO {$this->p}acceso_intento (correo_hash, fallos, vence) VALUES (?, 0, ?)",
+                [$hashCorreo, $caduca]);
+            $estado = $this->fila("SELECT fallos, vence FROM {$this->p}acceso_intento WHERE correo_hash = ?$bloqueo", [$hashCorreo]);
+            if ((int) $estado['fallos'] >= self::MAX_FALLOS) {
+                return ['bloqueado' => $estado['vence']];
+            }
+            $u = $this->fila("SELECT * FROM {$this->p}usuario WHERE email = ?", [$m]);
+            if (!$u || !password_verify($clave, $u['clave_hash'])) {
+                $fallos = (int) $estado['fallos'] + 1;
+                $this->ejecutar("UPDATE {$this->p}acceso_intento SET fallos = ?, vence = ? WHERE correo_hash = ?",
+                    [$fallos, $caduca, $hashCorreo]);
+                return ['quedan' => self::MAX_FALLOS - $fallos];
+            }
+            $this->ejecutar("DELETE FROM {$this->p}acceso_intento WHERE correo_hash = ?", [$hashCorreo]);
+            $this->validarCliente($u, $cliente);
+            if ($u['requiere_cambio_clave'] && self::msDeFechaBD($u['alta']) + self::CLAVE_INICIAL_MS <= $this->ahora()) {
+                throw new ProhibidoException('La contraseña inicial ha caducado. Crea una nueva con «He olvidado mi contraseña».');
+            }
+            return ['token' => $this->abrirSesion($u, $cliente), 'usuario' => $this->perfil($u)];
+        });
+        if (isset($resultado['bloqueado']) || ($resultado['quedan'] ?? null) === 0) {
+            throw new BloqueadoException('Demasiados intentos. El acceso queda bloqueado durante 15 minutos.',
+                self::isoDeBD($resultado['bloqueado'] ?? $caduca));
+        }
+        if (isset($resultado['quedan'])) {
+            throw new NoAutorizadoException($mensaje, $resultado['quedan']);
+        }
+        return $resultado;
+    }
+
+    private function validarCliente(array $u, string $cliente): void {
         if ($cliente === 'web' && !in_array($u['rol'], self::ROLES_PANEL, true)) {
             throw new ProhibidoException($u['rol'] === 'trabajador'
                 ? 'Tu cuenta es de trabajador municipal. No tiene acceso al panel de gestión: entra en la app Respira con este correo.'
@@ -167,7 +245,6 @@ class Cuentas extends Base {
         if ($cliente === 'app' && !in_array($u['rol'], self::ROLES_APP, true)) {
             throw new ProhibidoException('Las cuentas del ayuntamiento entran en el panel web, no en la app.');
         }
-        return ['token' => $this->abrirSesion($u, $cliente), 'usuario' => $this->perfil($u)];
     }
 
     // --------------------------------------------------------------
@@ -185,6 +262,28 @@ class Cuentas extends Base {
         $this->ejecutar("DELETE FROM {$this->p}token WHERE token_hash = ? AND tipo IN ('app', 'web')", [self::hashToken($token)]);
     }
 
+    public function cambiarClaveInicial(array $u, string $clave): array {
+        self::exigirRol($u, ['trabajador']);
+        if (!$u['requiere_cambio_clave']) {
+            throw new ConflictoException('La cuenta ya tiene una contraseña personal.');
+        }
+        $e = self::errorClave($u['rol'], $clave, $u['email']);
+        if ($e || password_verify($clave, $u['clave_hash'])) {
+            throw new DatosNoValidosException($e ?? 'Elige una contraseña distinta de la inicial.', 'clave');
+        }
+        $hash = password_hash($clave, PASSWORD_DEFAULT);
+        return $this->transaccion(function () use ($u, $hash) {
+            $st = $this->ejecutar("UPDATE {$this->p}usuario SET clave_hash = ?, requiere_cambio_clave = 0
+                WHERE id = ? AND requiere_cambio_clave = 1 AND clave_hash = ?", [$hash, $u['id'], $u['clave_hash']]);
+            if (!$st->rowCount()) {
+                throw new ConflictoException('La cuenta ya tiene una contraseña personal.');
+            }
+            $this->ejecutar("DELETE FROM {$this->p}token WHERE usuario_id = ?", [$u['id']]);
+            $actual = $this->usuarioPorId($u['id']);
+            return ['token' => $this->abrirSesion($actual, 'app'), 'usuario' => $this->perfil($actual)];
+        });
+    }
+
     // --------------------------------------------------------------
     // Borrar la cuenta (vecinos, desde la app). Se borran sus percepciones
     // y sus puntos; sus mediciones se quedan, pero sin portador.
@@ -197,9 +296,10 @@ class Cuentas extends Base {
         }
         $this->transaccion(function () use ($u) {
             // (SQLite no aplica ON DELETE si no se activan las FK: se hace a mano)
-            foreach (['alerta', 'favorito', 'token', 'percepcion', 'puntos_dia'] as $t) {
+            foreach (['alerta_emitida', 'alerta', 'favorito', 'token', 'percepcion_envio', 'percepcion', 'puntos_dia'] as $t) {
                 $this->ejecutar("DELETE FROM {$this->p}$t WHERE usuario_id = ?", [$u['id']]);
             }
+            $this->ejecutar("DELETE FROM {$this->p}acceso_intento WHERE correo_hash = ?", [hash('sha256', $u['email'])]);
             $this->ejecutar("UPDATE {$this->p}medicion SET portador_id = NULL WHERE portador_id = ?", [$u['id']]);
             $this->ejecutar("UPDATE {$this->p}prestamo SET usuario_id = NULL WHERE usuario_id = ?", [$u['id']]);
             $this->ejecutar("UPDATE {$this->p}canje SET usuario_id = NULL WHERE usuario_id = ?", [$u['id']]);
@@ -220,7 +320,7 @@ class Cuentas extends Base {
         $fav = array_column($this->filas("SELECT zona_id FROM {$this->p}favorito WHERE usuario_id = ? ORDER BY creado, zona_id",
             [$u['id']]), 'zona_id');
         $al = [];
-        foreach ($this->filas("SELECT zona_id, magnitud, condicion, valor FROM {$this->p}alerta WHERE usuario_id = ? ORDER BY zona_id",
+        foreach ($this->filas("SELECT zona_id, magnitud, condicion, valor FROM {$this->p}alerta WHERE usuario_id = ? ORDER BY zona_id, magnitud",
             [$u['id']]) as $a) {
             $al[] = ['zona' => $a['zona_id'], 'magnitud' => $a['magnitud'], 'condicion' => $a['condicion'],
                 'valor' => $a['condicion'] === 'custom' ? (float) $a['valor'] : null];
@@ -255,15 +355,15 @@ class Cuentas extends Base {
             $v = 0.0;
             if ($cond === 'custom') {
                 [$min, $max] = Logica::RANGO[$m];
-                if (!is_numeric($a['valor'] ?? null) || $a['valor'] <= $min || $a['valor'] > $max) {
+                if (!is_numeric($a['valor'] ?? null) || $a['valor'] < $min || $a['valor'] > $max) {
                     throw new DatosNoValidosException("El límite de la alerta debe ser un número entre $min y $max.", 'valor');
                 }
                 $v = (float) $a['valor'];
             }
-            $limpias[$z] = [$z, $m, $cond, $v];
+            $limpias[$z . ':' . $m] = [$z, $m, $cond, $v];
         }
         $ids = [];
-        foreach (array_merge($fav, array_keys($limpias)) as $z) {
+        foreach (array_merge($fav, array_column($limpias, 0)) as $z) {
             $z = (string) $z;
             if (!in_array($z, $zonas, true)) {
                 throw new DatosNoValidosException("La zona «{$z}» no existe.", 'zona');
@@ -292,6 +392,60 @@ class Cuentas extends Base {
             }
         });
         return $this->seguimiento($u);
+    }
+
+    public function registrarAlertaEmitida(array $u, array $aviso, Logica $logica): void {
+        self::exigirRol($u, self::ROLES_APP);
+        $zona = (string) ($aviso['zona'] ?? '');
+        $magnitud = (string) ($aviso['magnitud'] ?? '');
+        $momento = (string) ($aviso['momento'] ?? '');
+        $origen = (string) ($aviso['origen'] ?? '');
+        $valor = $aviso['valor'] ?? null;
+        if (!in_array($magnitud, Logica::MAGNITUDES, true) || !is_numeric($valor)
+            || !in_array($origen, ['real', 'simulado'], true)) {
+            throw new DatosNoValidosException('Faltan la magnitud, el valor o el origen del aviso.', 'alerta');
+        }
+        if (strlen($momento) === 20 && str_ends_with($momento, 'Z')) {
+            $momento = substr($momento, 0, -1) . '.000Z';
+        }
+        $fecha = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:s.v\Z', $momento, new DateTimeZone('UTC'));
+        if (!$fecha || $fecha->format('Y-m-d\TH:i:s.v\Z') !== $momento) {
+            throw new DatosNoValidosException('La hora del aviso no es válida.', 'momento');
+        }
+        $fechaBD = $fecha->format('Y-m-d H:i:s.v');
+        $clave = [$u['id'], $zona, $magnitud, $fechaBD];
+        if ($this->fila("SELECT 1 FROM {$this->p}alerta_emitida WHERE usuario_id = ? AND zona_id = ? AND magnitud = ? AND momento = ?", $clave)) {
+            return; // el móvil puede reenviar el mismo aviso si perdió la respuesta
+        }
+        $config = $this->fila("SELECT condicion, valor FROM {$this->p}alerta WHERE usuario_id = ? AND zona_id = ? AND magnitud = ?",
+            [$u['id'], $zona, $magnitud]);
+        if (!$config) {
+            throw new NoEncontradoException('No hay una alerta configurada para esa magnitud y zona.');
+        }
+        $datos = null;
+        foreach ($logica->zonas() as $fila) {
+            if ($fila['id'] === $zona) {
+                $datos = $fila['detalle'][$magnitud] ?? null;
+                break;
+            }
+        }
+        if (!$datos || $datos['valor'] === null || (float) $datos['valor'] !== (float) $valor
+            || $datos['momento'] !== $momento || $datos['origen'] !== $origen || $datos['estado'] !== 'reciente') {
+            throw new ConflictoException('La lectura del aviso ya no coincide con la publicada para esa zona.');
+        }
+        [$medio, $alto] = Logica::LIMITES[$magnitud];
+        $cumple = match ($config['condicion']) {
+            'bajo' => $valor < $medio,
+            'medio' => $valor >= $medio,
+            'alto' => $valor >= $alto,
+            'custom' => $valor > $config['valor'],
+        };
+        if (!$cumple) {
+            throw new DatosNoValidosException('La lectura no alcanza el umbral del aviso.', 'valor');
+        }
+        $ignorar = $this->bd->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? 'OR IGNORE' : 'IGNORE';
+        $this->ejecutar("INSERT $ignorar INTO {$this->p}alerta_emitida (usuario_id, zona_id, magnitud, momento, valor, origen)
+            VALUES (?, ?, ?, ?, ?, ?)", [...$clave, $valor, $origen]);
     }
 
     // ==============================================================
@@ -364,7 +518,7 @@ class Cuentas extends Base {
         }
         $hash = password_hash($clave, PASSWORD_DEFAULT);
         $this->transaccion(function () use ($v, $hash) {
-            $this->ejecutar("UPDATE {$this->p}usuario SET clave_hash = ? WHERE id = ?", [$hash, $v['id']]);
+            $this->ejecutar("UPDATE {$this->p}usuario SET clave_hash = ?, requiere_cambio_clave = 0 WHERE id = ?", [$hash, $v['id']]);
             // el enlace ya no sirve y las sesiones abiertas se cierran
             $this->ejecutar("DELETE FROM {$this->p}token WHERE usuario_id = ?", [$v['id']]);
         });
@@ -392,10 +546,7 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // Alta de un trabajador. Administración pone también su contraseña
-    // (mismas reglas que el personal: 10 caracteres, letras y números) y
-    // se la da en mano; él puede cambiarla luego con «He olvidado mi
-    // contraseña». La cuenta queda activa al momento. --> {trabajador}
+    // Alta de un trabajador con contraseña inicial de cambio obligatorio.
     // --------------------------------------------------------------
     public function altaTrabajador(?array $quien, string $nombre, string $email, string $numEmpleado, string $servicio,
                                    string $clave, ?string $ayuntamiento = null): array {
@@ -406,11 +557,15 @@ class Cuentas extends Base {
         $e = [];
         if ($n === '') {
             $e['nombre'] = 'Escribe el nombre y los apellidos.';
+        } elseif (mb_strlen($n) > 80) {
+            $e['nombre'] = 'El nombre debe tener como máximo 80 caracteres.';
         } elseif (count(explode(' ', $n)) < 2) {
             $e['nombre'] = 'Escribe al menos un nombre y un apellido.';
         }
         if ($m === '') {
             $e['email'] = 'Escribe el correo municipal.';
+        } elseif (strlen($m) > 120) {
+            $e['email'] = 'El correo debe tener como máximo 120 caracteres.';
         } elseif (!self::esEmail($m)) {
             $e['email'] = 'El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';
         } elseif (substr($m, -8) !== '@ayto.es') {
@@ -437,15 +592,28 @@ class Cuentas extends Base {
         }
         $ayto = $this->ayuntamientoDe($ayuntamiento);
         $hash = password_hash($clave, PASSWORD_DEFAULT);
-        return $this->transaccion(function () use ($quien, $n, $m, $emp, $servicio, $hash, $ayto) {
-            $max = (int) substr((string) $this->valor("SELECT MAX(id) FROM {$this->p}usuario WHERE rol = 'trabajador'"), 2);
-            $id = 'T-' . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
-            $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, alta) VALUES (?, 'trabajador', ?, ?, ?, ?)",
+        return $this->altaSinColision(function () use ($quien, $n, $m, $emp, $servicio, $hash, $ayto) {
+            $num = (int) substr((string) $this->valor("SELECT MAX(id) FROM {$this->p}usuario WHERE rol = 'trabajador'"), 2) + 1;
+            if ($num > 9999) {
+                throw new ConflictoException('No quedan identificadores de trabajador disponibles.');
+            }
+            $id = 'T-' . str_pad((string) $num, 4, '0', STR_PAD_LEFT);
+            $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, alta, requiere_cambio_clave)
+                VALUES (?, 'trabajador', ?, ?, ?, ?, 1)",
                 [$id, $n, $m, $hash, self::fechaBD($this->ahora())]);
             $this->ejecutar("INSERT INTO {$this->p}empleado (usuario_id, ayuntamiento_id, num_empleado, servicio) VALUES (?, ?, ?, ?)",
                 [$id, $ayto, $emp, $servicio]);
             $t = array_values(array_filter($this->trabajadores($quien), function ($x) use ($id) { return $x['id'] === $id; }));
             return ['trabajador' => $t[0]];
+        }, function () use ($m, $emp) {
+            $e = [];
+            if ($this->fila("SELECT id FROM {$this->p}usuario WHERE email = ?", [$m])) {
+                $e['email'] = 'Ya hay una cuenta con este correo.';
+            }
+            if ($this->fila("SELECT usuario_id FROM {$this->p}empleado WHERE num_empleado = ?", [$emp])) {
+                $e['num_empleado'] = 'Este número de empleado ya tiene una cuenta.';
+            }
+            return $e;
         });
     }
 

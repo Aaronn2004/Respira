@@ -13,6 +13,7 @@
 // ==============================================================
 
 require_once __DIR__ . '/Base.php';
+require_once __DIR__ . '/Flota.php';
 
 class Logica extends Base {
 
@@ -29,8 +30,7 @@ class Logica extends Base {
     // Dos mensajes con el mismo nodo, magnitud y contador en menos de
     // este tiempo son el MISMO anuncio (lo han oído varios móviles).
     const VENTANA_REPETIDA_MS = 10000;      // repetida: mismo sensor, tipo y valor en ±10 s
-    // Una zona muestra la media de la hora anterior a su último dato;
-    // si el último dato tiene más de 24 h, la zona queda «Sin datos».
+    const DISTANCIA_ESTIMACION_KM = 1.5;
 
     // Periodos de las gráficas (los mismos que la web y la app)
     const PERIODOS = [
@@ -59,8 +59,7 @@ class Logica extends Base {
 
     // --------------------------------------------------------------
     // lat: R, lng: R --> zonaDe() --> Text | null
-    // Si el punto cae en un parque, cuenta para el parque (aunque esté
-    // dentro de un barrio); si no, para el barrio.
+    // Un parque o una playa tiene prioridad si también cae en un barrio.
     // --------------------------------------------------------------
     public function zonaDe(?float $lat, ?float $lng): ?string {
         if ($lat === null || $lng === null) {
@@ -68,8 +67,8 @@ class Logica extends Base {
         }
         $barrio = null;
         foreach ($this->leerZonas() as $z) {
-            if (self::dentro($lat, $lng, $z['poligono'])) {
-                if ($z['tipo'] === 'parque') {
+            if (self::dentroDeZona($lat, $lng, $z['poligonos'])) {
+                if ($z['tipo'] !== 'barrio') {
                     return $z['id'];
                 }
                 $barrio = $barrio ?? $z['id'];
@@ -78,16 +77,44 @@ class Logica extends Base {
         return $barrio;
     }
 
+    private static function dentroDeZona(float $lat, float $lng, array $poligonos): bool {
+        foreach ($poligonos as $anillos) {
+            if (!self::dentro($lat, $lng, $anillos[0])) {
+                continue;
+            }
+            foreach (array_slice($anillos, 1) as $hueco) {
+                if (self::dentro($lat, $lng, $hueco)) {
+                    continue 2;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
     private $cacheZonas = null;
 
     private function leerZonas(): array {
         if ($this->cacheZonas === null) {
-            // por orden alfabético; «area» (el contorno en JSON) se lee como lista de puntos
-            $filas = $this->bd->query("SELECT id, ayuntamiento_id, nombre, tipo, area, etiqueta_lat, etiqueta_lng
-                FROM {$this->p}zona ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($filas as &$f) {
-                $f['poligono'] = json_decode($f['area'], true);
-                unset($f['area']);
+            $filas = $this->filas("SELECT id, ayuntamiento_id, nombre, tipo, area, etiqueta_lat, etiqueta_lng
+                FROM {$this->p}zona ORDER BY nombre");
+            foreach ($filas as &$fila) {
+                $area = json_decode($fila['area'], true);
+                // Las zonas previas guardan solo un anillo [lat, lng].
+                $invertir = static fn(array $anillo): array => array_map(static fn($p) => [$p[1], $p[0]], $anillo);
+                $geometria = $area['type'] ?? null;
+                if ($geometria === null) {
+                    $anillo = $invertir($area);
+                    if ($anillo[0] !== $anillo[count($anillo) - 1]) {
+                        $anillo[] = $anillo[0];
+                    }
+                    $area = ['type' => 'Polygon', 'coordinates' => [$anillo]];
+                }
+                $partes = $area['type'] === 'MultiPolygon' ? $area['coordinates'] : [$area['coordinates']];
+                $fila['geometria'] = $area;
+                $fila['poligonos'] = array_map(static fn($anillos) => array_map($invertir, $anillos), $partes);
+                $fila['poligono'] = $fila['poligonos'][0][0];
+                unset($fila['area']);
             }
             $this->cacheZonas = $filas;
         }
@@ -148,61 +175,62 @@ class Logica extends Base {
             throw new DatosNoValidosException('ubicación: está fuera de los parques y barrios de Respira');
         }
 
-        $st = $this->bd->prepare("SELECT estado, magnitudes FROM {$this->p}nodo WHERE codigo = ?");
-        $st->execute([$nodo]);
-        $n = $st->fetch(PDO::FETCH_ASSOC);
-        if (!$n) {
-            throw new NoEncontradoException("No existe el sensor $nodo");
-        }
-        if ($n['estado'] === 'baja') {
-            throw new DatosNoValidosException("El sensor $nodo está dado de baja");
-        }
-        $portador = $this->portadorDe($quien, $nodo);
-
-        // ¿Repetida? mismo sensor, tipo y valor con menos de 10 s de diferencia
-        // (el mismo anuncio oído por dos móviles, o el móvil que lo reenvía)
-        $st = $this->bd->prepare("SELECT COUNT(*) FROM {$this->p}medicion
-            WHERE id_nodo = ? AND tipo = ? AND valor = ? AND fecha_medicion BETWEEN ? AND ?");
-        $st->execute([$nodo, $magnitud, $valor,
-            self::fechaBD($medidaEn - self::VENTANA_REPETIDA_MS), self::fechaBD($medidaEn + self::VENTANA_REPETIDA_MS)]);
-        if ((int) $st->fetchColumn() > 0) {
-            return null;
-        }
-
+        // La fila del nodo serializa los reenvíos concurrentes de un sensor.
         try {
-            $st = $this->bd->prepare("INSERT INTO {$this->p}medicion
-                (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, portador_id, origen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'real')");
-            $st->execute([$nodo, $magnitud, $valor, self::fechaBD($medidaEn), $lat, $lng, $zona, $portador]);
-            $id = (int) $this->bd->lastInsertId();
-            // dato atrasado de un día ya cerrado: sus puntos se vuelven a calcular
-            if ($portador !== null && self::diaLocal($medidaEn) < self::diaLocal($this->ahora())) {
-                $this->ejecutar("DELETE FROM {$this->p}puntos_dia WHERE usuario_id = ? AND fecha = ?", [$portador, self::diaLocal($medidaEn)]);
-            }
+            $id = $this->transaccion(function () use ($nodo, $magnitud, $valor, $medidaEn, $lat, $lng, $zona, $quien) {
+                $bloqueo = $this->bd->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+                $n = $this->fila("SELECT estado FROM {$this->p}nodo WHERE codigo = ?" . $bloqueo, [$nodo]);
+                if ($n === null) {
+                    throw new NoEncontradoException("No existe el sensor $nodo");
+                }
+                if ($n['estado'] === 'baja') {
+                    throw new DatosNoValidosException("El sensor $nodo está dado de baja");
+                }
+                $repetida = $this->valor("SELECT id FROM {$this->p}medicion
+                    WHERE id_nodo = ? AND tipo = ? AND valor = ? AND origen = 'real' AND fecha_medicion BETWEEN ? AND ? LIMIT 1",
+                    [$nodo, $magnitud, $valor, self::fechaBD($medidaEn - self::VENTANA_REPETIDA_MS),
+                        self::fechaBD($medidaEn + self::VENTANA_REPETIDA_MS)]);
+                if ($repetida !== null) {
+                    return null;
+                }
+                $portador = $this->portadorDe($quien, $nodo, $medidaEn);
+                $this->ejecutar("INSERT INTO {$this->p}medicion
+                    (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, portador_id, origen)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'real')",
+                    [$nodo, $magnitud, $valor, self::fechaBD($medidaEn), $lat, $lng, $zona, $portador]);
+                $id = (int) $this->bd->lastInsertId();
+                $dia = self::diaLocal($medidaEn);
+                if ($portador !== null && $dia < self::diaLocal($this->ahora())) {
+                    $this->ejecutar("DELETE FROM {$this->p}puntos_dia WHERE usuario_id = ? AND fecha = ?", [$portador, $dia]);
+                }
+                return $id;
+            });
         } catch (PDOException $e) {
             throw new ErrorDeAlmacenamientoException('No se pudo guardar la medición');
+        }
+        if ($id === null) {
+            return null;
         }
         return ['id' => $id, 'nodo' => $nodo, 'magnitud' => $magnitud, 'valor' => $valor, 'zona' => $zona,
             'valida' => true, 'motivo' => null, 'medida_en' => self::fechaISO($medidaEn)];
     }
 
     // --------------------------------------------------------------
-    // quien: usuario | null, nodo: Text --> portadorDe() --> Text | null
-    //   vecino: tiene ese sensor prestado ahora
-    //   trabajador: el sensor es de un servicio (tipo trab) y está activo
-    // --------------------------------------------------------------
-    private function portadorDe(?array $quien, string $nodo): ?string {
+    // La fecha de la medición permite sincronizar lotes de un préstamo aún abierto
+    // cuyo plazo venció después de captar los datos.
+    private function portadorDe(?array $quien, string $nodo, int $medidaEn): ?string {
         if ($quien === null) {
             return null;
         }
         if ($quien['rol'] === 'vecino') {
-            $ok = $this->valor("SELECT COUNT(*) FROM {$this->p}prestamo WHERE nodo = ? AND usuario_id = ? AND estado_devolucion = 'No devuelto'",
-                [$nodo, $quien['id']]);
-            return (int) $ok > 0 ? $quien['id'] : null;
+            $fecha = self::fechaBD($medidaEn);
+            $ok = $this->valor("SELECT id FROM {$this->p}prestamo
+                WHERE nodo = ? AND usuario_id = ? AND estado_devolucion = 'No devuelto'
+                AND inicio <= ? AND fecha_limite >= ?", [$nodo, $quien['id'], $fecha, $fecha]);
+            return $ok !== null ? $quien['id'] : null;
         }
-        if ($quien['rol'] === 'trabajador') {
-            $ok = $this->valor("SELECT COUNT(*) FROM {$this->p}nodo WHERE codigo = ? AND tipo = 'trabajador' AND estado = 'activo'", [$nodo]);
-            return (int) $ok > 0 ? $quien['id'] : null;
+        if ($quien['rol'] === 'trabajador' && (new Flota($this->bd, $this->p, $this->reloj))->sensorDeSuServicio($quien['id'], $nodo)) {
+            return $quien['id'];
         }
         return null;
     }
@@ -237,65 +265,145 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // zonas() --> [{id, nombre, tipo, poligono, etiqueta,
-    //              hace_min | null, n, o3, temp, ruido, media_24h, mejor}]
-    // Valores = media de la hora anterior al último dato de la zona;
-    // mejor = la medida más baja de esa misma hora.
-    // --------------------------------------------------------------
+    // Última hora móvil. Para un dato antiguo se indica la media de la última
+    // hora que sí tuvo lecturas de esa magnitud y se publica su fecha.
     public function zonas(): array {
         $ahora = $this->ahora();
+        $hasta = self::fechaBD($ahora);
+        $ultimaHora = self::fechaBD($ahora - self::HORA_MS);
+        $ultimas24h = self::fechaBD($ahora - self::DIA_MS);
+        $stDia = $this->bd->prepare("SELECT tipo, origen, MAX(fecha_medicion) AS ultima, AVG(valor) AS media
+            FROM {$this->p}medicion WHERE zona_id = ? AND fecha_medicion >= ? AND fecha_medicion <= ?
+            GROUP BY tipo, origen");
+        $stHora = $this->bd->prepare("SELECT AVG(valor) AS media, MIN(valor) AS minimo, COUNT(*) AS n
+            FROM {$this->p}medicion WHERE zona_id = ? AND tipo = ? AND origen = ?
+            AND fecha_medicion >= ? AND fecha_medicion <= ?");
         $out = [];
-        $stUlt = $this->bd->prepare("SELECT MAX(fecha_medicion) FROM {$this->p}medicion
-            WHERE zona_id = ? AND origen = ? AND fecha_medicion >= ?");
-        $stMed = $this->bd->prepare("SELECT tipo AS magnitud, AVG(valor) AS media, MIN(valor) AS minimo, COUNT(*) AS n FROM {$this->p}medicion
-            WHERE zona_id = ? AND origen = ? AND fecha_medicion BETWEEN ? AND ? GROUP BY tipo");
-        foreach ($this->leerZonas() as $z) {
-            $fila = ['id' => $z['id'], 'ayuntamiento' => $z['ayuntamiento_id'], 'nombre' => $z['nombre'], 'tipo' => $z['tipo'],
-                'poligono' => $z['poligono'], 'etiqueta' => [(float) $z['etiqueta_lat'], (float) $z['etiqueta_lng']],
-                'hace_min' => null, 'n' => 0, 'o3' => null, 'temp' => null, 'ruido' => null,
-                'media_24h' => ['o3' => null, 'temp' => null, 'ruido' => null],
-                'mejor' => ['o3' => null, 'temp' => null, 'ruido' => null], 'simulado' => false];
-            // Si la zona tiene datos REALES en las últimas 24 h, se usan solo esos;
-            // si no, los simulados (Simulador.php)
-            foreach (['real', 'simulado'] as $origen) {
-                $stUlt->execute([$z['id'], $origen, self::fechaBD($ahora - self::DIA_MS)]);
-                $ult = $stUlt->fetchColumn();
-                if (!$ult) {
-                    continue;
-                }
-                $ultMs = self::msDeFechaBD($ult);
-                $fila['hace_min'] = max(0, intdiv($ahora - $ultMs, 60000));
-                $fila['simulado'] = $origen === 'simulado';
-                $stMed->execute([$z['id'], $origen, self::fechaBD($ultMs - self::HORA_MS), self::fechaBD($ultMs)]);
-                foreach ($stMed->fetchAll(PDO::FETCH_ASSOC) as $m) {
-                    $fila[$m['magnitud']] = round((float) $m['media'], $m['magnitud'] === 'o3' ? 3 : 1);
-                    $fila['n'] = max($fila['n'], (int) $m['n']);
-                    // mejor medida (la más baja) de esa hora: la portada la enseña en los parques
-                    $fila['mejor'][$m['magnitud']] = round((float) $m['minimo'], $m['magnitud'] === 'o3' ? 3 : 1);
-                }
-                // promedio de las últimas 24 h (para la ficha de la zona)
-                $stMed->execute([$z['id'], $origen, self::fechaBD($ahora - self::DIA_MS), self::fechaBD($ahora)]);
-                foreach ($stMed->fetchAll(PDO::FETCH_ASSOC) as $m) {
-                    $fila['media_24h'][$m['magnitud']] = round((float) $m['media'], $m['magnitud'] === 'o3' ? 3 : 1);
-                }
-                break;
+        foreach ($this->leerZonas() as $zona) {
+            $fila = [
+                'id' => $zona['id'], 'ayuntamiento' => $zona['ayuntamiento_id'],
+                'nombre' => $zona['nombre'], 'tipo' => $zona['tipo'],
+                'poligono' => $zona['poligono'], 'poligonos' => $zona['poligonos'], 'geometria' => $zona['geometria'],
+                'etiqueta' => [(float) $zona['etiqueta_lat'], (float) $zona['etiqueta_lng']],
+                'hace_min' => null, 'n' => 0, 'simulado' => false,
+            ];
+            $stDia->execute([$zona['id'], $ultimas24h, $hasta]);
+            $porOrigen = [];
+            foreach ($stDia->fetchAll(PDO::FETCH_ASSOC) as $dato) {
+                $porOrigen[$dato['tipo']][$dato['origen']] = $dato;
             }
+            $origenes = [];
+            foreach (self::MAGNITUDES as $magnitud) {
+                $fila[$magnitud] = $fila['mejor'][$magnitud] = $fila['media_24h'][$magnitud] = null;
+                $detalle = ['valor' => null, 'estado' => 'sin_datos', 'momento' => null, 'origen' => null];
+                $dato = $porOrigen[$magnitud]['real'] ?? $porOrigen[$magnitud]['simulado'] ?? null;
+                if ($dato !== null) {
+                    $momento = self::msDeFechaBD($dato['ultima']);
+                    // La lectura justo en el corte queda en la última hora.
+                    $reciente = $momento >= $ahora - self::HORA_MS;
+                    [$desde, $fin] = $reciente
+                        ? [$ultimaHora, $hasta]
+                        : [self::fechaBD($momento - self::HORA_MS), $dato['ultima']];
+                    $stHora->execute([$zona['id'], $magnitud, $dato['origen'], $desde, $fin]);
+                    $hora = $stHora->fetch(PDO::FETCH_ASSOC);
+                    $stHora->closeCursor();
+                    $dec = $magnitud === 'o3' ? 3 : 1;
+                    $valor = round((float) $hora['media'], $dec);
+                    $fila[$magnitud] = $valor;
+                    $fila['mejor'][$magnitud] = $reciente ? round((float) $hora['minimo'], $dec) : null;
+                    $fila['media_24h'][$magnitud] = round((float) $dato['media'], $dec);
+                    $fila['hace_min'] = min($fila['hace_min'] ?? PHP_INT_MAX, (int) ceil(($ahora - $momento) / 60000));
+                    $fila['n'] = max($fila['n'], (int) $hora['n']);
+                    $origenes[$dato['origen']] = true;
+                    $detalle = [
+                        'valor' => $valor, 'estado' => $reciente ? 'reciente' : 'antiguo',
+                        'momento' => self::fechaISO($momento), 'origen' => $dato['origen'],
+                    ];
+                }
+                $fila['detalle'][$magnitud] = $detalle;
+            }
+            $fila['simulado'] = isset($origenes['simulado']) && !isset($origenes['real']);
             $out[] = $fila;
+        }
+
+        $observadas = $out;
+        foreach ($out as &$zona) {
+            foreach (self::MAGNITUDES as $magnitud) {
+                if ($zona['detalle'][$magnitud]['estado'] === 'sin_datos') {
+                    $aprox = self::estimarZona($zona, $magnitud, $observadas);
+                    if ($aprox !== null) {
+                        $zona['detalle'][$magnitud] = [
+                            'valor' => $aprox, 'estado' => 'estimado', 'momento' => null, 'origen' => 'estimado',
+                        ];
+                    }
+                }
+            }
         }
         return $out;
     }
 
-    // --------------------------------------------------------------
-    // zonaId: Text, magnitud: Text, periodo: Text, desde?: Text, hasta?: Text
-    //   --> serie() --> {zona, magnitud, periodo, paso_min, desde, hasta, valores: [R | null]}
-    // periodo '24h' | '7d' | '30d', o 'rango' con desde/hasta (AAAA-MM-DD, 60 tramos)
-    // --------------------------------------------------------------
-    public function serie(string $zonaId, string $magnitud, string $periodo, ?string $desde = null, ?string $hasta = null): array {
-        $existe = false;
-        foreach ($this->leerZonas() as $z) {
-            $existe = $existe || $z['id'] === $zonaId;
+    // Ponderación por distancia inversa. Dos o más zonas vecinas del mismo
+    // ayuntamiento a menos de 1,5 km, solo con lecturas recientes del mismo
+    // origen. Se prefieren las reales. Una estimación no alimenta a otra.
+    private static function estimarZona(array $zona, string $magnitud, array $observadas): ?float {
+        [$latitud, $longitud] = $zona['etiqueta'];
+        $grupos = ['real' => [], 'simulado' => []];
+        foreach ($observadas as $vecina) {
+            $dato = $vecina['detalle'][$magnitud];
+            if ($vecina['id'] === $zona['id'] || $vecina['ayuntamiento'] !== $zona['ayuntamiento']
+                || $dato['estado'] !== 'reciente') {
+                continue;
+            }
+            [$latVecina, $lngVecina] = $vecina['etiqueta'];
+            $y = deg2rad($latVecina - $latitud);
+            $x = deg2rad($lngVecina - $longitud) * cos(deg2rad(($latitud + $latVecina) / 2));
+            $km = 6371 * hypot($x, $y);
+            if ($km <= self::DISTANCIA_ESTIMACION_KM) {
+                $grupos[$dato['origen']][] = [$dato['valor'], 1 / max(0.01, $km)];
+            }
         }
-        if (!$existe) {
+        foreach ($grupos as $vecinas) {
+            if (count($vecinas) < 2) {
+                continue;
+            }
+            $total = $peso = 0;
+            foreach ($vecinas as [$valor, $factor]) {
+                $total += $valor * $factor;
+                $peso += $factor;
+            }
+            return round($total / $peso, $magnitud === 'o3' ? 3 : 1);
+        }
+        return null;
+    }
+
+    private static function fechaCivil(?string $fecha, string $campo): int {
+        if ($fecha === null || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $fecha, $partes)
+            || !checkdate((int) $partes[2], (int) $partes[3], (int) $partes[1])) {
+            throw new DatosNoValidosException('Indica una fecha válida en formato AAAA-MM-DD.', $campo);
+        }
+        return self::msDeFechaBD("$fecha 00:00:00");
+    }
+
+    private static function finDeSerie(?string $referencia, int $ahora): int {
+        if ($referencia === null) {
+            return $ahora;
+        }
+        if (!preg_match('/^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(\.\d{3})?Z$/D', $referencia, $partes)) {
+            throw new DatosNoValidosException('Usa una fecha UTC válida como referencia.', 'referencia');
+        }
+        self::fechaCivil($partes[1], 'referencia');
+        $fin = self::msDeFechaBD(str_replace('T', ' ', substr($referencia, 0, -1)));
+        if ($fin > $ahora + 60000) {
+            throw new DatosNoValidosException('La referencia no puede ser futura.', 'referencia');
+        }
+        return intdiv($fin, 60000) * 60000;
+    }
+
+    // 24 h, 7 d o 30 d, o rango de fechas civiles UTC de hasta 90 días
+    // inclusive. Una referencia común sincroniza dos ventanas predefinidas.
+    public function serie(string $zonaId, string $magnitud, string $periodo, ?string $desde = null, ?string $hasta = null,
+                          ?string $referencia = null): array {
+        if (!in_array($zonaId, array_column($this->leerZonas(), 'id'), true)) {
             throw new NoEncontradoException("No existe la zona $zonaId");
         }
         if (!in_array($magnitud, self::MAGNITUDES, true)) {
@@ -303,63 +411,106 @@ class Logica extends Base {
         }
         $ahora = $this->ahora();
         if ($periodo === 'rango') {
-            $d = $desde ? strtotime($desde . ' 00:00:00 UTC') : false;
-            $h = $hasta ? strtotime($hasta . ' 23:59:59 UTC') : false;
-            if ($d === false || $h === false || $h <= $d) {
-                throw new DatosNoValidosException('desde y hasta: fechas AAAA-MM-DD, con hasta posterior a desde');
+            $inicio = self::fechaCivil($desde, 'desde');
+            $ultimoDia = self::fechaCivil($hasta, 'hasta');
+            if ($inicio > $ahora) {
+                throw new DatosNoValidosException('La fecha inicial no puede ser futura.', 'desde');
             }
-            if ($h - $d > 90 * 86400) {
-                throw new DatosNoValidosException('el rango máximo es de 90 días');
+            if ($ultimoDia > $ahora || $ultimoDia < $inicio) {
+                throw new DatosNoValidosException('La fecha final debe ser del mismo día o posterior sin superar hoy.', 'hasta');
             }
+            if ($ultimoDia - $inicio >= 90 * self::DIA_MS) {
+                throw new DatosNoValidosException('El rango máximo es de 90 días.', 'hasta');
+            }
+            $fin = min($ultimoDia + self::DIA_MS - 1, $ahora);
             $n = 60;
-            $fin = min($h * 1000 + 999, $ahora);
-            $paso = (int) ceil(($fin - $d * 1000) / $n);
+            $paso = max(1, (int) ceil(($fin - $inicio) / $n));
         } elseif (isset(self::PERIODOS[$periodo])) {
-            $n = self::PERIODOS[$periodo]['n'];
-            $paso = self::PERIODOS[$periodo]['paso'];
-            $fin = $ahora;
+            ['n' => $n, 'paso' => $paso] = self::PERIODOS[$periodo];
+            $fin = self::finDeSerie($referencia, $ahora);
+            $inicio = $fin - $n * $paso;
         } else {
             throw new DatosNoValidosException('periodo: 24h, 7d, 30d o rango');
         }
-        $inicio = $fin - $n * $paso;
-        $st = $this->bd->prepare("SELECT fecha_medicion AS medida_en, valor, origen FROM {$this->p}medicion
-            WHERE zona_id = ? AND tipo = ? AND fecha_medicion > ? AND fecha_medicion <= ?");
-        $st->execute([$zonaId, $magnitud, self::fechaBD($inicio), self::fechaBD($fin)]);
-        // por tramo, real y simulado por separado: si hay real, manda el real
-        $suma = ['real' => array_fill(0, $n, 0.0), 'simulado' => array_fill(0, $n, 0.0)];
-        $cuenta = ['real' => array_fill(0, $n, 0), 'simulado' => array_fill(0, $n, 0)];
-        $max = ['real' => array_fill(0, $n, null), 'simulado' => array_fill(0, $n, null)];
-        $cuando = ['real' => array_fill(0, $n, null), 'simulado' => array_fill(0, $n, null)];
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $f) {
-            $o = $f['origen'] === 'real' ? 'real' : 'simulado';
-            $i = min($n - 1, intdiv(self::msDeFechaBD($f['medida_en']) - $inicio - 1, $paso));
-            $v = (float) $f['valor'];
-            $suma[$o][$i] += $v;
-            $cuenta[$o][$i]++;
-            if ($max[$o][$i] === null || $v > $max[$o][$i]) {
-                $max[$o][$i] = $v;
-                $cuando[$o][$i] = self::msDeFechaBD($f['medida_en']);
+
+        $st = $this->ejecutar("SELECT fecha_medicion AS medida_en, valor, origen FROM {$this->p}medicion
+            WHERE zona_id = ? AND tipo = ? AND fecha_medicion > ? AND fecha_medicion <= ?
+            ORDER BY fecha_medicion, id", [$zonaId, $magnitud, self::fechaBD($inicio), self::fechaBD(min($fin, $ahora))]);
+        // En cada tramo prevalece el dato real y se conserva su origen en la respuesta.
+        $acumulados = ['real' => [], 'simulado' => []];
+        while ($fila = $st->fetch(PDO::FETCH_ASSOC)) {
+            $momento = self::msDeFechaBD($fila['medida_en']);
+            $i = min($n - 1, intdiv($momento - $inicio - 1, $paso));
+            $valor = (float) $fila['valor'];
+            $origen = $fila['origen'];
+            $tramo = $acumulados[$origen][$i] ?? ['suma' => 0, 'n' => 0, 'min' => $valor, 'max' => $valor, 'momento' => $momento];
+            $tramo['suma'] += $valor;
+            $tramo['n']++;
+            $tramo['min'] = min($tramo['min'], $valor);
+            if ($valor > $tramo['max']) {
+                $tramo['max'] = $valor;
+                $tramo['momento'] = $momento;
             }
+            $acumulados[$origen][$i] = $tramo;
         }
+
         $dec = $magnitud === 'o3' ? 3 : 1;
-        $valores = [];
-        $maximos = [];
-        $momentos = [];
+        $valores = $maximos = $momentos = $origenes = array_fill(0, $n, null);
+        $minimo = $maximo = null;
+        $suma = $cantidad = $sinDatos = 0;
         for ($i = 0; $i < $n; $i++) {
-            $o = $cuenta['real'][$i] ? 'real' : 'simulado';
-            $valores[] = $cuenta[$o][$i] ? round($suma[$o][$i] / $cuenta[$o][$i], $dec) : null;
-            $maximos[] = $cuenta[$o][$i] ? round($max[$o][$i], $dec) : null;
-            $momentos[] = $cuando[$o][$i];
+            $origen = isset($acumulados['real'][$i]) ? 'real' : 'simulado';
+            $tramo = $acumulados[$origen][$i] ?? null;
+            if ($tramo === null) {
+                $sinDatos += max(0, min($fin, $inicio + ($i + 1) * $paso) - ($inicio + $i * $paso));
+                continue;
+            }
+            $valores[$i] = round($tramo['suma'] / $tramo['n'], $dec);
+            $maximos[$i] = round($tramo['max'], $dec);
+            $momentos[$i] = $tramo['momento'];
+            $origenes[$i] = $origen;
+            $minimo = min($minimo ?? $tramo['min'], $tramo['min']);
+            $maximo = max($maximo ?? $tramo['max'], $tramo['max']);
+            $suma += $tramo['suma'];
+            $cantidad += $tramo['n'];
         }
-        return ['zona' => $zonaId, 'magnitud' => $magnitud, 'periodo' => $periodo, 'paso_min' => intdiv($paso, 60000),
-            'desde' => self::fechaISO($inicio), 'hasta' => self::fechaISO($fin), 'valores' => $valores,
-            'aprox' => self::aproximar($valores, $paso, $dec),
-            'eventos' => self::eventos($valores, $maximos, $momentos, $magnitud, $inicio, $paso)];
+        $eventos = self::eventos($valores, $maximos, $momentos, $magnitud, $inicio, $paso, $origenes);
+        $eventos['avisos'] = $this->avisosEmitidos($zonaId, $magnitud, $inicio, $fin);
+
+        return [
+            'zona' => $zonaId, 'magnitud' => $magnitud, 'periodo' => $periodo,
+            'paso_min' => intdiv($paso, 60000), 'paso_ms' => $paso, 'desde' => self::fechaISO($inicio), 'hasta' => self::fechaISO($fin),
+            'valores' => $valores, 'origen' => $origenes, 'aprox' => self::aproximar($valores, $paso, $dec),
+            'resumen' => [
+                'minimo' => $cantidad ? round($minimo, $dec) : null,
+                'media' => $cantidad ? round($suma / $cantidad, $dec) : null,
+                'maximo' => $cantidad ? round($maximo, $dec) : null,
+                'horas_sin_datos' => $sinDatos / self::HORA_MS,
+            ],
+            'eventos' => $eventos,
+        ];
+    }
+
+    private function avisosEmitidos(string $zona, string $magnitud, int $inicio, int $fin): array {
+        try {
+            $filas = $this->filas("SELECT DISTINCT momento, valor, origen FROM {$this->p}alerta_emitida
+                WHERE zona_id = ? AND magnitud = ? AND momento > ? AND momento <= ?
+                ORDER BY momento DESC, valor DESC LIMIT 30", [$zona, $magnitud, self::fechaBD($inicio), self::fechaBD($fin)]);
+        } catch (PDOException $e) {
+            if ($e->getCode() === '42S02' || ($e->errorInfo[1] === 1 && str_contains($e->getMessage(), 'no such table'))) {
+                return [];
+            }
+            throw $e;
+        }
+        return array_map(static fn($fila) => [
+            'momento' => self::isoDeBD($fila['momento']), 'valor' => (float) $fila['valor'],
+            'nivel' => self::nivelDe($magnitud, (float) $fila['valor']), 'origen' => $fila['origen'],
+        ], $filas);
     }
 
     // Límites de los niveles (los mismos que la app y la web): Medio y Alto
     const LIMITES = ['o3' => [0.060, 0.090], 'temp' => [25.0, 32.0], 'ruido' => [55.0, 65.0]];
-    // Un hueco se aproxima (línea discontinua) si dura como mucho esto (o un tramo, si el tramo es mayor)
+    // Los huecos de más de dos horas permanecen en blanco aunque el tramo sea más largo.
     const HUECO_APROX_MS = 2 * 3600000;
 
     // --------------------------------------------------------------
@@ -370,7 +521,7 @@ class Logica extends Base {
     public static function aproximar(array $valores, int $paso, int $dec): array {
         $n = count($valores);
         $out = array_fill(0, $n, null);
-        $maxTramos = max(1, intdiv(self::HUECO_APROX_MS, $paso));
+        $maxTramos = intdiv(self::HUECO_APROX_MS, $paso);
         $i = 0;
         while ($i < $n) {
             if ($valores[$i] !== null) {
@@ -394,12 +545,17 @@ class Logica extends Base {
         return $out;
     }
 
+    public static function nivelDe(string $magnitud, float $valor): string {
+        [$medio, $alto] = self::LIMITES[$magnitud];
+        return $valor >= $alto ? 'alto' : ($valor >= $medio ? 'medio' : 'bajo');
+    }
+
     // --------------------------------------------------------------
     // eventos() --> {alertas: [{desde, hasta, max, nivel}], picos: [{momento, valor}]}
     //   alertas: ratos seguidos en nivel Alto (y, si no hay, en Medio)
     //   picos: los 3 valores más altos medidos (en tramos no seguidos), con su hora
     // --------------------------------------------------------------
-    public static function eventos(array $valores, array $maximos, array $momentos, string $magnitud, int $inicio, int $paso): array {
+    public static function eventos(array $valores, array $maximos, array $momentos, string $magnitud, int $inicio, int $paso, array $origenes = []): array {
         [$medio, $alto] = self::LIMITES[$magnitud];
         $alertas = [];
         foreach (['alto' => $alto, 'medio' => $medio] as $nivel => $lim) {
@@ -413,8 +569,9 @@ class Logica extends Base {
                     $j++;
                     $mx = max($mx, $valores[$j]);
                 }
+                $fuentes = array_unique(array_slice($origenes, $i, $j - $i + 1));
                 $alertas[] = ['desde' => self::fechaISO($inicio + $i * $paso), 'hasta' => self::fechaISO($inicio + ($j + 1) * $paso),
-                    'max' => $mx, 'nivel' => $nivel];
+                    'max' => $mx, 'nivel' => $nivel, 'origen' => count($fuentes) > 1 ? 'mixto' : ($fuentes[0] ?? null)];
                 $i = $j;
             }
             if ($alertas) {
@@ -435,7 +592,8 @@ class Logica extends Base {
                 continue;           // el mismo pico visto en el tramo de al lado
             }
             $usados[$i] = true;
-            $picos[] = ['momento' => self::fechaISO($momentos[$i] ?? ($inicio + $i * $paso + intdiv($paso, 2))), 'valor' => $m];
+            $picos[] = ['momento' => self::fechaISO($momentos[$i] ?? ($inicio + $i * $paso + intdiv($paso, 2))),
+                'valor' => $m, 'nivel' => self::nivelDe($magnitud, $m), 'origen' => $origenes[$i] ?? null];
             if (count($picos) === 3) {
                 break;
             }

@@ -94,6 +94,7 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
     private final Runnable recargarZonas = new Runnable() {
         @Override
         public void run() {
+            if (capaComunidad) refrescar();
             repo.actualizarZonas();
             temporizador.postDelayed(this, 60_000);
         }
@@ -258,7 +259,7 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
             franja.setOnClickListener(x -> nuevaPercepcion());
         } else {
             leyenda.setText(leyenda(magnitud.abreviatura + " (" + magnitud.unidad + ") · última hora",
-                    repo.datosReales() ? "Parques con contorno; barrios en tono suave"
+                    repo.datosReales() ? "Antiguo · Estimado · Simulado · Sin datos"
                             : "DATOS DE DEMOSTRACIÓN: no hay conexión con el servidor", true));
             Recorrido r = repo.recorrido();
             if (r != null && r.enCurso()) {
@@ -343,38 +344,40 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
     private void dibujarZonas() {
         Context c = requireContext();
         for (Zona z : repo.zonas()) {
-            String estado = z.estado();
+            String estado = z.estado(magnitud);
             Nivel n = z.nivel(magnitud);
             int color = Ui.color(c, n.color);
             boolean antiguo = Reglas.ESTADO_ANTIGUO.equals(estado);
             boolean sinDatos = Reglas.ESTADO_SIN_DATOS.equals(estado);
+            boolean estimado = "estimado".equals(estado);
             if (antiguo) {
                 color = ColorUtils.blendARGB(color, Ui.color(c, R.color.nivel_ninguno), 0.55f);
             }
             int alfaRelleno = z.esParque() ? (sinDatos ? 70 : antiguo ? 90 : 140) : (sinDatos ? 25 : 45);
 
-            List<LatLng> puntos = new ArrayList<>();
-            for (double[] p : z.contorno) {
-                puntos.add(new LatLng(p[0], p[1]));
+            for (List<List<double[]>> poligono : z.contornos()) {
+                PolygonOptions po = new PolygonOptions()
+                        .addAll(anillo(poligono.get(0)))
+                        .fillColor(ColorUtils.setAlphaComponent(color, alfaRelleno))
+                        .strokeColor(z.esParque() ? color : ColorUtils.setAlphaComponent(color, 160))
+                        .strokeWidth(Ui.dp(c, z.esParque() ? 2.5f : 1.5f))
+                        .zIndex(z.esParque() ? 2 : 1)
+                        .clickable(true);
+                for (int i = 1; i < poligono.size(); i++) po.addHole(anillo(poligono.get(i)));
+                if (estimado) {
+                    po.strokePattern(Arrays.asList(new com.google.android.gms.maps.model.Dot(), new Gap(Ui.dp(c, 5))));
+                } else if (antiguo || sinDatos || !z.esParque()) {
+                    List<PatternItem> patron = Arrays.asList(new Dash(Ui.dp(c, 8)), new Gap(Ui.dp(c, 6)));
+                    po.strokePattern(patron);
+                }
+                mapa.addPolygon(po).setTag(z.id);
             }
-            PolygonOptions po = new PolygonOptions()
-                    .addAll(puntos)
-                    .fillColor(ColorUtils.setAlphaComponent(color, alfaRelleno))
-                    .strokeColor(z.esParque() ? color : ColorUtils.setAlphaComponent(color, 160))
-                    .strokeWidth(Ui.dp(c, z.esParque() ? 2.5f : 1.5f))
-                    .zIndex(z.esParque() ? 2 : 1)
-                    .clickable(true);
-            if (antiguo || sinDatos || !z.esParque()) {
-                List<PatternItem> patron = Arrays.asList(new Dash(Ui.dp(c, 8)), new Gap(Ui.dp(c, 6)));
-                po.strokePattern(patron);
-            }
-            Polygon poly = mapa.addPolygon(po);
-            poly.setTag(z.id);
 
             // Etiqueta con el nombre y el valor
             double[] centro = z.posicionEtiqueta();
             String linea2 = sinDatos ? "Sin datos" : magnitud.formatear(z.valor(magnitud)) + " " + magnitud.unidad
-                    + (antiguo ? " · antiguo" : "");
+                    + (antiguo ? " · antiguo" : estimado ? " · estimado" : "")
+                    + ("simulado".equals(z.dato(magnitud).origen) ? " · simulado" : "");
             Marker m = mapa.addMarker(new MarkerOptions()
                     .position(new LatLng(centro[0], centro[1]))
                     .icon(etiqueta(z.nombre, linea2, color, z.esParque()))
@@ -384,6 +387,12 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
                 m.setTag(z.id);
             }
         }
+    }
+
+    private static List<LatLng> anillo(List<double[]> datos) {
+        List<LatLng> puntos = new ArrayList<>();
+        for (double[] p : datos) puntos.add(new LatLng(p[0], p[1]));
+        return puntos;
     }
 
     private void dibujarPercepciones() {
@@ -397,7 +406,7 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
                     .position(new LatLng(p.lat, p.lng))
                     .icon(punto(letra, Ui.color(c, p.comoNivel().color)))
                     .anchor(0.5f, 0.5f)
-                    .title(p.titulo())
+                    .title(p.titulo() + (p.simulada ? " · Simulada" : ""))
                     .snippet(p.direccion + " · " + DateUtils.getRelativeTimeSpanString(p.cuando)));
             if (m != null) {
                 m.setTag(p.id); // Long: no abre la ficha de zona
@@ -432,6 +441,8 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
                     "Dejará de verse en el mapa.", "Borrar", () -> {
                         repo.borrarPercepcion(p.id, Ui.hecho(c, hoja::dismiss));
                     })).setBackgroundTintList(android.content.res.ColorStateList.valueOf(Ui.color(c, R.color.nivel_alto)));
+        } else if (p.simulada) {
+            Ui.nota(col, "Percepción simulada para la demostración.");
         } else {
             Ui.nota(col, "Es la percepción de un vecino («" + detalle + "»), no una medición. "
                     + "Solo quien la publicó puede editarla o borrarla.");
@@ -454,9 +465,7 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
         LinearLayout col = Ui.columna(c);
         sv.addView(col);
 
-        String estado = z.estado();
-        boolean sinDatos = Reglas.ESTADO_SIN_DATOS.equals(estado);
-        Ui.texto(col, (z.esParque() ? "Parque" : "Barrio") + " · " + z.numMediciones + " mediciones en la última hora",
+        Ui.texto(col, z.tipoTexto() + " · " + z.numMediciones + " mediciones en la última hora",
                 13, false, R.color.tinta_3);
         Ui.titulo(col, z.nombre);
 
@@ -472,25 +481,13 @@ public class MapaFragment extends Fragment implements OnMapReadyCallback {
                 AlertaActivity.abrir(c, z.id);
             });
         }
-        if (Reglas.ESTADO_ANTIGUO.equals(estado)) {
-            Ui.aviso(col, "La última medición es " + Reglas.haceTexto(z.haceMin)
-                    + ". Puede no reflejar cómo está ahora.", Nivel.MEDIO);
-        }
         LinearLayout card = Ui.tarjeta(col);
-        for (Magnitud m : Magnitud.values()) {
-            Double v = z.valor(m);
-            boolean sin = v == null || sinDatos;
-            LinearLayout f = Ui.fila(card, m.nombre + (sin ? "" : " · " + m.formatear(v) + " " + m.unidad),
-                    sin ? "Nadie con sensor ha pasado por aquí" : "Media · última medición " + Reglas.haceTexto(z.haceMin), null);
-            Ui.insignia(f, sin ? "Sin datos" : Reglas.ESTADO_ANTIGUO.equals(estado) ? "Antiguo" : m.nivel(v).nombre,
-                    sin || Reglas.ESTADO_ANTIGUO.equals(estado) ? Nivel.NINGUNO : m.nivel(v));
-        }
+        for (Magnitud m : Magnitud.values()) Ui.datoZona(card, z, m);
         Ui.nota(col, getString(R.string.nota_privacidad_mapa));
-        MaterialButton evol = Ui.boton(col, "Ver evolución", Ui.BOTON_LLENO, x -> {
+        Ui.boton(col, "Ver evolución", Ui.BOTON_LLENO, x -> {
             hoja.dismiss();
             ZonaActivity.abrir(c, z.id);
         });
-        evol.setEnabled(!sinDatos);
         Ui.boton(col, "¿Qué significan estos valores?", Ui.BOTON_TEXTO,
                 x -> TextoActivity.abrir(c, TextoActivity.GUIA));
 

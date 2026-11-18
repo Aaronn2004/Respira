@@ -42,7 +42,13 @@ class NoAutorizadoException extends Exception {        // 401: sin sesión o cre
 class ProhibidoException extends Exception { }            // 403: con sesión, pero sin permiso
 class NoEncontradoException extends Exception { }         // 404
 class ConflictoException extends DatosNoValidosException { }  // 409: choca con el estado actual
-class BloqueadoException extends Exception { }            // 423: cuenta bloqueada un rato
+class BloqueadoException extends Exception {               // 423: cuenta bloqueada un rato
+    public string $hasta;
+    public function __construct(string $mensaje, string $hasta) {
+        parent::__construct($mensaje);
+        $this->hasta = $hasta;
+    }
+}
 class DemasiadasException extends Exception { }           // 429: límite por hora
 class ErrorDeAlmacenamientoException extends Exception { } // 500
 
@@ -52,6 +58,10 @@ abstract class Base {
     const DIA_MS = 86400000;
     // Los días (puntos, «hoy») se cuentan en hora de España
     const ZONA_HORARIA = 'Europe/Madrid';
+    const SERVICIOS_MUNICIPALES = [
+        'Limpieza viaria', 'Parques y jardines', 'Mantenimiento urbano',
+        'Policía local', 'Movilidad', 'Otro servicio municipal',
+    ];
 
     protected $bd;
     protected $p;     // prefijo de las tablas ('' normalmente)

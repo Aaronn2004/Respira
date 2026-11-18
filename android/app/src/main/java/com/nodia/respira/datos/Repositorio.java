@@ -6,6 +6,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import com.nodia.respira.ble.EnvioMediciones;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -65,7 +67,7 @@ public final class Repositorio {
 
     // Lo usa RespiraApp para enseñar la notificación de una alerta
     public interface AvisoDeAlerta {
-        void avisar(Alerta alerta, Zona zona);
+        boolean avisar(Alerta alerta, Zona zona);
     }
 
     public static final int MAX_PERCEPCIONES_HORA = 3;
@@ -73,10 +75,14 @@ public final class Repositorio {
     private static final String CLAVE = "estado_v2";
     private static final String CLAVE_V1 = "estado_v1";
     private static final long REFRESCO_MIN_MS = 30_000;
+    private static final java.time.format.DateTimeFormatter INSTANTE = new java.time.format.DateTimeFormatterBuilder().appendInstant(3).toFormatter();
     private static final long ALERTA_CADA_MS = 3_600_000;   // una misma alerta, como mucho cada hora
     private static Repositorio instancia;
 
     private final SharedPreferences prefs;
+    private final Context contexto;
+    private final List<JSONObject> avisosPendientes = new ArrayList<>();
+    private boolean enviandoAvisos;
     private final Handler hiloPrincipal = new Handler(Looper.getMainLooper());
     private final List<Runnable> observadores = new ArrayList<>();
     private final ApiRespira api = new ApiRespira();
@@ -88,6 +94,7 @@ public final class Repositorio {
 
     // ---------- copia de lo del servidor ----------
     private String token;
+    private String tokenTemporal;
     private Usuario usuario;
     private Cuenta cuenta;
     private String sensorPrestado;            // código del préstamo en curso (o null)
@@ -98,6 +105,9 @@ public final class Repositorio {
     private long ultimoRefresco;
 
     // ---------- seguimiento (en la cuenta si hay sesión) ----------
+    private boolean seguimientoEnCurso;
+    private long revisionSeguimiento;
+    private Hecho<Boolean> resultadoAlerta;
     private boolean seguimientoPendiente;   // cambios aún sin subir a la cuenta
     private boolean fusionarSeguimiento;    // recién iniciada la sesión: sumar lo del móvil a la cuenta
     private final Set<String> favoritos = new LinkedHashSet<>();
@@ -119,6 +129,8 @@ public final class Repositorio {
     }
 
     private Repositorio(Context contexto) {
+        this.contexto = contexto.getApplicationContext();
+        zonas.forEach(z -> z.conSimulado(true));
         prefs = contexto.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String json = prefs.getString(CLAVE, null);
         try {
@@ -145,6 +157,7 @@ public final class Repositorio {
 
     private void cambio() {
         guardar();
+        TrabajoAlertas.programar(contexto, necesitaTrabajoAlertas());
         final List<Runnable> copia;
         synchronized (this) {
             copia = new ArrayList<>(observadores);
@@ -179,6 +192,10 @@ public final class Repositorio {
     // y comprueba las alertas de este móvil con los datos nuevos
     // --------------------------------------------------------------
     public void actualizarZonas() {
+        actualizarZonas(ok -> { });
+    }
+
+    public void actualizarZonas(ApiRespira.Listo<Boolean> hecho) {
         api.obtenerZonas(lista -> hiloPrincipal.post(() -> {
             synchronized (this) {
                 zonas.clear();
@@ -187,7 +204,11 @@ public final class Repositorio {
             }
             comprobarAlertas();
             cambio();
-        }), error -> Log.w("Respira", "No se pudieron leer las zonas de la API: " + error));
+            hecho.ok(true);
+        }), error -> hiloPrincipal.post(() -> {
+            Log.w("Respira", "No se pudieron leer las zonas de la API: " + error);
+            hecho.ok(false);
+        }));
     }
 
     // --------------------------------------------------------------
@@ -199,41 +220,80 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // Alertas: con datos reales, si una zona que sigues cumple tu
-    // condición, se avisa (una vez por hora y alerta como mucho).
-    // Funciona mientras la app está abierta o el recorrido en marcha:
-    // sin un servicio de notificaciones push no se puede avisar con
-    // la app cerrada.
+    // Solo se avisa con datos de la API y con la magnitud vigente.
     // --------------------------------------------------------------
     private void comprobarAlertas() {
-        List<Alerta> saltan = new ArrayList<>();
-        List<Zona> donde = new ArrayList<>();
-        long ahora = System.currentTimeMillis();
+        final long ahora = System.currentTimeMillis();
         synchronized (this) {
-            if (!datosReales) {
-                return;
-            }
+            if (!datosReales || avisoDeAlerta == null || (token != null && seguimientoPendiente)) return;
             for (Alerta a : alertas.values()) {
                 Zona z = zona(a.zonaId);
-                if (z == null || !Reglas.ESTADO_OK.equals(z.estado()) || !seCumple(a, z)) {
-                    continue;
+                if (z == null || !seCumple(a, z)) continue;
+                String estado = z.estado(a.magnitud);
+                if (!Reglas.ESTADO_OK.equals(estado)) continue;
+                Long antes = alertaAvisada.get(a.clave());
+                if (antes != null && ahora - antes < ALERTA_CADA_MS) continue;
+                if (avisoDeAlerta.avisar(a, z)) {
+                    alertaAvisada.put(a.clave(), ahora);
+                    anotarAviso(a, z);
                 }
-                Long antes = alertaAvisada.get(a.zonaId);
-                if (antes != null && ahora - antes < ALERTA_CADA_MS) {
-                    continue;
-                }
-                alertaAvisada.put(a.zonaId, ahora);
-                saltan.add(a);
-                donde.add(z);
             }
+            guardar();
         }
-        if (avisoDeAlerta != null) {
-            for (int i = 0; i < saltan.size(); i++) {
-                avisoDeAlerta.avisar(saltan.get(i), donde.get(i));
-            }
+        enviarAvisos();
+    }
+
+    public synchronized boolean necesitaTrabajoAlertas() {
+        return !alertas.isEmpty() || !avisosPendientes.isEmpty() || seguimientoPendiente;
+    }
+
+    private void anotarAviso(Alerta alerta, Zona zona) {
+        Zona.Dato dato = zona.dato(alerta.magnitud);
+        if (token == null || dato.momento == 0 || dato.origen.isEmpty()) return;
+        try {
+            avisosPendientes.add(new JSONObject().put("zona", zona.id).put("magnitud", alerta.magnitud.id)
+                    .put("valor", dato.valor).put("momento", INSTANTE.format(Instant.ofEpochMilli(dato.momento)))
+                    .put("origen", dato.origen));
+        } catch (JSONException e) {
+            Log.w("Respira", "No se pudo preparar el registro del aviso");
         }
     }
 
+    public void comprobacionEnSegundoPlano(ApiRespira.Listo<Boolean> hecho) {
+        subirSeguimiento();
+        enviarAvisos();
+        actualizarZonas(hecho);
+    }
+
+    private void enviarAvisos() {
+        final String t;
+        final JSONObject aviso;
+        synchronized (this) {
+            t = token;
+            if (t == null || enviandoAvisos || avisosPendientes.isEmpty()) return;
+            aviso = avisosPendientes.get(0);
+            enviandoAvisos = true;
+        }
+        api.pedir("POST", "/yo/alertas/emitidas", aviso, t, new ApiRespira.Respuesta() {
+            @Override public void ok(String cuerpo) { registrado(true); }
+
+            @Override public void error(ApiRespira.Error e) {
+                registrado(e.codigo == 400 || e.codigo == 404 || e.codigo == 409);
+            }
+
+            private void registrado(boolean retirar) {
+                synchronized (Repositorio.this) {
+                    if (!t.equals(token)) return;
+                    enviandoAvisos = false;
+                    if (retirar) avisosPendientes.remove(aviso);
+                }
+                guardar();
+                if (retirar) enviarAvisos();
+            }
+        });
+    }
+
+    // --------------------------------------------------------------
     // alerta, zona --> seCumple() --> B
     public static boolean seCumple(Alerta a, Zona z) {
         Double v = z.valor(a.magnitud);
@@ -269,14 +329,16 @@ public final class Repositorio {
         return ultimosValores.get(magnitud);
     }
 
-    // Las que estaban pendientes (sin red) ya han llegado al servidor
-    public void marcarPendientesEnviadas(int n) {
+    public void actualizarEnvios(String dueño, int enviadas, int pendientes, int rechazadas, long ultima) {
         synchronized (this) {
-            if (recorrido != null) {
-                int k = Math.min(n, recorrido.pendientes);
-                recorrido.pendientes -= k;
-                recorrido.enviadas += k;
-            }
+            if (usuario == null || !dueño.equals(usuario.id) || recorrido == null) return;
+            if (recorrido.enviadas == enviadas && recorrido.pendientes == pendientes
+                    && recorrido.rechazadas == rechazadas && recorrido.ultimaMs == ultima) return;
+            recorrido.enviadas = enviadas;
+            recorrido.pendientes = pendientes;
+            recorrido.rechazadas = rechazadas;
+            recorrido.ultimaMs = ultima;
+            recorrido.ultima = ultima > 0 ? ResumenRecorrido.hora(Instant.ofEpochMilli(ultima).toString()) : null;
         }
         cambio();
     }
@@ -330,94 +392,110 @@ public final class Repositorio {
             if (!favoritos.remove(id)) {
                 favoritos.add(id);
             } else {
-                alertas.remove(id);      // sin seguir el parque, su alerta no tiene sentido
+                alertas.values().removeIf(a -> a.zonaId.equals(id));
+                alertaAvisada.keySet().retainAll(alertas.keySet());
             }
-            seguimientoPendiente = token != null;
+            marcarSeguimiento();
         }
         cambio();
         subirSeguimiento();
     }
 
     public synchronized Alerta alerta(String zonaId) {
-        return alertas.get(zonaId);
+        for (Alerta a : alertas.values()) if (a.zonaId.equals(zonaId)) return a;
+        return null;
+    }
+
+    public synchronized Alerta alerta(String zonaId, Magnitud magnitud) {
+        return alertas.get(Alerta.clave(zonaId, magnitud));
     }
 
     public synchronized List<Alerta> alertas() {
         return new ArrayList<>(alertas.values());
     }
 
-    public void guardarAlerta(Alerta a) {
+    public void guardarAlerta(Alerta alerta, Hecho<Boolean> hecho) {
         synchronized (this) {
-            alertas.put(a.zonaId, a);
-            alertaAvisada.remove(a.zonaId);
-            // Una alerta solo tiene sentido en un parque que sigues
-            favoritos.add(a.zonaId);
-            seguimientoPendiente = token != null;
-        }
-        comprobarAlertas();
-        cambio();
-        subirSeguimiento();
-    }
-
-    public void borrarAlerta(String zonaId) {
-        synchronized (this) {
-            alertas.remove(zonaId);
-            seguimientoPendiente = token != null;
+            alertas.put(alerta.clave(), alerta);
+            alertaAvisada.remove(alerta.clave());
+            favoritos.add(alerta.zonaId);
+            marcarSeguimiento();
+            if (token == null) enPrincipal(hecho, false);
+            else resultadoAlerta = hecho;
         }
         cambio();
         subirSeguimiento();
     }
 
-    // --------------------------------------------------------------
-    // Sube a la cuenta los parques seguidos y sus alertas (lista completa).
-    // Sin red se queda pendiente y se reintenta en el siguiente refresco.
-    // --------------------------------------------------------------
+    public void borrarAlerta(String zonaId, Magnitud magnitud, Hecho<Boolean> hecho) {
+        synchronized (this) {
+            alertas.remove(Alerta.clave(zonaId, magnitud));
+            alertaAvisada.remove(Alerta.clave(zonaId, magnitud));
+            marcarSeguimiento();
+            if (token == null) enPrincipal(hecho, false);
+            else resultadoAlerta = hecho;
+        }
+        cambio();
+        subirSeguimiento();
+    }
+
+    private void marcarSeguimiento() {
+        revisionSeguimiento++;
+        seguimientoPendiente = token != null;
+    }
+
+    // Envía una copia de la lista completa; solo una petición a la vez.
     private void subirSeguimiento() {
         final String t;
-        final JSONObject c = new JSONObject();
+        final long revision;
+        final JSONObject cuerpo = new JSONObject();
         synchronized (this) {
             t = token;
-            if (t == null || !seguimientoPendiente) {
-                return;
-            }
+            if (t == null || !seguimientoPendiente || seguimientoEnCurso) return;
+            revision = revisionSeguimiento;
             try {
-                JSONArray al = new JSONArray();
+                JSONArray configuradas = new JSONArray();
                 for (Alerta a : alertas.values()) {
-                    JSONObject x = new JSONObject().put("zona", a.zonaId).put("magnitud", a.magnitud.id).put("condicion", a.condicion);
-                    if ("custom".equals(a.condicion)) {
-                        x.put("valor", Double.parseDouble(a.valor.replace(',', '.')));
-                    }
-                    al.put(x);
+                    JSONObject x = new JSONObject().put("zona", a.zonaId).put("magnitud", a.magnitud.id)
+                            .put("condicion", a.condicion);
+                    if ("custom".equals(a.condicion)) x.put("valor", Double.parseDouble(a.valor.replace(',', '.')));
+                    configuradas.put(x);
                 }
-                c.put("favoritos", new JSONArray(favoritos)).put("alertas", al);
-            } catch (JSONException | NumberFormatException | NullPointerException e) {
-                Log.w("Respira", "seguimiento: " + e);
+                cuerpo.put("favoritos", new JSONArray(favoritos)).put("alertas", configuradas);
+                seguimientoEnCurso = true;
+            } catch (JSONException | NumberFormatException e) {
+                Log.w("Respira", "Seguimiento no válido", e);
                 return;
             }
         }
-        api.pedir("PUT", "/yo/seguimiento", c, t, new ApiRespira.Respuesta() {
-            @Override
-            public void ok(String cuerpo) {
-                synchronized (Repositorio.this) {
-                    if (t.equals(token)) {
-                        seguimientoPendiente = false;
-                    }
-                }
-                guardar();
-            }
+        api.pedir("PUT", "/yo/seguimiento", cuerpo, t, new ApiRespira.Respuesta() {
+            @Override public void ok(String cuerpo) { terminar(null); }
+            @Override public void error(ApiRespira.Error e) { terminar(e); }
 
-            @Override
-            public void error(ApiRespira.Error e) {
-                if (e.codigo == 401) {
-                    sesionCaducada();
-                } else if (e.codigo == 400) {
-                    // algo que el servidor no admite (p. ej. una zona que ya no existe): manda la cuenta
+            private void terminar(ApiRespira.Error error) {
+                hiloPrincipal.post(() -> {
+                    final Hecho<Boolean> hecho;
+                    final boolean actual;
                     synchronized (Repositorio.this) {
-                        seguimientoPendiente = false;
+                        if (!t.equals(token)) return;
+                        seguimientoEnCurso = false;
+                        actual = revision == revisionSeguimiento;
+                        hecho = actual ? resultadoAlerta : null;
+                        if (actual) {
+                            resultadoAlerta = null;
+                            seguimientoPendiente = error != null && error.codigo != 400;
+                        }
                     }
-                    refrescar(true);
-                }
-                // sin red: sigue pendiente
+                    if (hecho != null) {
+                        if (error == null) hecho.ok(true);
+                        else hecho.error(error.mensaje, error.campos);
+                    }
+                    if (error == null && actual) comprobarAlertas();
+                    if (error != null && error.codigo == 400 && actual) refrescar(true);
+                    if (error != null && error.codigo == 401) sesionCaducada();
+                    cambio();
+                    if (!actual && (error == null || error.codigo == 400)) subirSeguimiento();
+                });
             }
         });
     }
@@ -440,8 +518,9 @@ public final class Repositorio {
         for (int i = 0; a != null && i < a.length(); i++) {
             JSONObject x = a.getJSONObject(i);
             String v = x.isNull("valor") ? "" : numero(x.getDouble("valor"));
-            al.put(x.getString("zona"), new Alerta(x.getString("zona"), Magnitud.desdeId(x.getString("magnitud")),
-                    x.getString("condicion"), v));
+            Alerta alerta = new Alerta(x.getString("zona"), Magnitud.desdeId(x.getString("magnitud")),
+                    x.getString("condicion"), v);
+            al.put(alerta.clave(), alerta);
         }
         boolean subir;
         if (fusionarSeguimiento) {
@@ -461,7 +540,8 @@ public final class Repositorio {
         alertas.putAll(al);
         alertaAvisada.keySet().retainAll(alertas.keySet());
         fusionarSeguimiento = false;
-        seguimientoPendiente = subir;
+        if (subir) marcarSeguimiento();
+        else seguimientoPendiente = false;
         return subir;
     }
 
@@ -476,6 +556,10 @@ public final class Repositorio {
             favoritos.clear();
             alertas.clear();
             alertaAvisada.clear();
+            avisosPendientes.clear();
+            enviandoAvisos = false;
+            seguimientoEnCurso = false;
+            resultadoAlerta = null;
             seguimientoPendiente = false;
             fusionarSeguimiento = false;
         }
@@ -529,6 +613,7 @@ public final class Repositorio {
 
     private void sesionCaducada() {
         synchronized (this) {
+            if (token != null) olvidarSeguimiento();
             token = null;
             usuario = null;
             cuenta = null;
@@ -540,7 +625,8 @@ public final class Repositorio {
     }
 
     private static Usuario usuarioDeJSON(JSONObject u) throws JSONException {
-        return new Usuario(u.getString("id"), u.getString("nombre"), u.getString("email"), u.optString("rol", Usuario.VECINO));
+        return new Usuario(u.getString("id"), u.getString("nombre"), u.getString("email"),
+                u.optString("rol", Usuario.VECINO), u.optBoolean("requiere_cambio_clave"));
     }
 
     // Respuesta de POST /sesiones o /usuarios: {token, usuario}
@@ -548,6 +634,11 @@ public final class Repositorio {
         JSONObject o = new JSONObject(cuerpo);
         Usuario u = usuarioDeJSON(o.getJSONObject("usuario"));
         synchronized (this) {
+            if (u.requiereCambioClave) {
+                tokenTemporal = o.getString("token");
+                return u;
+            }
+            tokenTemporal = null;
             token = o.getString("token");
             usuario = u;
             cuenta = new Cuenta();
@@ -557,6 +648,7 @@ public final class Repositorio {
             fusionarSeguimiento = true;
         }
         refrescar(true);
+        EnvioMediciones.obtener(contexto).reanudar();
         return u;
     }
 
@@ -585,12 +677,57 @@ public final class Repositorio {
             public void error(ApiRespira.Error e) {
                 if (e.codigo == 423) {
                     synchronized (Repositorio.this) {
-                        bloqueoHasta = System.currentTimeMillis() + Reglas.BLOQUEO_LOGIN_MS;
+                        bloqueoHasta = e.hasta > 0 ? e.hasta : System.currentTimeMillis() + Reglas.BLOQUEO_LOGIN_MS;
                     }
                     guardar();
                 }
                 errorEnPrincipal(hecho, e);
             }
+        });
+    }
+
+    public void cambiarClaveInicial(String clave, Hecho<Usuario> hecho) {
+        final String t;
+        synchronized (this) { t = tokenTemporal; }
+        if (t == null) {
+            errorEnPrincipal(hecho, ApiRespira.error(401, "{\"error\":\"Vuelve a iniciar sesión.\"}"));
+            return;
+        }
+        JSONObject cuerpo = new JSONObject();
+        try {
+            cuerpo.put("clave", clave);
+        } catch (JSONException e) {
+            errorEnPrincipal(hecho, ApiRespira.error(400, ""));
+            return;
+        }
+        api.pedir("PUT", "/yo/clave", cuerpo, t, new ApiRespira.Respuesta() {
+            @Override public void ok(String respuesta) {
+                try {
+                    synchronized (Repositorio.this) {
+                        if (!t.equals(tokenTemporal)) return;
+                        enPrincipal(hecho, abrirSesion(respuesta));
+                    }
+                    cambio();
+                } catch (JSONException e) {
+                    errorEnPrincipal(hecho, ApiRespira.error(500, ""));
+                }
+            }
+
+            @Override public void error(ApiRespira.Error e) {
+                errorEnPrincipal(hecho, e);
+            }
+        });
+    }
+
+    public void cancelarClaveInicial() {
+        final String t;
+        synchronized (this) {
+            t = tokenTemporal;
+            tokenTemporal = null;
+        }
+        if (t != null) api.pedir("DELETE", "/sesiones", null, t, new ApiRespira.Respuesta() {
+            @Override public void ok(String cuerpo) { }
+            @Override public void error(ApiRespira.Error e) { }
         });
     }
 
@@ -674,9 +811,11 @@ public final class Repositorio {
 
     // Borra la cuenta en el servidor (no se puede con un sensor prestado)
     public void borrarCuenta(Hecho<Void> hecho) {
+        final Usuario borrar = usuario();
         api.pedir("DELETE", "/yo", null, token(), new ApiRespira.Respuesta() {
             @Override
             public void ok(String cuerpo) {
+                if (borrar != null) EnvioMediciones.obtener(contexto).borrarCuenta(borrar.id);
                 olvidarSeguimiento();
                 sesionCaducada();
                 enPrincipal(hecho, null);
@@ -872,7 +1011,7 @@ public final class Repositorio {
         }
         String autor = p.optBoolean("mia", false) && usuario != null ? usuario.id : null;
         return new Percepcion(p.getLong("id"), p.getString("tipo"), p.getInt("nivel"), p.getDouble("lat"),
-                p.getDouble("lng"), cuando, p.getString("direccion"), autor);
+                p.getDouble("lng"), cuando, p.getString("direccion"), autor, p.optBoolean("simulado"));
     }
 
     private List<Percepcion> percepcionesDeJSON(JSONArray a) throws JSONException {
@@ -957,30 +1096,14 @@ public final class Repositorio {
             ultimosValores.clear();
         }
         cambio();
+        EnvioMediciones.obtener(contexto).reanudar();
     }
 
-    // --------------------------------------------------------------
-    // Llega una medición NUEVA del sensor (la llama el servicio BLE).
-    // Los minutos y los puntos los cuenta el servidor: aquí solo se
-    // lleva la cuenta de enviadas/pendientes y se pide el «hoy» al
-    // servidor de vez en cuando.
-    // --------------------------------------------------------------
-    public void registrarMedicion(boolean enParque, boolean enviada) {
+    public void estadoSensor(String estado) {
         synchronized (this) {
-            if (recorrido == null || !recorrido.enCurso()) {
-                return;
-            }
-            long ahora = System.currentTimeMillis();
-            recorrido.estado = Recorrido.ACTIVO;
-            recorrido.ultimaMs = ahora;
-            recorrido.ultima = hora(new Date(ahora));
-            if (enviada) {
-                recorrido.enviadas++;
-            } else {
-                recorrido.pendientes++;
-            }
+            if (recorrido == null || !recorrido.enCurso() || estado.equals(recorrido.estado)) return;
+            recorrido.estado = estado;
         }
-        refrescar(false);
         cambio();
     }
 
@@ -1075,7 +1198,7 @@ public final class Repositorio {
     }
 
     public synchronized Percepcion percepcion(long id) {
-        for (Percepcion p : percepciones) {
+        for (Percepcion p : percepciones()) {
             if (p.id == id) {
                 return p;
             }
@@ -1090,7 +1213,7 @@ public final class Repositorio {
 
     // Solo quien la publicó puede editarla o borrarla
     public synchronized boolean esMia(Percepcion p) {
-        return p != null && usuario != null && usuario.id.equals(p.autorId);
+        return p != null && !p.simulada && usuario != null && usuario.id.equals(p.autorId);
     }
 
     private ApiRespira.Respuesta respuestaPercepcion(Hecho<Percepcion> hecho) {
@@ -1233,6 +1356,7 @@ public final class Repositorio {
                 av.put(e.getKey(), e.getValue());
             }
             o.put("alertaAvisada", av);
+            o.put("avisosPendientes", new JSONArray(avisosPendientes));
             o.put("onboarding", onboardingVisto);
             o.put("bloqueo", bloqueoHasta);
             o.put("segPendiente", seguimientoPendiente);
@@ -1241,6 +1365,7 @@ public final class Repositorio {
                 o.put("recorrido", new JSONObject().put("codigo", recorrido.codigo).put("inicio", recorrido.inicio)
                         .put("estado", recorrido.estado).put("enviadas", recorrido.enviadas)
                         .put("pendientes", recorrido.pendientes)
+                        .put("rechazadas", recorrido.rechazadas)
                         .put("ultima", recorrido.ultima == null ? "" : recorrido.ultima)
                         .put("ultimaMs", recorrido.ultimaMs));
             }
@@ -1298,6 +1423,10 @@ public final class Repositorio {
                 alertaAvisada.put(k.getString(i), av.getLong(k.getString(i)));
             }
         }
+        JSONArray avisos = o.optJSONArray("avisosPendientes");
+        for (int i = 0; token != null && avisos != null && i < avisos.length(); i++) {
+            avisosPendientes.add(avisos.getJSONObject(i));
+        }
         bloqueoHasta = o.optLong("bloqueo", 0);
         seguimientoPendiente = o.optBoolean("segPendiente", false);
         fusionarSeguimiento = o.optBoolean("segFusionar", false);
@@ -1307,6 +1436,7 @@ public final class Repositorio {
             recorrido.estado = r.getString("estado");
             recorrido.enviadas = r.getInt("enviadas");
             recorrido.pendientes = r.getInt("pendientes");
+            recorrido.rechazadas = r.optInt("rechazadas");
             recorrido.ultima = r.getString("ultima").isEmpty() ? null : r.getString("ultima");
             recorrido.ultimaMs = r.getLong("ultimaMs");
         }
@@ -1321,8 +1451,9 @@ public final class Repositorio {
         JSONArray al = o.optJSONArray("alertas");
         for (int i = 0; al != null && i < al.length(); i++) {
             JSONObject a = al.getJSONObject(i);
-            alertas.put(a.getString("zona"), new Alerta(a.getString("zona"), Magnitud.desdeId(a.getString("mag")),
-                    a.getString("cond"), a.getString("valor")));
+            Alerta alerta = new Alerta(a.getString("zona"), Magnitud.desdeId(a.getString("mag")),
+                    a.getString("cond"), a.getString("valor"));
+            alertas.put(alerta.clave(), alerta);
         }
         onboardingVisto = o.optBoolean("onboarding", false);
     }

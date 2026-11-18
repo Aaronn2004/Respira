@@ -59,13 +59,22 @@ prueba('login: correo en mayúsculas vale y devuelve token y perfil', function (
     igual(64, strlen($r['token']));
 });
 
-prueba('login: sin bloqueo por intentos (decisión del sprint): tras fallos, la buena entra', function () {
+prueba('login: cinco fallos bloquean la cuenta 15 minutos, incluso con la contraseña correcta', function () {
+    global $T;
     [, $c] = nuevas();
-    for ($i = 1; $i <= 6; $i++) {
+    for ($i = 1; $i <= 4; $i++) {
         $e = lanza(NoAutorizadoException::class, function () use ($c) { $c->iniciarSesion('lucia@correo.es', 'mal', 'app'); });
-        igual(null, $e->quedan, "intento $i");
+        igual(5 - $i, $e->quedan, "intento $i");
     }
-    igual('U-48213', $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app')['usuario']['id']);
+    $e = lanza(BloqueadoException::class, function () use ($c) { $c->iniciarSesion('LUCIA@correo.es', 'mal', 'app'); });
+    igual(Cuentas::fechaISO($T + 900000), $e->hasta);
+    lanza(BloqueadoException::class, function () use ($c) { $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app'); });
+    $T += 900000;
+    try {
+        igual('U-48213', $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app')['usuario']['id']);
+    } finally {
+        $T -= 900000;
+    }
 });
 
 prueba('login: un correo que no existe no dice si existe', function () {
@@ -98,7 +107,7 @@ prueba('sesión: el token se guarda con hash, caduca y se puede cerrar', functio
     igual(null, $c->usuarioDeSesion('inventado'));
 });
 
-prueba('trabajador: administración pone la contraseña y la cuenta queda activa', function () {
+prueba('trabajador: la contraseña inicial debe cambiarse y el token anterior deja de valer', function () {
     [$bd, $c] = nuevas();
     $admin = $c->usuarioPorId('A-0001');
     $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) {
@@ -110,7 +119,14 @@ prueba('trabajador: administración pone la contraseña y la cuenta queda activa
     $r = $c->altaTrabajador($admin, 'Pablo  Sanz Gil', 'PSanz@ayto.es', '104233', 'Limpieza viaria', 'Trabajo2026!');
     igual(['T-0001', 'Pablo Sanz Gil', 'psanz@ayto.es'], [$r['trabajador']['id'], $r['trabajador']['nombre'], $r['trabajador']['email']]);
     igual(['104233', 'Limpieza viaria'], array_values($bd->query("SELECT num_empleado, servicio FROM empleado WHERE usuario_id = 'T-0001'")->fetch(PDO::FETCH_ASSOC)));
-    igual('trabajador', $c->iniciarSesion('psanz@ayto.es', 'Trabajo2026!', 'app')['usuario']['rol'], 'entra en la app al momento');
+    $primero = $c->iniciarSesion('psanz@ayto.es', 'Trabajo2026!', 'app');
+    igual(['trabajador', true], [$primero['usuario']['rol'], $primero['usuario']['requiere_cambio_clave']]);
+    $u = $c->usuarioDeSesion($primero['token']);
+    lanza(DatosNoValidosException::class, function () use ($c, $u) { $c->cambiarClaveInicial($u, 'Trabajo2026!'); });
+    $nuevo = $c->cambiarClaveInicial($u, 'Personal4359!');
+    igual(false, $nuevo['usuario']['requiere_cambio_clave']);
+    igual(null, $c->usuarioDeSesion($primero['token']));
+    igual('T-0001', $c->usuarioDeSesion($nuevo['token'])['id']);
     $r2 = $c->altaTrabajador($admin, 'Elena Mora Vidal', 'emora@ayto.es', '104587', 'Parques y jardines', 'Parques2026!');
     igual('T-0002', $r2['trabajador']['id']);
     $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) {
@@ -125,9 +141,33 @@ prueba('trabajador: validaciones y solo administración', function () {
     $admin = $c->usuarioPorId('A-0001');
     $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) { $c->altaTrabajador($admin, 'Pablo', 'p@gmail.com', '12', 'X', ''); });
     igual(['nombre', 'email', 'num_empleado', 'servicio', 'clave'], array_keys($e->errores));
+    $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) {
+        $c->altaTrabajador($admin, str_repeat('Ana ', 30), str_repeat('x', 113) . '@ayto.es', '654321', 'Movilidad', 'Inicio1234!');
+    });
+    igual(['nombre', 'email'], array_keys($e->errores));
     crearUsuario($bd, 'A-0002', 'tecnico', 'tecnico@ayto.es', 'Tecnico2026!');
     lanza(ProhibidoException::class, function () use ($c) { $c->altaTrabajador($c->usuarioPorId('A-0002'), 'A B', 'a@ayto.es', '111111', 'Movilidad', 'Movilidad2026'); });
     lanza(NoAutorizadoException::class, function () use ($c) { $c->trabajadores(null); });
+});
+
+prueba('trabajador: la contraseña inicial caduca a las 48 horas', function () {
+    global $T, $correos;
+    [, $c] = nuevas();
+    $c->altaTrabajador($c->usuarioPorId('A-0001'), 'Persona de Prueba', 'prueba@ayto.es', '104233',
+        'Limpieza viaria', 'Inicio1234!');
+    $T += 48 * Cuentas::HORA_MS;
+    try {
+        lanza(ProhibidoException::class, function () use ($c) {
+            $c->iniciarSesion('prueba@ayto.es', 'Inicio1234!', 'app');
+        });
+        $c->solicitarRecuperacion('prueba@ayto.es', 'https://x.es/');
+        preg_match('~#activar/([0-9a-f]{64})~', $correos[0][2], $m);
+        $c->usarEnlace($m[1], 'Personal4359!');
+        $sesion = $c->iniciarSesion('prueba@ayto.es', 'Personal4359!', 'app');
+        igual(false, $sesion['usuario']['requiere_cambio_clave']);
+    } finally {
+        $T -= 48 * Cuentas::HORA_MS;
+    }
 });
 
 prueba('recuperar: manda el enlace por correo, cambia la contraseña y cierra las sesiones', function () {
@@ -165,9 +205,11 @@ prueba('seguimiento: favoritos y alertas se guardan en la cuenta y se recuperan'
     $u = $c->usuarioPorId('U-48213');
     igual(['favoritos' => [], 'alertas' => []], $c->seguimiento($u));
     $s = $c->guardarSeguimiento($u, ['favoritos' => ['ribera'],
-        'alertas' => [['zona' => 'central', 'magnitud' => 'ruido', 'condicion' => 'custom', 'valor' => 60]]]);
+        'alertas' => [['zona' => 'central', 'magnitud' => 'ruido', 'condicion' => 'custom', 'valor' => Logica::RANGO['ruido'][0]],
+            ['zona' => 'central', 'magnitud' => 'o3', 'condicion' => 'alto']]]);
     igual(['central', 'ribera'], $s['favoritos'], 'un parque con alerta se sigue aunque no venga en la lista (orden: fecha y nombre)');
-    igual([['zona' => 'central', 'magnitud' => 'ruido', 'condicion' => 'custom', 'valor' => 60.0]], $s['alertas']);
+    igual(['o3', 'ruido'], array_column($s['alertas'], 'magnitud'));
+    igual((float) Logica::RANGO['ruido'][0], $s['alertas'][1]['valor']);
     // otra sesión (otro móvil) ve lo mismo; guardar otra vez sustituye
     igual($s, $c->seguimiento($c->usuarioPorId('U-48213')));
     $s = $c->guardarSeguimiento($u, ['favoritos' => ['molino'], 'alertas' => []]);

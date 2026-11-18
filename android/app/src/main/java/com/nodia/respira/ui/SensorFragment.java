@@ -81,15 +81,25 @@ public class SensorFragment extends Pestana {
     // ---------- recorrido en curso ----------
     private void pintarRecorrido(LinearLayout c, Recorrido r) {
         LinearLayout card = Ui.tarjeta(c);
-        LinearLayout f = Ui.fila(card, r.codigo, "Sensor prestado · desde las " + r.inicio, null);
+        LinearLayout f = Ui.fila(card, r.codigo, "Recorrido · desde las " + r.inicio, null);
         ((TextView) ((LinearLayout) f.getChildAt(0)).getChildAt(0)).setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
 
-        if (!ServicioEscuharBeacons.tienePermisoEscanear(requireContext())) {
-            Ui.aviso(c, "Envío en pausa: falta el permiso de Bluetooth. El móvil no puede oír al sensor.", Nivel.MEDIO);
-        } else if (Recorrido.BUSCANDO.equals(r.estado)) {
-            Ui.aviso(c, "Buscando tu sensor… Llévalo cerca del móvil.", Nivel.NINGUNO);
-        } else {
+        if (!ServicioEscuharBeacons.bluetoothActivado(requireContext())) {
+            Ui.aviso(c, "Envío en pausa. Activa el Bluetooth y comprueba el permiso de dispositivos cercanos.", Nivel.MEDIO);
+        } else if (!ServicioEscuharBeacons.ubicacionActivada(requireContext())) {
+            Ui.aviso(c, "Envío en pausa. Activa la ubicación precisa para situar las mediciones.", Nivel.MEDIO);
+        } else if (!ServicioEscuharBeacons.ejecutando()) {
+            Ui.aviso(c, "Recorrido en pausa.", Nivel.MEDIO);
+            Ui.boton(c, "Reanudar recorrido", Ui.BOTON_BORDE,
+                    v -> ServicioEscuharBeacons.arrancar(requireContext()));
+        } else if (Recorrido.LOCALIZANDO.equals(r.estado)) {
+            Ui.aviso(c, "Esperando una ubicación del móvil.", Nivel.MEDIO);
+        } else if (Recorrido.SIN_ALCANCE.equals(r.estado)) {
+            Ui.aviso(c, "Sensor fuera de alcance. Acércalo al móvil para reanudar el envío.", Nivel.MEDIO);
+        } else if (Recorrido.ACTIVO.equals(r.estado)) {
             Ui.aviso(c, "Recorrido activo: tu sensor está al alcance.", Nivel.BAJO);
+        } else {
+            Ui.aviso(c, "Buscando tu sensor… Llévalo cerca del móvil.", Nivel.NINGUNO);
         }
 
         int[] hoy = repo.hoy();
@@ -114,6 +124,9 @@ public class SensorFragment extends Pestana {
         if (r.pendientes > 0) {
             Ui.valor(datos, "Pendientes de enviar", String.valueOf(r.pendientes));
         }
+        if (r.rechazadas > 0) {
+            Ui.valor(datos, "Lecturas rechazadas hoy", String.valueOf(r.rechazadas));
+        }
         LinearLayout pts = Ui.tarjeta(c);
         Repositorio.Cuenta cu = repo.cuenta();
         Ui.valor(pts, "Puntos de hoy (provisionales: se suman al acabar el día)", "~" + (cu == null ? 0 : cu.hoyPuntos));
@@ -133,8 +146,10 @@ public class SensorFragment extends Pestana {
         Repositorio.Cuenta cu = repo.cuenta();
         ResumenRecorrido rh = cu == null ? null : cu.hoyRecorrido;
         long hasta = repo.prestamoHasta();
-        Ui.aviso(c, "Recorrido terminado. Devuelve el sensor " + terminado.codigo + " en cualquier punto de reparto"
-                + (hasta > 0 ? " antes del " + ZonaActivity.hora(hasta, true) : "") + ".", Nivel.BAJO);
+        Ui.aviso(c, hasta > 0 && terminado.codigo.equals(repo.sensorPrestado())
+                ? "Recorrido terminado. Devuelve el sensor " + terminado.codigo + " antes del "
+                        + ZonaActivity.hora(hasta, true) + " en cualquier punto de reparto."
+                : "Recorrido terminado.", Nivel.BAJO);
         LinearLayout card = Ui.tarjeta(c);
         Ui.etiqueta(card, "Resumen de hoy");
         if (rh == null || rh.vacio()) {
@@ -324,6 +339,12 @@ public class SensorFragment extends Pestana {
 
     private void empezar() {
         if (codigoPendiente == null) {
+            return;
+        }
+        if (!ServicioEscuharBeacons.bluetoothActivado(requireContext()) || !ServicioEscuharBeacons.ubicacionActivada(requireContext())) {
+            Ui.confirmar(requireContext(), "Activa Bluetooth y ubicación",
+                    "Ambos deben estar activados para empezar el recorrido.", "Abrir ajustes",
+                    () -> startActivity(new Intent(Settings.ACTION_SETTINGS)));
             return;
         }
         repo.iniciarRecorrido(codigoPendiente);

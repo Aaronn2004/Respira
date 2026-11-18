@@ -20,8 +20,6 @@
 //   - Para que se vean los estados del mapa: «oeste» no tiene datos
 //     (Sin datos) y «estacion» va 3 h por detrás (Antiguo). Hay huecos
 //     cortos (se aproximan) y, de noche en los parques, alguno largo (gris).
-//   - También mantiene unas percepciones de vecinos en las últimas 24 h
-//     y el «último dato» de los sensores que simulan.
 //   Se apaga con 'simulacion' => false en api/config.php.
 // Diseño:      doc/servidor.md
 // Autor:       Aaron Blasco Blay
@@ -36,22 +34,14 @@ class Simulador extends Base {
     const PASO_MS = 600000;                 // un dato cada 10 min por zona y magnitud
     const DIAS = 30;
     const CADA_MS = 300000;                 // con el historial completo, como mucho una pasada cada 5 min
+    const VERSION_MAPA = 2;
     const ATRAS_DIAS = 5;                   // días de historial que se rellenan por petición
-    const SIN_DATOS = ['oeste'];
-    const RETRASO = ['estacion' => 3 * 3600000];
+    const SIN_DATOS = ['oeste', 'marenys'];
+    const RETRASO = ['estacion' => 3 * 3600000, 'ermita' => 3 * 3600000];
     // sensores (de la demostración) a los que se apuntan los datos simulados;
     // si no existe ninguno, se crea RSP-SIM0
     const NODOS = ['RSP-L1MP', 'RSP-B12A', 'RSP-V08E', 'RSP-M7NT', 'RSP-SIM0'];
     const NODOS_RUIDO = ['RSP-L1MP', 'RSP-B12A'];
-
-    // Percepciones de vecinos que se van renovando (lat, lng, dirección, tipo)
-    const LUGARES = [
-        [38.968978, -0.197667, 'Av. del Río, 40', 'ruido'], [38.971433, -0.177622, 'C/ del Molino, 18', 'temp'],
-        [38.962839, -0.188867, 'C/ Mayor, 61', 'aire'], [38.964804, -0.178600, 'Pl. Mayor, 4', 'ruido'],
-        [38.972661, -0.165400, 'Av. Norte, 7', 'temp'], [38.977080, -0.192289, 'C/ Alta, 30', 'aire'],
-        [38.958420, -0.182022, 'C/ Poniente, 12', 'ruido'], [38.966200, -0.183900, 'Parque Central, entrada norte', 'aire'],
-    ];
-    const AUTORES = ['U-11902', 'U-30577'];
 
     private $marca;      // fichero con la hora de la última pasada (para no consultar la BD en cada petición)
 
@@ -140,12 +130,34 @@ class Simulador extends Base {
     // alDia() --> N (filas nuevas). Rellena hasta ahora.
     // --------------------------------------------------------------
     public function alDia(bool $forzar = false): int {
-        $ahora = $this->ahora();
-        // marca: «ms|completo» de la última pasada
-        $m = $this->marca && is_file($this->marca) ? explode('|', (string) @file_get_contents($this->marca)) : [];
-        if (!$forzar && count($m) === 2 && $m[1] === '1' && $ahora - (int) $m[0] < self::CADA_MS) {
-            return 0;
+        if ($this->marca === null) {
+            return $this->rellenar($this->ahora())[0];
         }
+        $fichero = fopen($this->marca, 'c+');
+        if ($fichero === false) {
+            throw new ErrorDeAlmacenamientoException('No se pudo abrir la marca de la simulación.');
+        }
+        try {
+            if (!flock($fichero, LOCK_EX | LOCK_NB)) {
+                return 0;
+            }
+            $ahora = $this->ahora();
+            $marca = explode('|', (string) stream_get_contents($fichero));
+            if (!$forzar && count($marca) === 3 && (int) $marca[2] === self::VERSION_MAPA
+                && $marca[1] === '1' && $ahora - (int) $marca[0] < self::CADA_MS) {
+                return 0;
+            }
+            [$total, $completo] = $this->rellenar($ahora);
+            rewind($fichero);
+            ftruncate($fichero, 0);
+            fwrite($fichero, $ahora . '|' . ($completo ? '1' : '0') . '|' . self::VERSION_MAPA);
+            return $total;
+        } finally {
+            fclose($fichero);
+        }
+    }
+
+    private function rellenar(int $ahora): array {
         @set_time_limit(120);
         $completo = true;
         $nodos = array_values(array_filter(self::NODOS, function ($c) {
@@ -180,31 +192,27 @@ class Simulador extends Base {
             }
             $filas = [];
             foreach ($tramos as [$desde, $fin]) {
-            for ($t = (int) (ceil($desde / self::PASO_MS) * self::PASO_MS); $t <= $fin; $t += self::PASO_MS) {
-                if (self::hueco($z, $t)) {
-                    continue;
+                for ($t = (int) (ceil($desde / self::PASO_MS) * self::PASO_MS); $t <= $fin; $t += self::PASO_MS) {
+                    if (self::hueco($z, $t)) {
+                        continue;
+                    }
+                    $k = intdiv($t, self::PASO_MS);
+                    foreach (['o3', 'temp', 'ruido'] as $m) {
+                        $lista = $m === 'ruido' ? $ruido : $nodos;
+                        $nodo = $lista[$k % count($lista)];
+                        $lat = (float) $z['etiqueta_lat'] + (self::azar("la|$k|{$z['id']}") - 0.5) * 0.0006;
+                        $lng = (float) $z['etiqueta_lng'] + (self::azar("ln|$k|{$z['id']}") - 0.5) * 0.0006;
+                        $f = self::fechaBD($t);
+                        $filas[] = [$nodo, $m, self::medida($z, $m, $t), $f, round($lat, 6), round($lng, 6), $z['id']];
+                    }
                 }
-                $k = intdiv($t, self::PASO_MS);
-                foreach (['o3', 'temp', 'ruido'] as $m) {
-                    $lista = $m === 'ruido' ? $ruido : $nodos;
-                    $nodo = $lista[$k % count($lista)];
-                    $lat = (float) $z['etiqueta_lat'] + (self::azar("la|$k|{$z['id']}") - 0.5) * 0.0006;
-                    $lng = (float) $z['etiqueta_lng'] + (self::azar("ln|$k|{$z['id']}") - 0.5) * 0.0006;
-                    $f = self::fechaBD($t);
-                    $filas[] = [$nodo, $m, self::medida($z, $m, $t), $f, round($lat, 6), round($lng, 6), $z['id']];
-                }
-            }
             }
             if ((count($tramos) > 1 && $tramos[1][0] > $tope) || (!$ult && $tramos[0][0] > $tope)) {
                 $completo = false;      // aún falta historial: la próxima petición sigue
             }
             $total += $this->insertar($filas);
         }
-        $this->percepciones($ahora);
-        if ($this->marca) {
-            @file_put_contents($this->marca, $ahora . '|' . ($completo ? '1' : '0'));
-        }
-        return $total;
+        return [$total, $completo];
     }
 
     // Inserta en bloques de 300 filas (rápido también en Plesk)
@@ -215,27 +223,5 @@ class Simulador extends Base {
             $this->ejecutar($sql, array_merge(...$bloque));
         }
         return count($filas);
-    }
-
-    // Una percepción nueva cada 3 h (si existen las cuentas de demostración)
-    private function percepciones(int $ahora): void {
-        $autores = array_values(array_filter(self::AUTORES, function ($id) {
-            return (bool) $this->fila("SELECT id FROM {$this->p}usuario WHERE id = ?", [$id]);
-        }));
-        if (!$autores) {
-            return;
-        }
-        $paso = 3 * self::HORA_MS;
-        for ($t = (int) (floor(($ahora - self::DIA_MS) / $paso) + 1) * $paso; $t <= $ahora; $t += $paso) {
-            $k = intdiv($t, $paso);
-            $lugar = self::LUGARES[$k % count(self::LUGARES)];
-            $f = self::fechaBD($t);
-            if ($this->fila("SELECT id FROM {$this->p}percepcion WHERE creada = ? AND direccion = ?", [$f, $lugar[2]])) {
-                continue;
-            }
-            $nivel = 1 + (int) floor(self::azar("pc|$k") * 3);
-            $this->ejecutar("INSERT INTO {$this->p}percepcion (usuario_id, tipo, nivel, lat, lng, direccion, creada) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                [$autores[$k % count($autores)], $lugar[3], $nivel, $lugar[0], $lugar[1], $lugar[2], $f]);
-        }
     }
 }

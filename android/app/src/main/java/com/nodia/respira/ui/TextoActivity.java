@@ -66,11 +66,13 @@ public class TextoActivity extends AppCompatActivity {
         Bloques.filaEstado(est, R.color.nivel_bajo, false, "Reciente", "Medido en la última hora.");
         Bloques.filaEstado(est, R.color.tinta_2, false, "Antiguo", "Medido hace entre 1 y 24 horas. Se muestra con su hora.");
         Bloques.filaEstado(est, 0, true, "Sin datos", "Nadie con sensor ha pasado en 24 horas. Trama gris: no significa «todo bien».");
+        Bloques.filaEstado(est, R.color.primario, true, "Estimado", "Valor aproximado. En el mapa usa un contorno punteado y en la gráfica una línea de puntos.");
+        Bloques.filaEstado(est, R.color.tinta_3, false, "Simulado", "Valor de demostración generado por el servidor.");
         Bloques.pequeno(est, "Parques con contorno; barrios en tono suave. Los sensores de bajo coste no sustituyen a las "
                 + "estaciones ni a los avisos oficiales.", 8);
 
         LinearLayout ir = Ui.tarjeta(c);
-        Ui.fila(ir, "Efectos en la salud", "Qué causan cuando se superan los umbrales",
+        Ui.fila(ir, "Efectos en la salud", "Efectos de la exposición y referencias sanitarias",
                 v -> startActivity(new Intent(this, EfectosActivity.class)));
     }
 

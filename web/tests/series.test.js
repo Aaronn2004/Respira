@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { serie, aproximar, resumen } = require('../js/series');
+const { serie, aproximar, resumen, desdeApi } = require('../js/series');
 
 const MINUTO = 60_000;
 const HORA = 60 * MINUTO;
@@ -14,8 +14,30 @@ test('interpolación lineal de huecos internos y máximo documentado en Android/
   assert.deepEqual(aproximar([1, null, null, null, null, 3], mediaHora, 1), [null, 1.4, 1.8, 2.2, 2.6, null]);
   assert.deepEqual(aproximar([1, null, null, null, null, null, 3], mediaHora, 1), Array(7).fill(null));
   assert.deepEqual(aproximar([null, null, 3, null], mediaHora, 1), Array(4).fill(null));
-  assert.deepEqual(aproximar([1, null, 3], 3 * HORA, 1), [null, 2, null]);
+  assert.deepEqual(aproximar([1, null, 3], 3 * HORA, 1), [null, null, null]);
   assert.deepEqual(aproximar([.009, null, .012], mediaHora, 3), [null, .011, null]);
+});
+
+test('un mismo rango de demostración cerrado conserva los valores al volver a consultarlo', () => {
+  const rango = { desde: '2026-11-10', hasta: '2026-11-12' };
+  assert.deepEqual(serie(zona, 'temp', 'custom', { ...rango, ahora }),
+    serie(zona, 'temp', 'custom', { ...rango, ahora: ahora + 26 * HORA }));
+});
+
+test('la API conserva duración corta, procedencia y estadísticas de las lecturas base', () => {
+  const datos = {
+    desde: '2026-11-16T00:00:00Z', hasta: '2026-11-16T00:01:30Z', paso_ms: 30000,
+    valores: [16, null, 20], aprox: [null, 18, null], origen: ['real', null, 'simulado'],
+    resumen: { minimo: 15, media: 18, maximo: 21, horas_sin_datos: 1 / 120 },
+    eventos: { avisos: [{ momento: '2026-11-16T00:01:30Z', valor: 20, origen: 'simulado' }] },
+  };
+  const serie = desdeApi(datos);
+  assert.equal(serie.paso, 30000);
+  assert.deepEqual(serie.origen, ['real', null, 'simulado']);
+  assert.deepEqual(serie.estimados, [null, 18, null]);
+  assert.deepEqual(resumen(serie), { min: 15, media: 18, max: 21, horasSinDatos: 1 / 120 });
+  assert.equal(serie.avisos[0].momento, Date.parse(datos.hasta));
+  assert.throws(() => desdeApi({ ...datos, paso_ms: -30000 }), /Serie no válida/);
 });
 
 test('el cálculo de mínimos, medias, máximos y horas sin datos solo usa observados', () => {

@@ -45,7 +45,7 @@ public final class Reglas {
     }
 
     public static boolean esEmail(String texto) {
-        return texto != null && EMAIL.matcher(texto.trim()).matches();
+        return texto != null && texto.trim().length() <= 120 && EMAIL.matcher(texto.trim()).matches();
     }
 
     public static boolean esNombreUsuario(String texto) {
@@ -70,7 +70,7 @@ public final class Reglas {
         } catch (NumberFormatException e) {
             return "Escribe solo un número, por ejemplo " + (m == Magnitud.O3 ? "0.080" : "30") + ".";
         }
-        if (v < m.rangoMin || v > m.rangoMax) {
+        if (!Double.isFinite(v) || v < m.rangoMin || v > m.rangoMax) {
             return "Fuera de rango: debe estar entre " + m.formatear(m.rangoMin) + " y "
                     + m.formatear(m.rangoMax) + " " + m.unidad + ".";
         }

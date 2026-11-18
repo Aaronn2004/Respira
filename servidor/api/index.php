@@ -142,6 +142,16 @@ try {
     $c = in_array($metodo, ['POST', 'PUT', 'DELETE'], true) ? cuerpo() : [];
     $r = $p[0] ?? '';
 
+    if ($metodo === 'PUT' && $ruta === '/yo/clave') {
+        if (!$yo) {
+            throw new NoAutorizadoException('Tu sesión ha caducado. Vuelve a iniciar sesión.');
+        }
+        responder(200, $cuentas->cambiarClaveInicial($yo, (string) ($c['clave'] ?? '')));
+    }
+    if (!empty($yo['requiere_cambio_clave']) && !($metodo === 'DELETE' && $ruta === '/sesiones')) {
+        throw new ProhibidoException('Cambia la contraseña inicial en la app para continuar.');
+    }
+
     // ---------------- público ----------------
     if ($metodo === 'GET' && $ruta === '/estado') {
         $logica->zonas();
@@ -168,7 +178,7 @@ try {
     }
     if ($metodo === 'GET' && $n === 3 && $r === 'zonas' && $p[2] === 'serie') {
         responder(200, $logica->serie($p[1], $_GET['magnitud'] ?? 'o3', $_GET['periodo'] ?? '24h',
-            $_GET['desde'] ?? null, $_GET['hasta'] ?? null));
+            $_GET['desde'] ?? null, $_GET['hasta'] ?? null, $_GET['referencia'] ?? null));
     }
     if ($metodo === 'GET' && $ruta === '/nodos') {
         responder(200, $logica->nodos());
@@ -186,7 +196,7 @@ try {
         responder(200, $puntos->regalos());
     }
     if ($metodo === 'GET' && $ruta === '/percepciones') {
-        responder(200, $comunidad->percepciones($yo));
+        responder(200, $comunidad->percepciones($yo, $cfg['simulacion'] ?? true));
     }
 
     // ---------------- cuentas ----------------
@@ -240,6 +250,10 @@ try {
         }
         if ($metodo === 'PUT' && $ruta === '/yo/seguimiento') {
             responder(200, $cuentas->guardarSeguimiento($yo, $c));
+        }
+        if ($metodo === 'POST' && $ruta === '/yo/alertas/emitidas') {
+            $cuentas->registrarAlertaEmitida($yo, $c, $logica);
+            responder(200, ['ok' => true]);
         }
         if ($metodo === 'GET' && $ruta === '/yo/percepciones') {
             responder(200, $comunidad->mias($yo));
@@ -327,7 +341,7 @@ try {
 } catch (NoEncontradoException $e) {
     responder(404, ['error' => $e->getMessage()]);
 } catch (BloqueadoException $e) {
-    responder(423, ['error' => $e->getMessage()]);
+    responder(423, ['error' => $e->getMessage(), 'hasta' => $e->hasta]);
 } catch (DemasiadasException $e) {
     responder(429, ['error' => $e->getMessage()]);
 } catch (Throwable $e) {

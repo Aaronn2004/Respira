@@ -35,7 +35,7 @@ public class MisAlertasActivity extends AppCompatActivity {
         LinearLayout lista = Ui.tarjeta(c);
         for (Alerta a : alertas) {
             Zona z = repo.zona(a.zonaId);
-            Ui.fila(lista, z == null ? a.zonaId : z.nombre, a.texto(), v -> AlertaActivity.abrir(this, a.zonaId));
+            Ui.fila(lista, z == null ? a.zonaId : z.nombre, a.texto(), v -> AlertaActivity.abrir(this, a.zonaId, a.magnitud));
         }
         if (!Notificaciones.permitidas(this)) {
             Ui.aviso(c, "Las notificaciones no están permitidas: las alertas no te llegarán. Actívalas en Ajustes.", Nivel.MEDIO);

@@ -10,6 +10,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputLayout;
 import com.nodia.respira.datos.Nivel;
 import com.nodia.respira.datos.Reglas;
@@ -86,8 +87,12 @@ public class LoginActivity extends AppCompatActivity {
         repo.iniciarSesion(m, p, new Repositorio.Hecho<Usuario>() {
             @Override
             public void ok(Usuario u) {
-                Toast.makeText(LoginActivity.this, "Hola, " + u.nombre, Toast.LENGTH_SHORT).show();
-                finish();
+                if (u.requiereCambioClave) {
+                    clave.getEditText().setText("");
+                    pedirClaveInicial();
+                } else {
+                    terminar(u);
+                }
             }
 
             @Override
@@ -98,5 +103,57 @@ public class LoginActivity extends AppCompatActivity {
                 comprobarBloqueo();
             }
         });
+    }
+    private void terminar(Usuario u) {
+        Toast.makeText(this, "Hola, " + u.nombre, Toast.LENGTH_SHORT).show();
+        finish();
+    }
+
+    private void pedirClaveInicial() {
+        LinearLayout c = Ui.columna(this);
+        c.setPadding(Ui.dp(this, 24), 0, Ui.dp(this, 24), 0);
+        Ui.parrafo(c, "Crea tu propia contraseña para empezar. Usa al menos 10 caracteres, con letras y números.");
+        int tipo = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD;
+        TextInputLayout nueva = Ui.campo(c, "Nueva contraseña", tipo);
+        TextInputLayout repetir = Ui.campo(c, "Repite la contraseña", tipo);
+        TextView error = Ui.aviso(c, "", Nivel.ALTO);
+        error.setVisibility(TextView.GONE);
+        androidx.appcompat.app.AlertDialog dialogo = new MaterialAlertDialogBuilder(this)
+                .setTitle("Cambia tu contraseña inicial")
+                .setView(c)
+                .setPositiveButton("Guardar", null)
+                .setNegativeButton("Cancelar", (d, w) -> cancelarClave())
+                .setOnCancelListener(d -> cancelarClave())
+                .create();
+        dialogo.show();
+        android.widget.Button guardar = dialogo.getButton(android.content.DialogInterface.BUTTON_POSITIVE);
+        guardar.setOnClickListener(v -> {
+            String p = Ui.leer(nueva);
+            repetir.setError(p.equals(Ui.leer(repetir)) ? null : "Las contraseñas no coinciden.");
+            nueva.setError(null);
+            error.setVisibility(TextView.GONE);
+            if (repetir.getError() != null) return;
+            guardar.setEnabled(false);
+            repo.cambiarClaveInicial(p, new Repositorio.Hecho<Usuario>() {
+                @Override public void ok(Usuario u) {
+                    dialogo.dismiss();
+                    terminar(u);
+                }
+
+                @Override public void error(String mensaje, Map<String, String> campos) {
+                    guardar.setEnabled(true);
+                    nueva.setError(campos.get("clave"));
+                    if (nueva.getError() == null) {
+                        error.setText(mensaje);
+                        error.setVisibility(TextView.VISIBLE);
+                    }
+                }
+            });
+        });
+    }
+
+    private void cancelarClave() {
+        repo.cancelarClaveInicial();
+        entrar.setEnabled(true);
     }
 }

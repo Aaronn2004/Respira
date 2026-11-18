@@ -32,11 +32,17 @@ public class ParquesFragment extends Pestana {
             String altas = z.magnitudesAltas();
             if (!altas.isEmpty()) {
                 Ui.insignia(f, "▲ " + altas, Nivel.ALTO);
-            } else if (z.nivel(com.nodia.respira.datos.Magnitud.O3) == Nivel.NINGUNO) {
+            } else if (com.nodia.respira.datos.Reglas.ESTADO_SIN_DATOS.equals(z.estado())) {
                 Ui.insignia(f, "Sin datos", Nivel.NINGUNO);
             }
-            Alerta a = repo.alerta(z.id);
-            Ui.fila(card, a != null ? "🔔 Alerta: " + a.texto() : "Sin alerta · Crear", null,
+            boolean tieneAlerta = false;
+            for (Alerta alerta : repo.alertas()) {
+                if (!alerta.zonaId.equals(z.id)) continue;
+                Ui.fila(card, "🔔 Alerta: " + alerta.texto(), null,
+                        v -> AlertaActivity.abrir(requireContext(), z.id, alerta.magnitud));
+                tieneAlerta = true;
+            }
+            if (!tieneAlerta) Ui.fila(card, "Sin alerta · Crear", null,
                     v -> AlertaActivity.abrir(requireContext(), z.id));
         }
         Ui.boton(c, "+ Añadir desde el mapa", Ui.BOTON_BORDE, v -> irA(R.id.tab_mapa));

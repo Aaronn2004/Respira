@@ -10,12 +10,13 @@ MariaDB 10.11 en Plesk. Todo lo que usan la app y la web está aquí:
 
 Todas las fechas se guardan en **UTC** (`DATETIME(3)`, con milisegundos). Los «días» de los puntos se cuentan en hora de España.
 
-**15 tablas, 90 campos y 19 claves ajenas.** Reglas del diseño:
+**18 tablas.** Reglas del diseño:
 
 - **Todo lo que apunta a otra tabla es una clave ajena (FK).** Por ejemplo, `medicion.id_nodo` → `nodo.codigo`.
-- **Ningún campo admite NULL** salvo tres, que se vacían a propósito:
+- **Los campos que admiten NULL** se vacían a propósito:
   - `medicion.portador_id`: cuando nadie con sesión llevaba el sensor (o es simulada).
   - `prestamo.usuario_id` y `canje.usuario_id`: cuando un vecino borra su cuenta (sus datos personales desaparecen, pero el historial del sensor y del regalo se conserva).
+  - `usuario.nombre_vecino`: índice único que solo se rellena para las cuentas ciudadanas.
 - Lo que se puede calcular a partir de otros datos no se guarda dos veces (última medición de un sensor, UUID del iBeacon, orden de las zonas). Excepción a propósito: los puntos de cada día acabado se guardan en `puntos_dia`.
 
 ```
@@ -23,7 +24,8 @@ punto_reparto ─< prestamo >─ nodo ─< medicion >─ zona
                     │                   │
 usuario ────────────┴───────────────────┘ (portador)
 usuario ─< token · puntos_dia · canje >─ regalo · percepcion
-usuario ─< favorito >─ zona          favorito ─── alerta (una por parque seguido)
+usuario ─< favorito >─ zona          favorito ─< alerta (una por magnitud)
+usuario ─< alerta_emitida >─ zona   usuario ─< percepcion_envio
 usuario ─── empleado (trabajadores)
 ayuntamiento ─< zona · nodo · punto_reparto · empleado
 ```
@@ -61,11 +63,11 @@ ayuntamiento ─< zona · nodo · punto_reparto · empleado
 | `admin`, `tecnico`, `reparto` | panel web | `A-XXXX` |
 
 - Un vecino no puede registrarse sin aceptar las condiciones, así que su `alta` es también el momento en que las aceptó.
-- No hay bloqueo por contraseñas fallidas (decisión del sprint): se puede reintentar sin límite.
+- `acceso_intento` registra fallos y caducidad por hash del correo. Al quinto intento el acceso queda bloqueado durante 15 minutos.
 
 **empleado**: los datos de empleado de cada trabajador (`usuario_id` PK y FK, `ayuntamiento_id` FK: para qué ayuntamiento trabaja, `num_empleado` UNIQUE, `servicio`). Están aparte para que los vecinos no tengan esos campos vacíos.
 
-**Alta de trabajadores**: la hace administración desde el panel y pone también la contraseña (10 caracteres, letras y números, sin su usuario). Se crean a la vez su `usuario` y su `empleado` y la cuenta queda activa; la contraseña se le da en persona. Si la olvida, la cambia con «He olvidado mi contraseña». (Hasta el 13/11/2026 había una tabla `invitacion` con un enlace de activación de 48 h; se quitó por simplicidad.)
+**Alta de trabajadores**: administración entrega en persona una contraseña inicial válida durante 48 h. La cuenta tiene `requiere_cambio_clave` activo hasta que el trabajador elige su contraseña personal en la app o mediante la recuperación por correo.
 
 **token**: sesiones abiertas y enlaces de «he olvidado mi contraseña» (`token_hash`, `usuario_id`, `tipo`, `caduca`). Solo se guarda el **sha256**: quien lea la BD no puede usarlos.
 
@@ -135,19 +137,23 @@ Al canjear se resta una unidad del stock. Si el canje caduca sin recogerse, vuel
 
 Se ven 24 h y cada cuenta puede publicar como máximo 3 por hora. Se muestran **sin el autor**: solo se dice si es tuya. Solo quien la publicó puede cambiar el tipo y el nivel, o borrarla.
 
+**percepcion_envio** conserva el registro para aplicar el límite aunque se borre la opinión. Los ejemplos simulados se generan sin guardar opiniones ni asociarlas a una cuenta.
+
 ## 6. Seguimiento de parques (app)
 
 **favorito**: los parques (o barrios) que sigue cada cuenta.
 - Clave: `usuario_id` + `zona_id` (las dos son FK).
 - `creado`: desde cuándo lo sigue (el orden de la lista en la app).
 
-**alerta**: como mucho una por parque seguido.
-- Clave y FK: `usuario_id` + `zona_id` → `favorito` (si dejas de seguir el parque, se borra su alerta).
+**alerta**: como mucho una por parque seguido y magnitud.
+- Clave: `usuario_id` + `zona_id` + `magnitud`. Las dos primeras columnas apuntan a `favorito`.
 - `magnitud`: `o3`, `temp` o `ruido`.
 - `condicion`: `bajo`, `medio`, `alto` o `custom` (un límite propio).
 - `valor`: el límite; solo cuenta si `condicion` = `custom` (si no, 0, para no usar NULL).
 
-La app manda siempre la lista completa (`PUT /yo/seguimiento`) y el servidor la sustituye. Sin sesión, los parques se guardan en el móvil y se suman a la cuenta al iniciar sesión. Las alertas las sigue comprobando el móvil (sin notificaciones push el servidor no podría avisar).
+La app manda la lista completa (`PUT /yo/seguimiento`) y el servidor la sustituye. Sin sesión, los parques se guardan en el móvil y se suman a la cuenta al iniciar sesión. Android comprueba las alertas en primer plano y con una tarea periódica.
+
+**alerta_emitida** guarda la lectura, hora y origen de los avisos emitidos. El historial de la zona devuelve esos avisos sin identificar a la cuenta.
 
 ## Lo que NO está en la BD (y por qué)
 
@@ -172,7 +178,7 @@ Además incluye:
 - 11 sensores y 3 préstamos (el de Marcos, fuera de plazo).
 - Recorridos de días pasados (una lectura por minuto) que dan los puntos: Lucía 340, Marcos 120, Ana 127.
 - 3 canjes: CJ-8R2T (válido), CJ-2K9L (caducado) y CJ-5P7Q (entregado).
-- 8 percepciones, que desaparecen del mapa a las 24 h de importar.
+- Ejemplos de percepciones identificados como simulados en Comunidad.
 - Lucía sigue el Parque de la Ribera y el Parque Central, con una alerta de ruido en nivel Alto en el Central.
 
 **Antes de usarlo de verdad, cambia esas contraseñas**: son públicas porque están en el repositorio.

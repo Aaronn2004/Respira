@@ -49,11 +49,10 @@
     return Math.sign(valor) * Math.round(absoluto + Number.EPSILON * absoluto) / escala;
   }
 
-  // Equivalente a Logica::aproximar: solo huecos internos, de hasta dos
-  // horas (o un tramo si la resolución es mayor). Los observados se conservan.
+  // Equivalente a Logica::aproximar: solo huecos internos de hasta dos horas.
   function aproximar(valores, paso, decimales) {
     const estimados = new Array(valores.length).fill(null);
-    const maxTramos = Math.max(1, Math.floor(2 * HORA / paso));
+    const maxTramos = Math.floor(2 * HORA / paso);
     let i = 0;
     while (i < valores.length) {
       if (valores[i] !== null) {
@@ -75,28 +74,31 @@
     return estimados;
   }
 
-  function lecturasPorTramo(zona, magnitud, modelo, { tramos, inicio, fin }, ahora) {
+  function lecturasPorTramo(zona, magnitud, modelo, { tramos, inicio, fin }, ahora, cerrado) {
     const grupos = Array.from({ length: tramos }, () => ({ suma: 0, cantidad: 0, max: null, momento: null }));
     if (!Number.isFinite(zona?.[magnitud]) || !Number.isFinite(zona.hace) || zona.hace < 0) return grupos;
 
     const base = zona[magnitud];
     const semilla = Array.from(zona.id || '').reduce((n, letra) => n + letra.charCodeAt(0), 0);
-    const ultimaLectura = ahora - zona.hace * MINUTO;
+    const ultimaLectura = cerrado
+      ? Math.floor(fin / PASO_LECTURA) * PASO_LECTURA
+      : ahora - zona.hace * MINUTO;
     const tramosHastaFin = Math.max(0, Math.ceil((ultimaLectura - fin) / PASO_LECTURA));
     for (let momento = ultimaLectura - tramosHastaFin * PASO_LECTURA; momento > inicio; momento -= PASO_LECTURA) {
       const edad = ultimaLectura - momento;
-      const fase = (edad + (semilla % 4) * PASO_LECTURA) % DIA;
-      const dia = Math.floor(edad / DIA);
+      const reloj = cerrado ? momento : edad;
+      const fase = (reloj + (semilla % 4) * PASO_LECTURA) % DIA;
+      const dia = Math.floor(reloj / DIA);
       // Un hueco corto y otro largo por día, y una jornada completa
       // ocasional sin lecturas. La última hora conserva la media del mapa.
-      const dentroUltimaHora = edad <= HORA;
+      const dentroUltimaHora = !cerrado && edad <= HORA;
       const sinLectura = (fase >= 3 * HORA && fase < 4 * HORA)
         || (fase >= 11 * HORA && fase < 16 * HORA)
         || (dia > 0 && (dia + semilla) % 11 === 0);
       if (!dentroUltimaHora && sinLectura) continue;
 
       const variacion = Math.sin(fase / DIA * 2 * Math.PI) * .8
-        + Math.cos((edad / PASO_LECTURA + semilla) * .61) * .2;
+        + Math.cos((reloj / PASO_LECTURA + semilla) * .61) * .2;
       const valor = Math.max(0, dentroUltimaHora ? base : base + modelo.amplitud * variacion);
       const indice = Math.ceil((momento - inicio) * tramos / (fin - inicio)) - 1;
       const grupo = grupos[indice];
@@ -148,13 +150,17 @@
     const modelo = MAGNITUDES[magnitud];
     if (!tiempos || !modelo) return null;
     const { inicio, fin, paso } = tiempos;
-    const grupos = lecturasPorTramo(zona, magnitud, modelo, tiempos, ahora);
+    const cerrado = (periodo === 'custom' || periodo === 'rango') && fin < ahora;
+    const grupos = lecturasPorTramo(zona, magnitud, modelo, tiempos, ahora, cerrado);
     const observados = grupos.map(g => g.cantidad ? redondear(g.suma / g.cantidad, modelo.decimales) : null);
     const estimados = aproximar(observados, paso, modelo.decimales);
-    return { observados, estimados, inicio, fin, paso, ...eventos(observados, grupos, modelo, inicio, paso) };
+    const origen = observados.map(valor => valor === null ? null : 'simulado');
+    return { observados, estimados, origen, inicio, fin, paso, avisos: [],
+      ...eventos(observados, grupos, modelo, inicio, paso) };
   }
 
-  function resumen({ observados, paso }) {
+  function resumen({ observados, paso, estadisticas }) {
+    if (estadisticas) return estadisticas;
     const datos = observados.filter(valor => valor !== null);
     return {
       min: datos.length ? Math.min(...datos) : null,
@@ -164,7 +170,34 @@
     };
   }
 
-  const api = { serie, aproximar, resumen };
+  function desdeApi(datos) {
+    const { valores, aprox, origen, eventos = {}, resumen: estadisticas } = datos;
+    const inicio = Date.parse(datos.desde), fin = Date.parse(datos.hasta);
+    const paso = datos.paso_ms ?? datos.paso_min * MINUTO;
+    const numeroOpcional = valor => valor === null || Number.isFinite(valor);
+    if (!Array.isArray(valores) || !valores.length || !valores.every(numeroOpcional)
+        || !Array.isArray(aprox) || aprox.length !== valores.length || !aprox.every(numeroOpcional)
+        || !Array.isArray(origen) || origen.length !== valores.length
+        || !origen.every((tipo, i) => valores[i] === null ? tipo === null : tipo === 'real' || tipo === 'simulado')
+        || !Number.isFinite(inicio) || !Number.isFinite(fin) || fin <= inicio
+        || !Number.isFinite(paso) || paso <= 0 || !estadisticas
+        || ![estadisticas.minimo, estadisticas.media, estadisticas.maximo].every(numeroOpcional)
+        || !Number.isFinite(estadisticas.horas_sin_datos)) {
+      throw new Error('Serie no válida');
+    }
+    const lectura = evento => ({ ...evento, momento: Date.parse(evento.momento) });
+    const alertas = (eventos.alertas ?? []).map(a => ({ ...a, desde: Date.parse(a.desde), hasta: Date.parse(a.hasta) }))
+      .filter(a => Number.isFinite(a.desde) && Number.isFinite(a.hasta) && Number.isFinite(a.max));
+    const picos = (eventos.picos ?? []).map(lectura).filter(p => Number.isFinite(p.momento) && Number.isFinite(p.valor));
+    const avisos = (eventos.avisos ?? []).map(lectura).filter(a => Number.isFinite(a.momento) && Number.isFinite(a.valor));
+    return {
+      observados: valores, estimados: aprox, origen, inicio, fin, paso, alertas, picos, avisos,
+      estadisticas: { min: estadisticas.minimo, media: estadisticas.media, max: estadisticas.maximo,
+        horasSinDatos: estadisticas.horas_sin_datos },
+    };
+  }
+
+  const api = { serie, aproximar, resumen, desdeApi, fechaUtc };
   if (typeof module !== 'undefined') module.exports = api;
   else window.RespiraSeries = api;
 })();

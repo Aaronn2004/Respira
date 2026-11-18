@@ -16,8 +16,14 @@ public class Usuario {
     public final String nombre;
     public final String email;
     public final String rol;
+    public final boolean requiereCambioClave;
 
     public Usuario(String id, String nombre, String email, String rol) {
+        this(id, nombre, email, rol, false);
+    }
+
+    public Usuario(String id, String nombre, String email, String rol, boolean requiereCambioClave) {
+        this.requiereCambioClave = requiereCambioClave;
         this.id = id;
         this.nombre = nombre;
         this.email = email;

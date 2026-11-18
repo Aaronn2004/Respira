@@ -4,8 +4,7 @@
    Dirección de la API: js/config.js (RESPIRA_CONFIG.API_URL), p. ej.
      https://TU_DOMINIO/respira/api/index.php
 
-   La API carga ayuntamientos y puntos de reparto. La vista pública del
-   Grau i Platja usa un escenario local de mediciones simuladas.
+   La API sirve zonas, series y percepciones, además de los datos municipales.
 
    Panel municipal (#acceso y #panel-…): con API_URL, TODO va al
    servidor (no hay modo demo): inicio de sesión con token (en
@@ -16,9 +15,7 @@
 (function () {
   'use strict';
 
-  const CFG = window.RESPIRA_CONFIG || {};
-  let URL_API = String(CFG.API_URL || '').trim().replace(/\/+$/, '');
-  if (/TU_DOMINIO|pon_aqui/i.test(URL_API)) URL_API = '';
+  const URL_API = window.Respira.urlApi;
   const CADA_MS = 60000;
   const CLAVE_SESION = 'respira-sesion';
   const R = () => window.Respira;
@@ -34,12 +31,12 @@
     const r = R();
     if (!r) return;
     const a = document.activeElement;
-    if (!forzar && a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;   // no borrar lo que se escribe
+    if (!forzar && a && /^(INPUT|TEXTAREA)$/.test(a.tagName)) return;   // no borrar lo que se escribe
     if (!forzar && r.S.modal) return;
     const firma = D.version;
     if (!forzar && firma === firmaPintada) return;
     firmaPintada = firma;
-    r.render();
+    r.render(!forzar);
   }
 
   // ---------------- peticiones ----------------
@@ -55,14 +52,15 @@
     }
   }
 
-  async function pedir(ruta, metodo = 'GET', cuerpo) {
-    const tokenPeticion = token;
+  async function pedir(ruta, metodo = 'GET', cuerpo, publico = false) {
+    const tokenPeticion = publico ? null : token;
     let res;
     try {
       const h = { Accept: 'application/json' };
       if (cuerpo !== undefined) h['Content-Type'] = 'application/json';
       if (tokenPeticion) h['X-Respira-Token'] = tokenPeticion;
       res = await fetch(URL_API + ruta, { method: metodo, cache: 'no-store', headers: h,
+        signal: AbortSignal.timeout(15000),
         body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) });
     } catch (e) {
       throw new ErrorApi(0, null);
@@ -87,32 +85,86 @@
   // DATOS PÚBLICOS
   // ==============================================================
 
-  let ayuntamientosCargados = false;
-  let puntosCargados = false;
-  D.ayuntamientosVerificados = () => ayuntamientosCargados;
-  D.repartoVerificado = () => puntosCargados;
   let idsPuntos = {};
-  async function cargarAyuntamientos() {
-    if (ayuntamientosCargados) return;
-    const aytos = await pedir('/ayuntamientos');
-    const { AYTOS } = E();
-    AYTOS.splice(0, AYTOS.length, ...aytos.map(a => {
+  const fuentes = {
+    zonas: { ruta: '/zonas', aplicar: zonas => R().actualizarZonas(zonas) },
+    percepciones: { ruta: '/percepciones', aplicar: opiniones => R().actualizarPercepciones(opiniones) },
+    ayuntamientos: { ruta: '/ayuntamientos', aplicar: aytos => {
+      const { AYTOS } = E();
+      AYTOS.splice(0, AYTOS.length, ...aytos.map(a => {
       const d = new Date(a.desde + 'T12:00');
       return { id: a.id, n: a.nombre, zona: a.comarca, desde: MES_LARGO[d.getMonth()] + ' ' + d.getFullYear(), activo: a.activo };
-    }));
-    ayuntamientosCargados = true;
-    D.version++;
+      }));
+    } },
+    puntos: { ruta: '/puntos-reparto', aplicar: puntos => {
+      const { PUNTOS_REPARTO } = E();
+      PUNTOS_REPARTO.splice(0, PUNTOS_REPARTO.length, ...puntos.map(p => [p.nombre, p.direccion, p.horario]));
+      idsPuntos = Object.fromEntries(puntos.map(p => [p.nombre, p.id]));
+    } },
+    regalos: { ruta: '/regalos', aplicar: regalos => {
+      const { REGALOS_PUBLICOS } = E();
+      REGALOS_PUBLICOS.splice(0, REGALOS_PUBLICOS.length, ...regalos.map(aRegalo));
+    } },
+  };
+  D.estadoPublico = nombre => fuentes[nombre];
+  D.ayuntamientosVerificados = () => Boolean(fuentes.ayuntamientos.actualizado);
+  D.repartoVerificado = () => Boolean(fuentes.puntos.actualizado);
+
+  function cargarFuente(nombre) {
+    const fuente = fuentes[nombre];
+    if (fuente.pendiente) return fuente.pendiente;
+    fuente.pendiente = pedir(fuente.ruta, 'GET', undefined, true).then(datos => {
+      if (!Array.isArray(datos)) throw new Error('Respuesta no válida');
+      fuente.aplicar(datos);
+      fuente.actualizado = Date.now();
+      fuente.error = false;
+    }).catch(error => {
+      fuente.error = true;
+      throw error;
+    }).finally(() => {
+      fuente.pendiente = null;
+      D.version++;
+      repintar();
+    });
+    return fuente.pendiente;
   }
 
   async function cargarPuntos() {
-    if (puntosCargados) return;
-    const puntos = await pedir('/puntos-reparto');
-    const { PUNTOS_REPARTO } = E();
-    PUNTOS_REPARTO.splice(0, PUNTOS_REPARTO.length, ...puntos.map(p => [p.nombre, p.direccion, p.horario]));
-    idsPuntos = Object.fromEntries(puntos.map(p => [p.nombre, p.id]));
-    puntosCargados = true;
-    D.version++;
+    if (!fuentes.puntos.actualizado || fuentes.puntos.error) await cargarFuente('puntos');
   }
+
+  const series = new Map();
+  D.serie = (zona, magnitud, periodo, rango = {}) => {
+    const params = new URLSearchParams({ magnitud, periodo: periodo === 'custom' ? 'rango' : periodo });
+    if (periodo === 'custom') {
+      params.set('desde', rango.desde);
+      params.set('hasta', rango.hasta);
+    } else if (rango.referencia) params.set('referencia', rango.referencia);
+    const ruta = '/zonas/' + encodeURIComponent(zona) + '/serie?' + params;
+    if (series.has(ruta)) return series.get(ruta);
+    const serie = { estado: 'cargando', datos: null };
+    series.set(ruta, serie);
+    if (series.size > 40) series.delete(series.keys().next().value);
+    pedir(ruta, 'GET', undefined, true).then(datos => {
+      serie.datos = window.RespiraSeries.desdeApi(datos);
+      serie.estado = 'listo';
+    }).catch(error => {
+      serie.estado = 'error';
+      serie.mensaje = error instanceof ErrorApi ? error.message : 'El servidor devolvió una serie no válida.';
+    }).finally(() => {
+      if (series.get(ruta) !== serie) return;
+      D.version++;
+      repintar();
+    });
+    return serie;
+  };
+
+  D.reintentarPublico = nombre => {
+    if (nombre === 'serie') {
+      series.clear();
+      repintar(true);
+    } else if (fuentes[nombre]) cargarFuente(nombre).catch(() => {});
+  };
 
   // ==============================================================
   // PANEL MUNICIPAL
@@ -285,14 +337,24 @@
     const S = R().S;
     const m = CAMPOS[accion] || {};
     const er = {};
-    Object.keys(e.errores || {}).forEach(k => { if (m[k]) er[m[k]] = e.errores[k]; });
-    if (!Object.keys(er).length) {
+    const sinCampo = [];
+    for (const [clave, mensaje] of Object.entries(e.errores || {})) {
+      if (typeof mensaje !== 'string' || !mensaje.trim()) continue;
+      if (Object.hasOwn(m, clave)) er[m[clave]] = mensaje;
+      else sinCampo.push(mensaje);
+    }
+    const hayCampos = Object.keys(er).length > 0;
+    if (accion === 'trabajador') {
+      if (sinCampo.length) er.altaTrabajador = sinCampo.join(' ');
+      else if (!hayCampos) er.altaTrabajador = e.message;
+    } else if (!hayCampos) {
       if (porDefecto) er[porDefecto] = e.message;
-      else R().toast(e.message);
+      else R().toast(sinCampo.length ? sinCampo.join(' ') : e.message);
     }
     S.e = er;
-    if (Object.keys(er).length) S.focusErr = true;
+    if (hayCampos || er[porDefecto]) S.focusErr = true;
     R().render();
+    if (er.altaTrabajador && !hayCampos) document.getElementById('alta-trabajador-error')?.focus();
   }
 
   // ==============================================================
@@ -476,7 +538,7 @@
   // Ciclo
   // ==============================================================
   async function ciclo() {
-    const fijos = await Promise.allSettled([cargarAyuntamientos(), cargarPuntos()]);
+    const fijos = await Promise.allSettled(Object.keys(fuentes).map(cargarFuente));
     fijos.filter(x => x.status === 'rejected').forEach(x => console.warn('[Respira] Datos públicos:', x.reason?.message));
     const S = R().S;
     if (S.user && /^panel/.test(location.hash.slice(1)) && !S.modal) await cargarPanel();
@@ -487,6 +549,9 @@
     restaurarSesion();
     ciclo();
     setInterval(() => { if (!document.hidden) ciclo(); }, CADA_MS);
+    window.addEventListener('hashchange', () => {
+      if (location.hash === '#comunidad') cargarFuente('percepciones').catch(() => {});
+    });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) ciclo(); });
     window.addEventListener('focusout', () => setTimeout(() => repintar(), 0));
   }

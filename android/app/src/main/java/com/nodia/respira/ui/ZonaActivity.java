@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.widget.LinearLayout;
 
+import java.util.DoubleSummaryStatistics;
+
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButtonToggleGroup;
@@ -36,6 +38,8 @@ public class ZonaActivity extends AppCompatActivity {
     private LinearLayout c;
     private String zonaId;
     private Serie serieServidor;      // la última serie pedida a la API
+    private boolean falloSerie;
+    private int generacionSerie;
     private String claveSerie;        // de qué zona, magnitud y periodo es
 
     public static void abrir(Context ctx, String zonaId) {
@@ -70,21 +74,10 @@ public class ZonaActivity extends AppCompatActivity {
         }
         c.removeAllViews();
         String estado = zona.estado();
-        Ui.texto(c, (zona.esParque() ? "Parque" : "Barrio") + " · " + zona.numMediciones + " mediciones en la última hora",
+        Ui.texto(c, zona.tipoTexto() + " · " + zona.numMediciones + " mediciones en la última hora",
                 13, false, com.nodia.respira.R.color.tinta_3);
-        if (Reglas.ESTADO_ANTIGUO.equals(estado)) {
-            Ui.aviso(c, "La última medición es " + Reglas.haceTexto(zona.haceMin) + ". Puede no reflejar cómo está ahora.", Nivel.MEDIO);
-        }
-
         LinearLayout valores = Ui.tarjeta(c);
-        for (Magnitud m : Magnitud.values()) {
-            Double v = zona.valor(m);
-            boolean sin = v == null || Reglas.ESTADO_SIN_DATOS.equals(estado);
-            LinearLayout f = Ui.fila(valores, m.nombre + (sin ? "" : " · " + m.formatear(v) + " " + m.unidad),
-                    sin ? "Nadie con sensor ha pasado por aquí en las últimas 24 h" : "Última medición " + Reglas.haceTexto(zona.haceMin), null);
-            Ui.insignia(f, sin ? "Sin datos" : Reglas.ESTADO_ANTIGUO.equals(estado) ? "Antiguo" : m.nivel(v).nombre,
-                    sin || Reglas.ESTADO_ANTIGUO.equals(estado) ? Nivel.NINGUNO : m.nivel(v));
-        }
+        for (Magnitud m : Magnitud.values()) Ui.datoZona(valores, zona, m);
 
         // media de las últimas 24 h (la da el servidor)
         if (!Reglas.ESTADO_SIN_DATOS.equals(estado)) {
@@ -109,15 +102,10 @@ public class ZonaActivity extends AppCompatActivity {
                     continue;
                 }
                 Nivel n = ef.magnitud.nivel(v);
-                int grav = n == Nivel.ALTO ? Salud.DANA : Salud.MOLESTA;
-                String efecto = "";
-                for (Salud.Paso p : ef.pasos) {
-                    if (p.gravedad == grav) {
-                        efecto = p.efecto;
-                    }
-                }
-                Ui.aviso(c, ef.nombre + " en " + n.nombre + ": " + efecto + ". Qué hacer: " + ef.hacer
-                        + ". Más sensibles: " + String.join(", ", ef.peorPara) + ".", n);
+                if (!Reglas.ESTADO_OK.equals(zona.estado(ef.magnitud))
+                        || !"real".equals(zona.dato(ef.magnitud).origen)) continue;
+                Ui.aviso(c, ef.nombre + " en nivel " + n.nombre + " en la escala de Respira. "
+                        + ef.hacer + " Más sensibles: " + String.join(", ", ef.peorPara) + ".", n);
             }
             Ui.boton(c, "Efectos en la salud", Ui.BOTON_TEXTO, v -> startActivity(new Intent(this, EfectosActivity.class)));
         }
@@ -133,10 +121,6 @@ public class ZonaActivity extends AppCompatActivity {
         }
 
         Ui.etiqueta(c, "Evolución");
-        if (Reglas.ESTADO_SIN_DATOS.equals(estado)) {
-            Ui.vacio(c, "Sin datos en este periodo", "No ha pasado nadie con sensor por esta zona.", null, null);
-            return;
-        }
         ChipGroup chips = new ChipGroup(this);
         chips.setSingleSelection(true);
         chips.setSelectionRequired(true);
@@ -174,74 +158,87 @@ public class ZonaActivity extends AppCompatActivity {
         c.addView(periodo);
 
         String periodoElegido = dia ? "24h" : "7d";
-        int tramos = dia ? 48 : 56;
         Serie serie;
         if (repo.datosReales()) {
-            final String clave = zona.id + magnitud.id + periodoElegido;
+            final String clave = zona.id + ":" + magnitud.id + ":" + periodoElegido;
             if (!clave.equals(claveSerie)) {
                 claveSerie = clave;
                 serieServidor = null;
+                falloSerie = false;
+                int solicitud = ++generacionSerie;
                 repo.serie(zona.id, magnitud, periodoElegido, datos -> {
-                    if (clave.equals(claveSerie) && !isFinishing()) {
-                        serieServidor = datos != null ? datos : new Serie(new Double[tramos], null);
+                    if (solicitud == generacionSerie && !isFinishing() && !isDestroyed()) {
+                        serieServidor = datos;
+                        falloSerie = datos == null;
                         pintar();
                     }
                 });
             }
-            serie = serieServidor != null ? serieServidor : new Serie(new Double[tramos], null);
+            if (falloSerie) {
+                Ui.vacio(c, "No se pudo cargar la evolución", "Comprueba la conexión e inténtalo de nuevo.",
+                        "Reintentar", v -> { claveSerie = null; pintar(); });
+                return;
+            }
             if (serieServidor == null) {
                 Ui.nota(c, "Cargando la evolución desde el servidor…");
+                return;
             }
+            serie = serieServidor;
         } else {
             serie = new Serie(DatosDemo.serie(zona, magnitud, periodoElegido), null);
             Ui.nota(c, "Datos de demostración: no hay conexión con el servidor.");
         }
+        if (java.util.Arrays.stream(serie.valores).allMatch(java.util.Objects::isNull)) {
+            Ui.vacio(c, "Sin datos en este periodo", "Elige otra magnitud u otro periodo para consultar la evolución.", null, null);
+            return;
+        }
         LinearLayout card = Ui.tarjeta(c);
         GraficaView g = new GraficaView(this);
-        g.mostrar(serie.valores, serie.aprox, magnitud, dia);
+        g.mostrar(serie.valores, serie.aprox, serie.origen, magnitud, dia);
+        if (serie.tieneSimulacion()) Ui.nota(card, "Trazo discontinuo: datos simulados.");
         card.addView(g);
 
         // mínimo, media y máximo: solo con lo medido (lo aproximado no cuenta)
-        double mn = Double.MAX_VALUE, mx = -Double.MAX_VALUE, suma = 0;
-        int n = 0;
-        for (Double v : serie.valores) {
-            if (v != null) {
-                mn = Math.min(mn, v);
-                mx = Math.max(mx, v);
-                suma += v;
-                n++;
-            }
-        }
+        DoubleSummaryStatistics resumen = new DoubleSummaryStatistics();
+        for (Double v : serie.valores) if (v != null) resumen.accept(v);
+        boolean vacio = resumen.getCount() == 0;
         LinearLayout stats = Ui.tarjeta(c);
-        Ui.valor(stats, "Mínimo", magnitud.formatear(n == 0 ? null : mn) + (n == 0 ? "" : " " + magnitud.unidad));
-        Ui.valor(stats, "Media", magnitud.formatear(n == 0 ? null : suma / n) + (n == 0 ? "" : " " + magnitud.unidad));
-        Ui.valor(stats, "Máximo", magnitud.formatear(n == 0 ? null : mx) + (n == 0 ? "" : " " + magnitud.unidad));
+        mostrarEstadistica(stats, "Mínimo", serie.conResumen ? serie.minimo : vacio ? null : resumen.getMin());
+        mostrarEstadistica(stats, "Media", serie.conResumen ? serie.media : vacio ? null : resumen.getAverage());
+        mostrarEstadistica(stats, "Máximo", serie.conResumen ? serie.maximo : vacio ? null : resumen.getMax());
 
-        // alertas y picos del periodo
-        if (serieServidor != null || !repo.datosReales()) {
+        if (serieServidor != null) {
             Ui.etiqueta(c, "Alertas y picos");
             LinearLayout ev = Ui.tarjeta(c);
-            if (serie.alertas.isEmpty() && serie.picos.isEmpty()) {
-                Ui.nota(ev, repo.datosReales() ? "Sin ratos en Medio o Alto en este periodo."
-                        : "Las alertas y picos se calculan en el servidor.");
+            if (serie.alertas.isEmpty() && serie.picos.isEmpty() && serie.avisos.isEmpty()) {
+                Ui.nota(ev, "No hay alertas ni picos en este periodo.");
             }
             for (Serie.Evento a : serie.alertas) {
-                Nivel nv = "alto".equals(a.nivel) ? Nivel.ALTO : Nivel.MEDIO;
-                LinearLayout f = Ui.fila(ev, "En " + nv.nombre + " " + franja(a.desde, a.hasta),
-                        "Máximo " + magnitud.formatear(a.valor) + " " + magnitud.unidad, null);
-                Ui.insignia(f, nv.nombre, nv);
+                Nivel nv = Nivel.desdeId(a.nivel);
+                evento(ev, a, "En " + nv.nombre + " " + franja(a.desde, a.hasta), "Máximo ", nv);
             }
             for (Serie.Evento p : serie.picos) {
-                Nivel nv = magnitud.nivel(p.valor);
-                LinearLayout f = Ui.fila(ev, "Pico de " + magnitud.formatear(p.valor) + " " + magnitud.unidad,
-                        hora(p.desde, true), null);
-                Ui.insignia(f, nv.nombre, nv);
+                evento(ev, p, "Pico · " + hora(p.desde, true), "", magnitud.nivel(p.valor));
+            }
+            for (Serie.Evento a : serie.avisos) {
+                evento(ev, a, "Aviso emitido · " + hora(a.desde, true), "", magnitud.nivel(a.valor));
             }
         }
 
         Ui.nota(c, "Media cada " + (dia ? "30 minutos" : "3 horas") + ". Línea de puntos: hueco corto (hasta 2 h) aproximado; "
                 + "no cuenta en mínimo, media y máximo. Tramos grises: ratos más largos sin ningún sensor, que no se rellenan.");
         Ui.nota(c, getString(com.nodia.respira.R.string.nota_privacidad_mapa));
+    }
+
+    private void mostrarEstadistica(LinearLayout tarjeta, String titulo, Double valor) {
+        Ui.valor(tarjeta, titulo, valor == null ? "—" : magnitud.formatear(valor) + " " + magnitud.unidad);
+    }
+
+    private void evento(LinearLayout lista, Serie.Evento evento, String titulo, String prefijo, Nivel nivel) {
+        String origen = "simulado".equals(evento.origen) ? " · Simulado" : "";
+        LinearLayout fila = Ui.fila(lista, titulo, prefijo + magnitud.formatear(evento.valor)
+                + " " + magnitud.unidad + origen, null);
+        Ui.insignia(fila, nivel.nombre, nivel);
     }
 
     // ms --> hora() --> "lun 9 14:30" | "14:30"
