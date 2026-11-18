@@ -28,11 +28,13 @@ CREATE TABLE ayuntamiento (
 
 CREATE TABLE punto_reparto (
   id        SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  ayuntamiento_id VARCHAR(32) NOT NULL COMMENT 'a que ayuntamiento pertenece',
   nombre    VARCHAR(80)  NOT NULL,
   direccion VARCHAR(120) NOT NULL,
   horario   VARCHAR(80)  NOT NULL,
   activo    TINYINT(1)   NOT NULL DEFAULT 1,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  CONSTRAINT punto_reparto_ayuntamiento_fk FOREIGN KEY (ayuntamiento_id) REFERENCES ayuntamiento (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE usuario (
@@ -50,26 +52,13 @@ CREATE TABLE usuario (
 
 CREATE TABLE empleado (
   usuario_id    VARCHAR(8)  NOT NULL,
+  ayuntamiento_id VARCHAR(32) NOT NULL COMMENT 'para que ayuntamiento trabaja',
   num_empleado  CHAR(6)     NOT NULL,
   servicio      VARCHAR(60) NOT NULL,
   PRIMARY KEY (usuario_id),
   UNIQUE KEY empleado_num (num_empleado),
-  CONSTRAINT empleado_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE invitacion (
-  id            VARCHAR(8)   NOT NULL COMMENT 'el T-XXXX que tendra la cuenta',
-  nombre        VARCHAR(80)  NOT NULL,
-  email         VARCHAR(120) NOT NULL,
-  num_empleado  CHAR(6)      NOT NULL,
-  servicio      VARCHAR(60)  NOT NULL,
-  token_hash    CHAR(64)     NOT NULL COMMENT 'sha256 del enlace de activacion',
-  caduca        DATETIME(3)  NOT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY invitacion_email (email),
-  UNIQUE KEY invitacion_num (num_empleado),
-  UNIQUE KEY invitacion_token (token_hash),
-  CONSTRAINT invitacion_id_valido CHECK (id REGEXP '^T-[0-9]{4}$')
+  CONSTRAINT empleado_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE,
+  CONSTRAINT empleado_ayuntamiento_fk FOREIGN KEY (ayuntamiento_id) REFERENCES ayuntamiento (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE token (
@@ -98,28 +87,21 @@ CREATE TABLE prestamo (
   CONSTRAINT prestamo_punto_fk FOREIGN KEY (punto_reparto_id) REFERENCES punto_reparto (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE reglas_puntos (
-  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  min_por_punto TINYINT UNSIGNED NOT NULL COMMENT '1 punto cada N minutos validos',
-  mult_parque   TINYINT UNSIGNED NOT NULL COMMENT 'los minutos en parques cuentan x N',
-  max_dia       SMALLINT UNSIGNED NOT NULL COMMENT 'maximo de puntos al dia',
-  desde         DATE         NOT NULL,
-  PRIMARY KEY (id),
-  KEY reglas_desde (desde),
-  CONSTRAINT reglas_rango CHECK (min_por_punto BETWEEN 1 AND 60 AND mult_parque BETWEEN 1 AND 5 AND max_dia BETWEEN 10 AND 500)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE revision (
-  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  usuario_id  VARCHAR(8)   NOT NULL,
-  fecha       DATE         NOT NULL COMMENT 'dia en hora de Espana',
-  motivo      VARCHAR(160) NOT NULL COMMENT 'por que se marco',
-  estado      ENUM('pend','ok','anulado') NOT NULL DEFAULT 'pend',
-  razon       VARCHAR(200) NOT NULL DEFAULT 'Sin revisar' COMMENT 'lo que decide administracion',
-  PRIMARY KEY (id),
-  UNIQUE KEY revision_dia (usuario_id, fecha),
-  KEY revision_estado (estado),
-  CONSTRAINT revision_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE
+-- Puntos de cada dia: una fila por usuario y dia (hora de Espana). Los
+-- calcula el servidor con las mediciones del portador cuando el dia ya ha
+-- acabado y los guarda aqui. Las reglas (1 punto cada 5 min, parques x2,
+-- maximo 100 al dia) estan en el codigo (Puntos.php). El dia de hoy no se
+-- guarda: se calcula en directo. Si llegan mediciones atrasadas de un dia
+-- ya guardado, su fila se borra y se vuelve a calcular.
+CREATE TABLE puntos_dia (
+  usuario_id     VARCHAR(8)  NOT NULL,
+  fecha          DATE        NOT NULL COMMENT 'dia en hora de Espana',
+  minutos        SMALLINT UNSIGNED NOT NULL COMMENT 'minutos validos con el sensor',
+  minutos_parque SMALLINT UNSIGNED NOT NULL COMMENT 'de esos, los que fueron dentro de parques',
+  descartados    SMALLINT UNSIGNED NOT NULL COMMENT 'minutos que no cuentan (huecos, vehiculo, parado)',
+  puntos         SMALLINT UNSIGNED NOT NULL,
+  PRIMARY KEY (usuario_id, fecha),
+  CONSTRAINT puntos_dia_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE regalo (
@@ -187,12 +169,21 @@ CREATE TABLE alerta (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- cambios en las tablas de la versión 1 ----
--- zona: el municipio no lo usa nadie (todas son de Gandia)
-ALTER TABLE zona DROP COLUMN municipio;
+-- zona: el municipio no lo usa nadie (todas son de Gandia); «poligono» pasa
+-- a llamarse «area» y sobra «orden» (se listan por orden alfabetico)
+ALTER TABLE zona DROP CONSTRAINT zona_poligono_json;
+ALTER TABLE zona
+  DROP COLUMN municipio,
+  DROP COLUMN orden,
+  CHANGE poligono area TEXT NOT NULL COMMENT 'contorno: JSON [[lat,lng],...] (minimo 3 puntos)',
+  ADD CONSTRAINT zona_area_json CHECK (JSON_VALID(area));
 
 -- nodo: sin UUID (es 'RESPIRA-' + codigo), sin batería y sin última medición
--- (sale de medicion); asignado_a y motivo nunca vacíos
+-- (sale de medicion); asignado_a e incidencia nunca vacíos; el tipo pasa
+-- de códigos (vol, trab, bus) a palabras (voluntariado, trabajador, autobus)
 ALTER TABLE nodo DROP CONSTRAINT nodo_bateria_valida;
+ALTER TABLE nodo MODIFY tipo ENUM('vol','trab','bus','voluntariado','trabajador','bici','autobus') NOT NULL;
+UPDATE nodo SET tipo = CASE tipo WHEN 'vol' THEN 'voluntariado' WHEN 'trab' THEN 'trabajador' WHEN 'bus' THEN 'autobus' ELSE tipo END;
 UPDATE nodo SET asignado_a = 'No asignado' WHERE asignado_a IS NULL;
 UPDATE nodo SET motivo_baja = 'Sin incidencias' WHERE motivo_baja IS NULL;
 ALTER TABLE nodo
@@ -201,8 +192,9 @@ ALTER TABLE nodo
   DROP COLUMN bateria,
   DROP COLUMN ultima_medicion,
   DROP COLUMN alta,
-  MODIFY asignado_a VARCHAR(80) NOT NULL DEFAULT 'No asignado' COMMENT 'servicio o vehiculo (trab, bici, bus); nunca el nombre de una persona',
-  CHANGE motivo_baja motivo VARCHAR(120) NOT NULL DEFAULT 'Sin incidencias' COMMENT 'por que esta en mant o de baja';
+  MODIFY asignado_a VARCHAR(80) NOT NULL DEFAULT 'No asignado' COMMENT 'servicio o vehiculo (trabajador, bici, autobus); nunca el nombre de una persona',
+  MODIFY tipo ENUM('voluntariado','trabajador','bici','autobus') NOT NULL DEFAULT 'voluntariado',
+  CHANGE motivo_baja incidencia VARCHAR(120) NOT NULL DEFAULT 'Sin incidencias' COMMENT 'que le pasa (por que esta en mant o de baja)';
 
 -- medicion: solo se quedan las válidas (con ubicación, dentro de una zona y
 -- dentro del rango); nombres nuevos y sin contador
@@ -228,7 +220,7 @@ ALTER TABLE medicion
   CHANGE medida_en fecha_medicion DATETIME(3) NOT NULL COMMENT 'UTC: cuando el movil oyo el beacon',
   MODIFY lat DECIMAL(9,6) NOT NULL,
   MODIFY lng DECIMAL(9,6) NOT NULL,
-  MODIFY zona_id VARCHAR(32) NOT NULL COMMENT 'la calcula el servidor (punto en poligono)',
+  MODIFY zona_id VARCHAR(32) NOT NULL COMMENT 'la calcula el servidor (en que area cae el punto)',
   MODIFY portador_id VARCHAR(8) NULL COMMENT 'quien llevaba el sensor (puntos). NULL: nadie con sesion lo llevaba. Nunca se publica';
 ALTER TABLE medicion
   ADD KEY medicion_zona (zona_id, tipo, fecha_medicion),
@@ -243,13 +235,22 @@ ALTER TABLE medicion
 INSERT INTO ayuntamiento (id, nombre, comarca, desde, activo) VALUES
   ('gandia', 'Gandia', 'La Safor · Comunitat Valenciana', '2026-06-01', 1);
 
-INSERT INTO punto_reparto (id, nombre, direccion, horario) VALUES
-  (1, 'Biblioteca Central', 'Pl. Mayor, 2', 'L–V 9:00–20:00'),
-  (2, 'Centro Cívico Norte', 'Av. Norte, 15', 'L–S 10:00–14:00'),
-  (3, 'Oficina de Turismo', 'Pl. de la Estación, 1', 'Todos los días 9:00–19:00');
+-- Las zonas y el sensor de la versión 1 son de Gandia
+ALTER TABLE zona
+  ADD COLUMN ayuntamiento_id VARCHAR(32) NOT NULL DEFAULT 'gandia' COMMENT 'a que ayuntamiento pertenece' AFTER id;
+ALTER TABLE zona
+  ALTER COLUMN ayuntamiento_id DROP DEFAULT,
+  ADD CONSTRAINT zona_ayuntamiento_fk FOREIGN KEY (ayuntamiento_id) REFERENCES ayuntamiento (id);
+ALTER TABLE nodo
+  ADD COLUMN ayuntamiento_id VARCHAR(32) NOT NULL DEFAULT 'gandia' COMMENT 'a que ayuntamiento pertenece' AFTER codigo;
+ALTER TABLE nodo
+  ALTER COLUMN ayuntamiento_id DROP DEFAULT,
+  ADD CONSTRAINT nodo_ayuntamiento_fk FOREIGN KEY (ayuntamiento_id) REFERENCES ayuntamiento (id);
 
--- Reglas iniciales: 1 punto cada 5 min, parques x2, máximo 100 al día
-INSERT INTO reglas_puntos (min_por_punto, mult_parque, max_dia, desde) VALUES (5, 2, 100, '2026-06-01');
+INSERT INTO punto_reparto (id, nombre, direccion, horario, ayuntamiento_id) VALUES
+  (1, 'Biblioteca Central', 'Pl. Mayor, 2', 'L–V 9:00–20:00', 'gandia'),
+  (2, 'Centro Cívico Norte', 'Av. Norte, 15', 'L–S 10:00–14:00', 'gandia'),
+  (3, 'Oficina de Turismo', 'Pl. de la Estación, 1', 'Todos los días 9:00–19:00', 'gandia');
 
 INSERT INTO regalo (id, nombre, coste, stock, activo) VALUES
   ('g1', 'Bolsa de tela', 100, 0, 1),
@@ -263,7 +264,7 @@ INSERT INTO regalo (id, nombre, coste, stock, activo) VALUES
 -- Contraseñas de prueba (en la BD solo está su hash):
 --   app:  lucia@correo.es / Respira2026 · marcos@correo.es / Marcos2026 · ana.v@correo.es / AnaV2026
 --   web:  admin@ayto.es / Admin2026! · tecnico@ayto.es / Tecnico2026! · reparto@ayto.es / Reparto2026!
---   app (trabajador): psanz@ayto.es / Trabajo2026!
+--   app (trabajador): psanz@ayto.es / Trabajo2026! · emora@ayto.es / Parques2026!
 -- Las fechas son relativas a cuando se importa (así la demo parece de hoy).
 -- ==============================================================
 -- @@DEMO:INICIO
@@ -274,31 +275,28 @@ INSERT INTO usuario (id, rol, nombre, email, clave_hash, alta) VALUES
   ('A-0001', 'admin', 'Ana García', 'admin@ayto.es', '$2y$10$3Bff0nqlTMCb7MlmwvhBoOFQC5nz9UN2Qoe.cS2YBl4rGc//v1iLS', UTC_TIMESTAMP(3) - INTERVAL 60 DAY),
   ('A-0002', 'tecnico', 'Luis Pérez', 'tecnico@ayto.es', '$2y$10$.9Xda9NzdGTt9WXh4/s00eZ3hBcy/wqRAlThw/Q0xWEG/eUPwHKQe', UTC_TIMESTAMP(3) - INTERVAL 60 DAY),
   ('A-0003', 'reparto', 'Marta Ruiz', 'reparto@ayto.es', '$2y$10$A4i52694GXCpx3/c/9kWd.U.BHzvhBQ6vAkAz2IcFtJdCJU5spVtS', UTC_TIMESTAMP(3) - INTERVAL 60 DAY),
-  ('T-0001', 'trabajador', 'Pablo Sanz Gil', 'psanz@ayto.es', '$2y$10$oW0XDYbcPJHbs6ZJcV0YOuu.nNdQc5m/r0/Hc53hxuYbHhgbOeVyW', UTC_TIMESTAMP(3) - INTERVAL 12 DAY);
+  ('T-0001', 'trabajador', 'Pablo Sanz Gil', 'psanz@ayto.es', '$2y$10$oW0XDYbcPJHbs6ZJcV0YOuu.nNdQc5m/r0/Hc53hxuYbHhgbOeVyW', UTC_TIMESTAMP(3) - INTERVAL 12 DAY),
+  ('T-0002', 'trabajador', 'Elena Mora Vidal', 'emora@ayto.es', '$2y$10$4hHqhCfJu666HTs/oRb8z.k9eDu3vmE4rnq1ois6B2dkzLCzI6dJi', UTC_TIMESTAMP(3) - INTERVAL 4 DAY);
 
-INSERT INTO empleado (usuario_id, num_empleado, servicio) VALUES
-  ('T-0001', '104233', 'Limpieza viaria');
+INSERT INTO empleado (usuario_id, num_empleado, servicio, ayuntamiento_id) VALUES
+  ('T-0001', '104233', 'Limpieza viaria', 'gandia'),
+  ('T-0002', '104587', 'Parques y jardines', 'gandia');
 
--- Elena, dada de alta por administración: aún no ha activado su cuenta y su
--- enlace ya caducó (su token real no se conoce: solo el hash)
-INSERT INTO invitacion (id, nombre, email, num_empleado, servicio, token_hash, caduca) VALUES
-  ('T-0002', 'Elena Mora Vidal', 'emora@ayto.es', '104587', 'Parques y jardines',
-   SHA2('demo-caducado-emora', 256), UTC_TIMESTAMP(3) - INTERVAL 4 DAY);
 
 -- La flota del prototipo. Solo RSP-4F7K manda datos de verdad; los sensores de
 -- servicio (L1MP, M7NT, B12A, V08E) los alimenta la simulación del servidor.
 UPDATE nodo SET estado = 'prestado' WHERE codigo = 'RSP-4F7K';
-INSERT INTO nodo (codigo, tipo, magnitudes, estado, asignado_a, motivo) VALUES
-  ('RSP-2B9Q', 'vol',  'o3,temp,ruido', 'prestado',   'No asignado', 'Sin incidencias'),
-  ('RSP-7H3M', 'vol',  'o3,temp,ruido', 'disponible', 'No asignado', 'Sin incidencias'),
-  ('RSP-5K8P', 'vol',  'o3,temp',       'disponible', 'No asignado', 'Sin incidencias'),
-  ('RSP-9C2D', 'vol',  'o3,temp,ruido', 'disponible', 'No asignado', 'Sin incidencias'),
-  ('RSP-X3QR', 'vol',  'o3,temp',       'mant',       'No asignado', 'Carcasa rota al devolverlo'),
-  ('RSP-L1MP', 'trab', 'o3,temp,ruido', 'activo', 'Limpieza · Brigada de parques 2', 'Sin incidencias'),
-  ('RSP-M7NT', 'trab', 'o3,temp',       'activo', 'Mantenimiento de jardines', 'Sin incidencias'),
-  ('RSP-B12A', 'bus',  'o3,temp,ruido', 'activo', 'Línea 2 · Bus 214', 'Sin incidencias'),
-  ('RSP-B05C', 'bus',  'o3,temp,ruido', 'activo', 'Línea 5 · Bus 231', 'Sin incidencias'),
-  ('RSP-V08E', 'bici', 'o3,temp',       'activo', 'Bici compartida · Estación 8', 'Sin incidencias');
+INSERT INTO nodo (codigo, tipo, magnitudes, estado, asignado_a, incidencia, ayuntamiento_id) VALUES
+  ('RSP-2B9Q', 'voluntariado', 'o3,temp,ruido', 'prestado',   'No asignado', 'Sin incidencias', 'gandia'),
+  ('RSP-7H3M', 'voluntariado', 'o3,temp,ruido', 'disponible', 'No asignado', 'Sin incidencias', 'gandia'),
+  ('RSP-5K8P', 'voluntariado', 'o3,temp',       'disponible', 'No asignado', 'Sin incidencias', 'gandia'),
+  ('RSP-9C2D', 'voluntariado', 'o3,temp,ruido', 'disponible', 'No asignado', 'Sin incidencias', 'gandia'),
+  ('RSP-X3QR', 'voluntariado', 'o3,temp',       'mant',       'No asignado', 'Carcasa rota al devolverlo', 'gandia'),
+  ('RSP-L1MP', 'trabajador', 'o3,temp,ruido', 'activo', 'Limpieza · Brigada de parques 2', 'Sin incidencias', 'gandia'),
+  ('RSP-M7NT', 'trabajador', 'o3,temp',       'activo', 'Mantenimiento de jardines', 'Sin incidencias', 'gandia'),
+  ('RSP-B12A', 'autobus', 'o3,temp,ruido', 'activo', 'Línea 2 · Bus 214', 'Sin incidencias', 'gandia'),
+  ('RSP-B05C', 'autobus', 'o3,temp,ruido', 'activo', 'Línea 5 · Bus 231', 'Sin incidencias', 'gandia'),
+  ('RSP-V08E', 'bici', 'o3,temp',       'activo', 'Bici compartida · Estación 8', 'Sin incidencias', 'gandia');
 
 -- Último dato de los sensores que no alimenta la simulación (en Barrio Sur,
 -- con más de 24 h: solo sirven para que el panel muestre «hace cuánto»)
@@ -335,12 +333,6 @@ SELECT d.nodo, 'temp', 17 + (n.k MOD 30) / 10,
        38.9805, ROUND(-0.204 + 0.000693 * IF(n.k MOD 120 < 60, n.k MOD 120, 120 - n.k MOD 120), 6),
        'norte', d.usuario, 'simulado'
 FROM dias d JOIN n ON n.k <= d.minutos;
-
--- Días que revisa administración
-INSERT INTO revision (usuario_id, fecha, motivo, estado, razon) VALUES
-  ('U-48213', CURDATE() - INTERVAL 2 DAY, 'Llega al 90 % del máximo diario', 'ok', 'Aprobado'),
-  ('U-11902', CURDATE() - INTERVAL 1 DAY, 'Sensor 3 h sin moverse en el mismo punto (descontado)', 'pend', 'Sin revisar'),
-  ('U-30577', CURDATE() - INTERVAL 1 DAY, 'Llega al máximo diario', 'pend', 'Sin revisar');
 
 INSERT INTO canje (codigo, usuario_id, regalo_id, coste, creado, caduca, estado) VALUES
   ('CJ-8R2T', 'U-48213', 'g2', 150, UTC_TIMESTAMP(3) - INTERVAL 3 DAY, CURDATE() + INTERVAL 4 DAY, 'pendiente'),

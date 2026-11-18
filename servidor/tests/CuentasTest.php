@@ -98,50 +98,35 @@ prueba('sesión: el token se guarda con hash, caduca y se puede cerrar', functio
     igual(null, $c->usuarioDeSesion('inventado'));
 });
 
-prueba('trabajador: alta pendiente con enlace de 48 h que solo sirve una vez', function () {
-    global $T;
+prueba('trabajador: administración pone la contraseña y la cuenta queda activa', function () {
     [$bd, $c] = nuevas();
     $admin = $c->usuarioPorId('A-0001');
-    $r = $c->altaTrabajador($admin, 'Pablo  Sanz Gil', 'PSanz@ayto.es', '104233', 'Limpieza viaria');
-    igual('T-0001', $r['trabajador']['id']);
-    igual('pendiente', $r['trabajador']['estado']);
-    igual([0, 1], [(int) $bd->query("SELECT COUNT(*) FROM usuario WHERE id = 'T-0001'")->fetchColumn(),
-        (int) $bd->query("SELECT COUNT(*) FROM invitacion")->fetchColumn()], 'aún no es usuario: es una invitación');
-    $v = $c->verEnlace($r['token']);
-    igual(['valido', 'activar', 'Pablo Sanz Gil'], [$v['estado'], $v['tipo'], $v['nombre']]);
-    $e = lanza(DatosNoValidosException::class, function () use ($c, $r) { $c->usarEnlace($r['token'], 'psanz12345'); });
-    cierto(strpos($e->getMessage(), 'nombre de usuario') !== false, 'no puede llevar su usuario');
-    lanza(DatosNoValidosException::class, function () use ($c, $r) { $c->usarEnlace($r['token'], 'solotexto'); });
-    igual('psanz@ayto.es', $c->usarEnlace($r['token'], 'Trabajo2026!'));
-    igual('activo', $c->trabajadores($admin)[0]['estado']);
+    $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) {
+        $c->altaTrabajador($admin, 'Pablo Sanz Gil', 'psanz@ayto.es', '104233', 'Limpieza viaria', 'psanz12345'); });
+    cierto(strpos($e->errores['clave'], 'nombre de usuario') !== false, 'no puede llevar su usuario');
+    lanza(ErroresDeCamposException::class, function () use ($c, $admin) {
+        $c->altaTrabajador($admin, 'Pablo Sanz Gil', 'psanz@ayto.es', '104233', 'Limpieza viaria', 'solotexto'); });
+    igual(0, (int) $bd->query("SELECT COUNT(*) FROM usuario WHERE rol = 'trabajador'")->fetchColumn(), 'con error no crea nada');
+    $r = $c->altaTrabajador($admin, 'Pablo  Sanz Gil', 'PSanz@ayto.es', '104233', 'Limpieza viaria', 'Trabajo2026!');
+    igual(['T-0001', 'Pablo Sanz Gil', 'psanz@ayto.es'], [$r['trabajador']['id'], $r['trabajador']['nombre'], $r['trabajador']['email']]);
     igual(['104233', 'Limpieza viaria'], array_values($bd->query("SELECT num_empleado, servicio FROM empleado WHERE usuario_id = 'T-0001'")->fetch(PDO::FETCH_ASSOC)));
-    igual(0, (int) $bd->query("SELECT COUNT(*) FROM invitacion")->fetchColumn(), 'la invitación se borra');
-    igual('no_valido', $c->verEnlace($r['token'])['estado'], 'ya usado');
-    igual('trabajador', $c->iniciarSesion('psanz@ayto.es', 'Trabajo2026!', 'app')['usuario']['rol']);
-});
-
-prueba('trabajador: enlace caducado y reenvío (el anterior deja de servir)', function () {
-    global $T;
-    [$bd, $c] = nuevas();
-    $admin = $c->usuarioPorId('A-0001');
-    $r = $c->altaTrabajador($admin, 'Elena Mora Vidal', 'emora@ayto.es', '104587', 'Parques y jardines');
-    $T += 49 * 3600000;
-    igual('caducado', $c->verEnlace($r['token'])['estado']);
-    igual('caducado', $c->trabajadores($admin)[0]['estado']);
-    lanza(ConflictoException::class, function () use ($c, $r) { $c->usarEnlace($r['token'], 'Elena2026xyz'); });
-    $r2 = $c->reenviarActivacion($admin, 'T-0001');
-    igual('no_valido', $c->verEnlace($r['token'])['estado'], 'el viejo ya no vale');
-    igual('valido', $c->verEnlace($r2['token'])['estado']);
-    $T -= 49 * 3600000;
+    igual('trabajador', $c->iniciarSesion('psanz@ayto.es', 'Trabajo2026!', 'app')['usuario']['rol'], 'entra en la app al momento');
+    $r2 = $c->altaTrabajador($admin, 'Elena Mora Vidal', 'emora@ayto.es', '104587', 'Parques y jardines', 'Parques2026!');
+    igual('T-0002', $r2['trabajador']['id']);
+    $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) {
+        $c->altaTrabajador($admin, 'Otra Persona', 'psanz@ayto.es', '104587', 'Parques y jardines', 'Parques2026!'); });
+    igual(['email', 'num_empleado'], array_keys($e->errores), 'correo y nº de empleado no se repiten');
+    igual(['T-0001', 'T-0002'], array_column($c->trabajadores($admin), 'id'));
+    igual(['gandia', 'gandia'], array_column($c->trabajadores($admin), 'ayuntamiento'), 'empleado.ayuntamiento_id');
 });
 
 prueba('trabajador: validaciones y solo administración', function () {
     [$bd, $c] = nuevas();
     $admin = $c->usuarioPorId('A-0001');
-    $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) { $c->altaTrabajador($admin, 'Pablo', 'p@gmail.com', '12', 'X'); });
-    igual(['nombre', 'email', 'num_empleado', 'servicio'], array_keys($e->errores));
+    $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) { $c->altaTrabajador($admin, 'Pablo', 'p@gmail.com', '12', 'X', ''); });
+    igual(['nombre', 'email', 'num_empleado', 'servicio', 'clave'], array_keys($e->errores));
     crearUsuario($bd, 'A-0002', 'tecnico', 'tecnico@ayto.es', 'Tecnico2026!');
-    lanza(ProhibidoException::class, function () use ($c) { $c->altaTrabajador($c->usuarioPorId('A-0002'), 'A B', 'a@ayto.es', '111111', 'Movilidad'); });
+    lanza(ProhibidoException::class, function () use ($c) { $c->altaTrabajador($c->usuarioPorId('A-0002'), 'A B', 'a@ayto.es', '111111', 'Movilidad', 'Movilidad2026'); });
     lanza(NoAutorizadoException::class, function () use ($c) { $c->trabajadores(null); });
 });
 

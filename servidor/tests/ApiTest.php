@@ -214,24 +214,23 @@ try {
         igual([200, 3], [$c, count(array_filter($l, fn($g) => $g['stock'] > 0))]);
         igual(409, pedir('POST', '/canjes', ['regalo' => 'g2'], $TOK['lucia'])[0]);
     });
-    prueba('trabajador: alta con enlace, activación y entra en la app', function () use (&$TOK) {
-        [$c, $j] = pedir('POST', '/panel/trabajadores', ['nombre' => 'Pablo Sanz Gil', 'email' => 'psanz@ayto.es', 'num_empleado' => '104233', 'servicio' => 'Limpieza viaria'], $TOK['admin']);
-        igual(201, $c);
-        preg_match('/#activar\/([0-9a-f]{64})$/', $j['enlace'], $mm);
-        [, $v] = pedir('GET', '/enlaces/' . $mm[1]);
-        igual(['valido', 'activar'], [$v['estado'], $v['tipo']]);
-        igual(400, pedir('POST', '/enlaces/' . $mm[1], ['clave' => 'corta'])[0]);
-        igual(200, pedir('POST', '/enlaces/' . $mm[1], ['clave' => 'Trabajo2026!'])[0]);
+    prueba('trabajador: alta con contraseña y entra en la app al momento', function () use (&$TOK) {
+        $datos = ['nombre' => 'Pablo Sanz Gil', 'email' => 'psanz@ayto.es', 'num_empleado' => '104233', 'servicio' => 'Limpieza viaria'];
+        [$c, $j] = pedir('POST', '/panel/trabajadores', $datos + ['clave' => 'corta'], $TOK['admin']);
+        igual([400, ['clave']], [$c, array_keys($j['errores'])]);
+        [$c, $j] = pedir('POST', '/panel/trabajadores', $datos + ['clave' => 'Trabajo2026!'], $TOK['admin']);
+        igual([201, 'T-0001'], [$c, $j['trabajador']['id']]);
+        cierto(!isset($j['enlace']) && !isset($j['token']), 'ya no hay enlace de activación');
         igual(201, pedir('POST', '/sesiones', ['email' => 'psanz@ayto.es', 'clave' => 'Trabajo2026!'])[0]);
-        igual(404, pedir('POST', '/enlaces/' . $mm[1], ['clave' => 'Trabajo2027!'])[0], 'ya usado');
+        igual(404, pedir('POST', '/panel/trabajadores/T-0001/enlace', [], $TOK['admin'])[0], 'la ruta de reenviar ya no existe');
     });
     prueba('recuperar: 202 siempre y el correo trae un enlace que funciona', function () {
         global $correo;
         igual(202, pedir('POST', '/recuperaciones', ['email' => 'nadie@correo.es'])[0]);
         igual(202, pedir('POST', '/recuperaciones', ['email' => 'lucia@correo.es'])[0]);
-        // el último correo es el de Lucía (antes está el de activación del trabajador)
+        // solo un correo: el de Lucía (al de «nadie» no se manda nada)
         preg_match_all('/#activar\/([0-9a-f]{64})/', (string) @file_get_contents($correo), $mm);
-        cierto(count($mm[1]) === 2, 'dos correos: activación del trabajador y recuperación');
+        cierto(count($mm[1]) === 1, 'un solo correo, el de recuperación');
         igual(200, pedir('POST', '/enlaces/' . end($mm[1]), ['clave' => 'Nueva2026'])[0]);
         igual(201, pedir('POST', '/sesiones', ['email' => 'lucia@correo.es', 'clave' => 'Nueva2026'])[0]);
     });

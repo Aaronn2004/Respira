@@ -37,7 +37,7 @@
     estado: URL_API ? 'cargando' : 'off',   // off | cargando | ok | error   (datos públicos)
     series: {},
     pedidas: {},
-    enlaces: {},                            // token de activación --> datos del enlace
+    enlaces: {},                            // token del enlace de contraseña nueva --> datos del enlace
   };
   window.RespiraDatos = D;
 
@@ -280,7 +280,10 @@
   }
 
   // ---------- traducir los datos del servidor a los de app.js ----------
-  const aSensor = n => ({ code: n.codigo, tipo: n.tipo, mags: n.magnitudes, est: n.estado, asig: n.asignado_a || '',
+  // tipo de sensor: la API usa palabras (voluntariado, trabajador, bici, autobus); app.js, códigos cortos
+  const TIPO_WEB = { voluntariado: 'vol', trabajador: 'trab', bici: 'bici', autobus: 'bus' };
+  const TIPO_API = Object.fromEntries(Object.entries(TIPO_WEB).map(([a, w]) => [w, a]));
+  const aSensor = n => ({ code: n.codigo, tipo: TIPO_WEB[n.tipo] || n.tipo, mags: n.magnitudes, est: n.estado, asig: n.asignado_a || '',
     user: n.prestamo ? n.prestamo.usuario : null, desde: n.prestamo ? fechaHora(n.prestamo.desde) : null,
     ult: n.ultima_min, motivo: n.motivo_mant });
   // «No devuelto» = en curso; lim = fecha límite (10 días desde la recogida)
@@ -288,17 +291,13 @@
     iniMs: Date.parse(p.inicio), lim: fechaHora(p.fecha_limite), limMs: Date.parse(p.fecha_limite),
     fin: p.estado_devolucion === 'No devuelto' ? null : fechaHora(p.fecha_limite), punto: p.punto || '—', estDev: p.estado_devolucion });
   const aTrabajador = t => ({ n: t.nombre, e: t.email, p: null, r: 'trabajador', id: t.id, emp: t.num_empleado,
-    serv: t.servicio, estado: t.estado === 'activo' ? 'activo' : 'pendiente', alta: fechaDia(t.alta),
-    caduca: t.estado === 'caducado' ? 0 : Date.now() + 48 * 36e5, token: null });
-  const aRevision = d => ({ id: String(d.id), user: d.usuario, d: fechaDia(d.fecha), min: d.minutos, pts: d.puntos,
-    mot: d.motivo, estado: d.estado, razon: d.razon });
+    serv: t.servicio, estado: 'activo', alta: fechaDia(t.alta) });
   const aRegalo = g => ({ id: g.id, n: g.nombre, c: g.coste, stock: g.stock });
   const aCanje = c => ({ code: c.codigo, user: c.usuario || '(cuenta borrada)', gift: c.regalo_id, giftN: c.regalo,
     cad: c.caduca, estado: c.estado });
 
   // Carga lo que necesita el panel según el rol.
-  // formularios = true: también rellena el formulario de reglas (no se pisa lo que se escribe)
-  async function cargarPanel(formularios = false) {
+  async function cargarPanel() {
     const S = R().S;
     if (!S.user || !PANEL.includes(S.user.r)) return;
     const rol = S.user.r;
@@ -308,17 +307,14 @@
     t.push(pedir('/panel/vecinos').then(l => { E().APPUSERS = l.map(u => ({ id: u.id, n: u.nombre })); }));
     t.push(pedir('/regalos').then(l => { E().GIFTS = l.map(aRegalo); }));
     if (rol === 'admin') {
-      t.push(pedir('/panel/reglas').then(r => { E().RULES = { min: r.min, mult: r.mult, max: r.max };
-        if (formularios) S.rules = { min: String(r.desde_manana ? r.desde_manana.min : r.min), mult: String(r.desde_manana ? r.desde_manana.mult : r.mult),
-          max: String(r.desde_manana ? r.desde_manana.max : r.max) }; }));
-      t.push(pedir('/panel/revisiones').then(l => { E().SOSP = l.map(aRevision); }));
+      t.push(pedir('/panel/reglas').then(r => { E().RULES = { min: r.min, mult: r.mult, max: r.max }; }));
       t.push(pedir('/panel/canjes').then(l => { E().CANJES = l.map(aCanje); }));
       t.push(pedir('/panel/trabajadores').then(l => {
         E().STAFF = [{ n: S.user.n, e: S.user.e, p: null, r: S.user.r }].concat(l.map(aTrabajador));
       }));
     } else {
       E().STAFF = [{ n: S.user.n, e: S.user.e, p: null, r: S.user.r }];
-      E().SOSP = []; E().CANJES = [];
+      E().CANJES = [];
     }
     const res = await Promise.allSettled(t);
     res.filter(x => x.status === 'rejected').forEach(x => console.warn('[Respira] Panel:', x.reason && x.reason.message));
@@ -333,7 +329,7 @@
       const j = await pedir('/yo');
       if (!PANEL.includes(j.usuario.rol)) { guardarToken(null); return; }
       R().S.user = aUsuarioWeb(j.usuario);
-      await cargarPanel(true);
+      await cargarPanel();
       const inicial = (window.__respiraRutaInicial || '').slice(1);
       if (inicial && inicial.startsWith('panel') && location.hash !== '#' + inicial) location.hash = inicial;
       else R().render();
@@ -347,7 +343,7 @@
     guardarToken(null);
   };
 
-  // Enlace de activación o de contraseña nueva: undefined = cargando, null = no vale
+  // Enlace de contraseña nueva: undefined = cargando, null = no vale
   D.enlace = tok => {
     if (!tok) return null;
     if (!(tok in D.enlaces)) {
@@ -364,9 +360,9 @@
   const CAMPOS = {
     prestar: { usuario: 'puser', codigo: 'pcode', punto: 'ppunto' }, devolver: { codigo: 'dcode' },
     sensor: { codigo: 'code', magnitudes: 'mags', asignado_a: 'asig', motivo: 'motivo' },
-    baja: { motivo: 'bmot' }, reglas: { min: 'rmin', mult: 'rmult', max: 'rmax' }, anular: { razon: 'amot' },
+    baja: { motivo: 'bmot' },
     regalo: { nombre: 'gn', coste: 'gc', stock: 'gs' }, comprobarCanje: { codigo: 'ccode' }, entregar: { codigo: 'ccode' },
-    trabajador: { nombre: 'tn', email: 'te', num_empleado: 'temp', servicio: 'ts' }, activar: { clave: 'ap1' },
+    trabajador: { nombre: 'tn', email: 'te', num_empleado: 'temp', servicio: 'ts', clave: 'tp1' }, activar: { clave: 'ap1' },
     recuperar: { email: 'rmail' },
   };
   function mostrarError(accion, e, porDefecto) {
@@ -393,7 +389,7 @@
         const j = await pedir('/sesiones', 'POST', { email, clave, cliente: 'web' });
         guardarToken(j.token);
         S.user = aUsuarioWeb(j.usuario); S.tries = 0; S.f = {}; S.e = {};
-        await cargarPanel(true);
+        await cargarPanel();
         R().toast('Hola, ' + S.user.n.split(' ')[0]);
         R().nav(R().HOME[S.user.r]);
       } catch (e) {
@@ -425,12 +421,12 @@
 
     async sensor({ orig, codigo, tipo, mags, asig, mant, motivo }) {
       const S = R().S;
-      const cuerpo = { codigo, tipo, magnitudes: mags, asignado_a: asig || '', mantenimiento: mant, motivo: motivo || '' };
+      const cuerpo = { codigo, tipo: TIPO_API[tipo] || tipo, magnitudes: mags, asignado_a: asig || '', mantenimiento: mant, motivo: motivo || '' };
       try {
         const n = orig ? await pedir('/panel/nodos/' + encodeURIComponent(orig), 'PUT', cuerpo)
           : await pedir('/panel/nodos', 'POST', cuerpo);
         await cargarPanel();
-        R().toast(orig ? `${n.codigo} guardado` : `${n.codigo} dado de alta${n.tipo === 'vol' ? ': ya se puede prestar' : ''}`);
+        R().toast(orig ? `${n.codigo} guardado` : `${n.codigo} dado de alta${n.tipo === 'voluntariado' ? ': ya se puede prestar' : ''}`);
         S.edit = null; R().nav('panel-sensores');
       } catch (e) {
         if (e.errores && e.errores.tipo) R().toast(e.errores.tipo);
@@ -466,23 +462,6 @@
       } catch (e) { mostrarError('devolver', e, 'dcode'); }
     },
 
-    async reglas({ min, mult, max }) {
-      try {
-        await pedir('/panel/reglas', 'PUT', { min, mult, max });
-        await cargarPanel(true); E().RULES = { min: +min, mult: +mult, max: +max }; R().render();
-        R().toast('Reglas guardadas: se aplican desde mañana');
-      } catch (e) { mostrarError('reglas', e); }
-    },
-
-    async revisar({ id, decision, razon }) {
-      const S = R().S;
-      try {
-        const x = await pedir('/panel/revisiones/' + encodeURIComponent(id), 'POST', { decision, razon });
-        S.modal = null; await cargarPanel(); R().render();
-        R().toast(decision === 'aprobar' ? 'Día aprobado: los puntos se mantienen' : `Puntos anulados: se restan ${x.puntos} a ${x.usuario}`);
-      } catch (e) { mostrarError('anular', e); }
-    },
-
     async regalo({ id, nombre, coste, stock }) {
       const S = R().S;
       try {
@@ -516,29 +495,16 @@
       } catch (e) { mostrarError('entregar', e, 'ccode'); }
     },
 
-    async trabajador({ nombre, email, num_empleado, servicio }) {
+    async trabajador({ nombre, email, num_empleado, servicio, clave }) {
       const S = R().S;
       try {
-        const j = await pedir('/panel/trabajadores', 'POST', { nombre, email, num_empleado, servicio });
+        const j = await pedir('/panel/trabajadores', 'POST', { nombre, email, num_empleado, servicio, clave });
         await cargarPanel();
-        const t = E().STAFF.find(x => x.id === j.trabajador.id);
-        if (t) t.token = j.enlace.split('#activar/')[1];
-        S.altaOk = j.trabajador.id; S.f.tn = ''; S.f.te = ''; S.f.temp = ''; S.f.ts = '';
+        S.altaOk = j.trabajador.id; S.f.tn = ''; S.f.te = ''; S.f.temp = ''; S.f.ts = ''; S.f.tp1 = ''; S.f.tp2 = '';
         R().render(); R().toast(`Trabajador ${j.trabajador.id} dado de alta`);
-      } catch (e) { mostrarError('trabajador', e); }
+      } catch (e) { S.f.tp1 = ''; S.f.tp2 = ''; mostrarError('trabajador', e); }
     },
 
-    async reenviar({ id }) {
-      const S = R().S;
-      try {
-        const j = await pedir('/panel/trabajadores/' + encodeURIComponent(id) + '/enlace', 'POST', {});
-        await cargarPanel();
-        const t = E().STAFF.find(x => x.id === id);
-        if (t) t.token = j.enlace.split('#activar/')[1];
-        S.altaOk = id; R().render();
-        R().toast(`Enlace nuevo para ${j.trabajador.email}. El anterior ya no sirve.`);
-      } catch (e) { R().toast(e.message); }
-    },
   };
 
   D.accion = (nombre, datos) => {

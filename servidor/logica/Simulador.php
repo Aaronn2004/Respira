@@ -152,8 +152,8 @@ class Simulador extends Base {
             return (bool) $this->fila("SELECT codigo FROM {$this->p}nodo WHERE codigo = ?", [$c]);
         }));
         if (!$nodos) {
-            $this->ejecutar("INSERT INTO {$this->p}nodo (codigo, tipo, magnitudes, estado, asignado_a, motivo)
-                VALUES ('RSP-SIM0', 'trab', 'o3,temp,ruido', 'activo', 'Datos simulados', 'Sin incidencias')");
+            $this->ejecutar("INSERT INTO {$this->p}nodo (codigo, ayuntamiento_id, tipo, magnitudes, estado, asignado_a, incidencia)
+                VALUES ('RSP-SIM0', (SELECT MIN(id) FROM {$this->p}ayuntamiento), 'trabajador', 'o3,temp,ruido', 'activo', 'Datos simulados', 'Sin incidencias')");
             $nodos = ['RSP-SIM0'];
         }
         $ruido = array_values(array_intersect($nodos, self::NODOS_RUIDO)) ?: [$nodos[0]];

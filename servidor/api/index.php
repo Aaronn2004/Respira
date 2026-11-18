@@ -288,15 +288,8 @@ try {
         if ($s === 'vecinos' && $metodo === 'GET' && $n === 2) {
             responder(200, $cuentas->vecinos($yo));
         }
-        if ($s === 'reglas' && $n === 2) {
-            if ($metodo === 'GET') responder(200, $puntos->reglas($yo));
-            if ($metodo === 'PUT') responder(200, $puntos->guardarReglas($yo, $c['min'] ?? '', $c['mult'] ?? '', $c['max'] ?? ''));
-        }
-        if ($s === 'revisiones') {
-            if ($metodo === 'GET' && $n === 2) responder(200, $puntos->revisiones($yo));
-            if ($metodo === 'POST' && $n === 3 && ctype_digit($id)) {
-                responder(200, $puntos->revisar($yo, (int) $id, (string) ($c['decision'] ?? ''), (string) ($c['razon'] ?? '')));
-            }
+        if ($s === 'reglas' && $n === 2 && $metodo === 'GET') {
+            responder(200, $puntos->reglas($yo));   // fijas en el código: solo se consultan
         }
         if ($s === 'regalos') {
             if ($metodo === 'POST' && $n === 2) responder(201, $puntos->crearRegalo($yo, (string) ($c['nombre'] ?? ''), $c['coste'] ?? '', $c['stock'] ?? ''));
@@ -312,23 +305,12 @@ try {
             if ($metodo === 'POST' && $n === 4 && $p[3] === 'entrega') responder(200, $puntos->entregarCanje($yo, $id));
         }
         if ($s === 'trabajadores') {
-            // el enlace se manda por correo al trabajador y se le enseña a
-            // administración (por si el correo no llega, se lo puede dar en mano)
-            $enlace = function ($x) use ($cfg) {
-                $x['enlace'] = rtrim($cfg['url_web'], '/') . '/#activar/' . $x['token'];
-                unset($x['token']);
-                $t = $x['trabajador'];
-                $x['correo_enviado'] = (bool) call_user_func($cfg['correo'], $t['email'], 'Respira: activa tu cuenta de trabajador municipal',
-                    "Hola, {$t['nombre']}:\n\nEl ayuntamiento te ha dado de alta en Respira ({$t['id']}). Para crear tu contraseña, "
-                    . "abre este enlace (caduca en 48 horas y solo sirve una vez):\n\n{$x['enlace']}\n\nDespués, entra en la app Respira con este correo.\n\nRespira · Nodia");
-                return $x;
-            };
             if ($metodo === 'GET' && $n === 2) responder(200, $cuentas->trabajadores($yo));
             if ($metodo === 'POST' && $n === 2) {
-                responder(201, $enlace($cuentas->altaTrabajador($yo, (string) ($c['nombre'] ?? ''), (string) ($c['email'] ?? ''),
-                    (string) ($c['num_empleado'] ?? ''), (string) ($c['servicio'] ?? ''))));
+                responder(201, $cuentas->altaTrabajador($yo, (string) ($c['nombre'] ?? ''), (string) ($c['email'] ?? ''),
+                    (string) ($c['num_empleado'] ?? ''), (string) ($c['servicio'] ?? ''), (string) ($c['clave'] ?? ''),
+                    isset($c['ayuntamiento']) ? (string) $c['ayuntamiento'] : null));
             }
-            if ($metodo === 'POST' && $n === 4 && $p[3] === 'enlace') responder(200, $enlace($cuentas->reenviarActivacion($yo, $id)));
         }
     }
     responder(404, ['error' => "Ruta desconocida: $metodo $ruta"]);

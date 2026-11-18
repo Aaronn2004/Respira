@@ -19,7 +19,7 @@ require_once __DIR__ . '/Base.php';
 
 class Flota extends Base {
 
-    const TIPOS = ['vol' => 'Voluntariado', 'trab' => 'Trabajador público', 'bici' => 'Bici o moto compartida', 'bus' => 'Autobús'];
+    const TIPOS = ['voluntariado' => 'Voluntariado', 'trabajador' => 'Trabajador público', 'bici' => 'Bici o moto compartida', 'autobus' => 'Autobús'];
     const MAGNITUDES = ['o3', 'temp', 'ruido'];
     const ESTADOS_DEVOLUCION = ['Correcto', 'Defectuoso'];   // «No devuelto» es el de un préstamo en curso
     const PLAZO_PRESTAMO_MS = 10 * self::DIA_MS;           // 10 días desde la recogida
@@ -38,7 +38,8 @@ class Flota extends Base {
 
     public function puntosReparto(): array {
         return array_map(function ($p) {
-            return ['id' => (int) $p['id'], 'nombre' => $p['nombre'], 'direccion' => $p['direccion'], 'horario' => $p['horario']];
+            return ['id' => (int) $p['id'], 'ayuntamiento' => $p['ayuntamiento_id'], 'nombre' => $p['nombre'],
+                'direccion' => $p['direccion'], 'horario' => $p['horario']];
         }, $this->filas("SELECT * FROM {$this->p}punto_reparto WHERE activo = 1 ORDER BY id"));
     }
 
@@ -54,11 +55,11 @@ class Flota extends Base {
         $out = [];
         foreach ($this->filas("SELECT * FROM {$this->p}nodo WHERE estado <> 'baja' ORDER BY codigo") as $n) {
             $p = $this->fila("SELECT usuario_id, inicio, fecha_limite FROM {$this->p}prestamo WHERE nodo = ? AND estado_devolucion = 'No devuelto'", [$n['codigo']]);
-            $out[] = ['codigo' => $n['codigo'], 'tipo' => $n['tipo'],
+            $out[] = ['codigo' => $n['codigo'], 'ayuntamiento' => $n['ayuntamiento_id'], 'tipo' => $n['tipo'],
                 'magnitudes' => $n['magnitudes'] === '' ? [] : explode(',', $n['magnitudes']),
                 'estado' => $n['estado'], 'asignado_a' => $n['asignado_a'] === self::NO_ASIGNADO ? null : $n['asignado_a'],
                 'ultima_min' => $this->ultimaMin($n['codigo']),
-                'motivo_mant' => $n['estado'] === 'mant' ? $n['motivo'] : null,
+                'motivo_mant' => $n['estado'] === 'mant' ? $n['incidencia'] : null,
                 'prestamo' => $p ? ['usuario' => $p['usuario_id'], 'desde' => self::isoDeBD($p['inicio']),
                     'hasta' => self::isoDeBD($p['fecha_limite'])] : null];
         }
@@ -89,7 +90,7 @@ class Flota extends Base {
                 $e['codigo'] = "Ya existe un sensor con el código $codigo.";
             }
         }
-        $tipo = (string) ($d['tipo'] ?? 'vol');
+        $tipo = (string) ($d['tipo'] ?? 'voluntariado');
         if (!isset(self::TIPOS[$tipo])) {
             $e['tipo'] = 'Tipo de portador no válido.';
         } elseif ($actual && $actual['estado'] === 'prestado' && $tipo !== $actual['tipo']) {
@@ -100,7 +101,7 @@ class Flota extends Base {
             $e['magnitudes'] = 'Marca al menos una magnitud.';
         }
         $asig = trim((string) ($d['asignado_a'] ?? ''));
-        if ($tipo !== 'vol' && mb_strlen($asig) < 3) {
+        if ($tipo !== 'voluntariado' && mb_strlen($asig) < 3) {
             $e['asignado_a'] = 'Indica a qué servicio, línea o vehículo va asignado (mínimo 3 caracteres).';
         }
         $mant = !empty($d['mantenimiento']);
@@ -111,17 +112,18 @@ class Flota extends Base {
         if ($e) {
             throw new ErroresDeCamposException($e);
         }
-        return [$codigo, $tipo, implode(',', $mags), $tipo === 'vol' ? self::NO_ASIGNADO : $asig, $mant,
+        return [$codigo, $tipo, implode(',', $mags), $tipo === 'voluntariado' ? self::NO_ASIGNADO : $asig, $mant,
             $mant ? $motivo : self::SIN_INCIDENCIAS];
     }
 
     public function altaNodo(?array $quien, array $d): array {
         self::exigirRol($quien, ['admin', 'tecnico']);
         [$codigo, $tipo, $mags, $asig, $mant, $motivo] = $this->validarNodo($d, null);
-        $estado = $mant ? 'mant' : ($tipo === 'vol' ? 'disponible' : 'activo');
-        $this->ejecutar("INSERT INTO {$this->p}nodo (codigo, tipo, magnitudes, estado, asignado_a, motivo)
-            VALUES (?, ?, ?, ?, ?, ?)",
-            [$codigo, $tipo, $mags, $estado, $asig, $motivo]);
+        $ayto = $this->ayuntamientoDe(isset($d['ayuntamiento']) ? (string) $d['ayuntamiento'] : null);
+        $estado = $mant ? 'mant' : ($tipo === 'voluntariado' ? 'disponible' : 'activo');
+        $this->ejecutar("INSERT INTO {$this->p}nodo (codigo, ayuntamiento_id, tipo, magnitudes, estado, asignado_a, incidencia)
+            VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [$codigo, $ayto, $tipo, $mags, $estado, $asig, $motivo]);
         return $this->nodoPanel($codigo);
     }
 
@@ -141,9 +143,9 @@ class Flota extends Base {
         } elseif ($n['estado'] === 'prestado') {
             $estado = 'prestado';
         } else {
-            $estado = $tipo === 'vol' ? 'disponible' : 'activo';
+            $estado = $tipo === 'voluntariado' ? 'disponible' : 'activo';
         }
-        $this->ejecutar("UPDATE {$this->p}nodo SET tipo = ?, magnitudes = ?, asignado_a = ?, estado = ?, motivo = ? WHERE codigo = ?",
+        $this->ejecutar("UPDATE {$this->p}nodo SET tipo = ?, magnitudes = ?, asignado_a = ?, estado = ?, incidencia = ? WHERE codigo = ?",
             [$tipo, $mags, $asig, $estado, $motivo, $c]);
         return $this->nodoPanel($c);
     }
@@ -162,7 +164,7 @@ class Flota extends Base {
         if (trim($motivo) === '') {
             throw new DatosNoValidosException('Elige un motivo.', 'motivo');
         }
-        $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'baja', motivo = ? WHERE codigo = ?",
+        $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'baja', incidencia = ? WHERE codigo = ?",
             [mb_substr(trim($motivo), 0, 120), $c]);
     }
 
@@ -213,7 +215,7 @@ class Flota extends Base {
             $e['codigo'] = 'Formato no válido: RSP- y 4 letras o números.';
         } elseif (!$n) {
             $e['codigo'] = "No existe ningún sensor $c.";
-        } elseif ($n['tipo'] !== 'vol') {
+        } elseif ($n['tipo'] !== 'voluntariado') {
             $e['codigo'] = "$c va asignado a " . mb_strtolower(self::TIPOS[$n['tipo']]) . ': no se presta.';
         } elseif ($n['estado'] === 'prestado') {
             $quienLoTiene = $this->valor("SELECT usuario_id FROM {$this->p}prestamo WHERE nodo = ? AND estado_devolucion = 'No devuelto'", [$c]);
@@ -263,9 +265,9 @@ class Flota extends Base {
         $this->transaccion(function () use ($p, $c, $estado) {
             $this->ejecutar("UPDATE {$this->p}prestamo SET estado_devolucion = ? WHERE id = ?", [$estado, $p['id']]);
             if ($estado === 'Defectuoso') {
-                $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'mant', motivo = 'No se ha entregado en buenas condiciones' WHERE codigo = ?", [$c]);
+                $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'mant', incidencia = 'No se ha entregado en buenas condiciones' WHERE codigo = ?", [$c]);
             } else {
-                $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'disponible', motivo = ? WHERE codigo = ?", [self::SIN_INCIDENCIAS, $c]);
+                $this->ejecutar("UPDATE {$this->p}nodo SET estado = 'disponible', incidencia = ? WHERE codigo = ?", [self::SIN_INCIDENCIAS, $c]);
             }
         });
         return $this->nodoPanel($c);
@@ -292,7 +294,7 @@ class Flota extends Base {
         }
         $mags = $n['magnitudes'] === '' ? [] : explode(',', $n['magnitudes']);
         if ($quien['rol'] === 'trabajador') {
-            if ($n['tipo'] !== 'trab' || $n['estado'] !== 'activo') {
+            if ($n['tipo'] !== 'trabajador' || $n['estado'] !== 'activo') {
                 throw new ConflictoException("El sensor $c no está asignado a un servicio municipal. Pide a tu servicio el código correcto.", 'codigo');
             }
             return ['codigo' => $c, 'magnitudes' => $mags, 'desde' => null, 'hasta' => null];

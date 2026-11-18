@@ -30,7 +30,7 @@ Cuentas, préstamos, puntos, regalos, canjes y percepciones: también en el serv
 | Sensor → app → servidor | **Real**: la app escucha el beacon de SU sensor, añade ubicación y lo envía a `POST /mediciones`; sin red, lo guarda y lo manda en lote después |
 | Zonas y sus valores (mapa, ficha de zona, historial, comparar) | **Reales** si la API responde (`GET /zonas`, `/serie`). Si no, datos de demostración **con aviso** |
 | Cuentas (app y panel) y sesión | **Servidor**: contraseñas con hash, token de sesión, roles comprobados en el servidor |
-| Préstamos, sensores del panel, puntos, revisiones, regalos, canjes, trabajadores | **Servidor** (BD completa). Los puntos los calcula el servidor con las mediciones de quien lleva el sensor |
+| Préstamos, sensores del panel, puntos, regalos, canjes, trabajadores | **Servidor** (BD completa). Los puntos los calcula el servidor con las mediciones de quien lleva el sensor |
 | Percepciones (capa Comunidad) | **Servidor**: se ven en la app y en la web, 24 h, sin autor |
 | Datos de partida | Los del prototipo, cargados en la BD (`esquema.sql`, sección demo). Solo RSP-4F7K manda datos reales |
 | Zonas sobre Gandia | Las 9 de la demo (en la BD con sus coordenadas) + **Campus UPV** (rectángulo **aproximado**: compruébalo) |
@@ -47,7 +47,7 @@ Cuentas, préstamos, puntos, regalos, canjes y percepciones: también en el serv
 
 Configuración: AGP 9.4.1 · Gradle 9.6.0 · compileSdk/targetSdk 36 · minSdk 28 · Java 11. Si Android Studio pide instalar el SDK 36, acéptalo.
 
-Cuentas de prueba (en la BD de Plesk): `lucia@correo.es` / `Respira2026` (sensor `RSP-4F7K`) · `marcos@correo.es` / `Marcos2026` · trabajador `psanz@ayto.es` / `Trabajo2026!`. La app necesita la API: sin conexión se ve el mapa de demostración, pero no se puede entrar.
+Cuentas de prueba (en la BD de Plesk): `lucia@correo.es` / `Respira2026` (sensor `RSP-4F7K`) · `marcos@correo.es` / `Marcos2026` · trabajadores `psanz@ayto.es` / `Trabajo2026!` · `emora@ayto.es` / `Parques2026!`. La app necesita la API: sin conexión se ve el mapa de demostración, pero no se puede entrar.
 
 Estructura del código (`app/src/main/java/com/nodia/respira/`):
 

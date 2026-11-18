@@ -8,8 +8,8 @@ servidor/
 ├── api/config.example.php   plantilla de config.php (NO se sube a git)
 ├── logica/Base.php          errores del dominio, fechas, ayudas de SQL
 ├── logica/Logica.php        mediciones, zonas, series, sensores (público)
-├── logica/Cuentas.php       registro, sesiones, enlaces, trabajadores (invitaciones)
-├── logica/Puntos.php        cálculo de puntos, saldo, regalos, canjes, revisiones, reglas
+├── logica/Cuentas.php       registro, sesiones, enlaces, alta de trabajadores
+├── logica/Puntos.php        puntos de cada día (puntos_dia), saldo, regalos, canjes; reglas fijas
 ├── logica/Comunidad.php     percepciones de los vecinos
 ├── logica/Flota.php         sensores del panel, préstamos, devoluciones, sensor de la app
 ├── logica/Simulador.php     datos simulados mientras no haya sensores reales (se puede apagar)
@@ -68,14 +68,13 @@ Base: `https://ablabla.upv.edu.es/respira/api/index.php` (si en tu Plesk falla l
 
 | Método y ruta | Qué hace |
 |---|---|
-| `GET /panel/nodos` (todos) · `POST` · `PUT /panel/nodos/{c}` (admin, técnico) · `DELETE /panel/nodos/{c}` `{motivo}` (admin) | Flota, alta, edición/mantenimiento, baja |
+| `GET /panel/nodos` (todos) · `POST` · `PUT /panel/nodos/{c}` (admin, técnico) · `DELETE /panel/nodos/{c}` `{motivo}` (admin) | Flota, alta, edición/mantenimiento, baja. El alta admite `ayuntamiento` (obligatorio solo si hay varios activos) |
 | `GET /panel/prestamos` · `POST /panel/prestamos` `{usuario, codigo, punto}` · `POST /panel/devoluciones` `{codigo, estado: Correcto\|Defectuoso}` (todos) | Préstamos: plazo de 10 días desde la recogida (`fecha_limite`, `fuera_de_plazo`) |
 | `GET /panel/vecinos` (todos) | IDs de vecinos para prestar |
-| `GET` · `PUT /panel/reglas` (admin) | Reglas de puntos (desde mañana) |
-| `GET /panel/revisiones` · `POST /panel/revisiones/{id}` `{decision: aprobar\|anular, razon}` (admin) | Días sospechosos |
+| `GET /panel/reglas` (admin) | Reglas de puntos (fijas en el código; solo se consultan) |
 | `POST` · `PUT` · `DELETE /panel/regalos[/{id}]` (admin) | Catálogo |
 | `GET /panel/canjes` (admin) · `GET /panel/canjes/{c}` · `POST /panel/canjes/{c}/entrega` (admin, reparto) | Canjes |
-| `GET` · `POST /panel/trabajadores` · `POST /panel/trabajadores/{id}/enlace` (admin) | Alta de trabajadores (enlace de activación por correo y en pantalla) |
+| `GET` · `POST /panel/trabajadores` (admin) | Alta de trabajadores: `{nombre, email, num_empleado, servicio, clave, ayuntamiento?}`; la cuenta queda activa |
 
 **Qué devuelven las rutas del mapa**
 
@@ -105,10 +104,11 @@ Ya tienes la BD `respira` (usuario `respira`) y `httpdocs/respira/` del paso ant
 1. **Base de datos.** Elige una:
    - **Empezar de cero** (recomendado si aún no hay mediciones reales): en phpMyAdmin, BD `respira` › **Importar** › `servidor/bd/esquema.sql`. Borra lo que hubiera.
    - **Conservar las mediciones**: **Importar** › `servidor/bd/actualizar_desde_v1.sql`. Solo una vez.
+   - **Ya tienes el `esquema.sql` del 10/11/2026** (lo normal): **Importar** › `servidor/bd/actualizar_plesk.sql` (se puede repetir sin problema).
 
    Deben quedar 15 tablas.
 2. **Archivos.** Sube el ZIP `_plesk/respira_plesk.zip` a `httpdocs`, **Extract Files** marcando que reemplace los existentes, y borra el ZIP. No trae `config.php`: el tuyo se queda como está.
-3. **Correo (opcional).** Para que lleguen los correos (contraseña nueva, activación de trabajadores), Plesk tiene que poder enviar desde el dominio. Si no llegan, administración ve el enlace de activación en el panel («Abrir correo de prueba») y se lo puede dar al trabajador en mano.
+3. **Correo (opcional).** Para que lleguen los correos (contraseña nueva), Plesk tiene que poder enviar desde el dominio.
 4. **Prueba.**
    - `…/respira/api/index.php/estado` → `ok`.
    - `…/respira/web/#acceso` → entra con `admin@ayto.es` / `Admin2026!`.
@@ -120,10 +120,10 @@ En cualquier equipo con PHP 8 y `pdo_sqlite`. No tocan Plesk: usan SQLite en mem
 
 ```bash
 php servidor/tests/LogicaTest.php          # 15 · mediciones, zonas, series
-php servidor/tests/CuentasTest.php         # 12 · registro, sesión, enlaces, invitaciones de trabajadores
-php servidor/tests/PuntosTest.php          # 11 · cálculo de puntos, canjes, revisiones, reglas
+php servidor/tests/CuentasTest.php         # 14 · registro, sesión, enlaces, alta de trabajadores, seguimiento
+php servidor/tests/PuntosTest.php          # 12 · cálculo de puntos, puntos_dia, canjes, reglas
 php servidor/tests/ComunidadFlotaTest.php  # 13 · percepciones, préstamos, sensores
-php servidor/tests/ApiTest.php             # 23 · HTTP de verdad (levanta php -S él solo)
+php servidor/tests/ApiTest.php             # 24 · HTTP de verdad (levanta php -S él solo)
 php servidor/tests/SimuladorTest.php       # 5 · simulación, aproximación de huecos, alertas y picos
 ```
 

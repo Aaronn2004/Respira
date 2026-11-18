@@ -3,7 +3,7 @@
 // Fichero:     PuntosTest.php
 // Descripción: Tests de Puntos: portador de las mediciones, cálculo de
 //              un día (huecos, vehículo, parado, parques), cierre de
-//              días, saldo, canjes, caducidad, revisiones y reglas.
+//              días guardados en puntos_dia, saldo, canjes, caducidad y reglas.
 //              Ejecutar:  php servidor/tests/PuntosTest.php
 // Autor:       Aaron Blasco Blay
 // Fecha:       09/11/2026
@@ -88,7 +88,6 @@ prueba('día: andando por un parque cuentan los minutos y valen el doble', funct
     igual(120, $d['minutos']);
     igual(120, $d['minutos_parque']);
     igual(48, $d['puntos'], '120/5 + 120/5');
-    igual(null, $d['motivo']);
 });
 
 prueba('recorrido: inicio, fin, duración, distancia, lecturas y parques del día', function () {
@@ -141,23 +140,36 @@ prueba('día: parado más de 15 min seguidos no cuenta (y se marca si es mucho)'
     $d = $pu->calcularDia('U-48213', '2026-11-08', $T);
     igual(22, $d['minutos'], 'solo lo andado (+ el paso al punto donde se para)');
     cierto($d['descartados'] >= 180, 'descartados');
-    cierto(strpos((string) $d['motivo'], 'sin moverse') !== false, 'motivo');
 });
 
-prueba('días: los acabados suman al saldo (sin guardarse); hoy va aparte; nada que revisar', function () {
+prueba('días: los acabados se guardan en puntos_dia y suman al saldo; hoy va aparte', function () {
     global $T, $Z;
     [$bd, $l, $pu] = entorno();
     $cont = 0;
     paseo($l, $T - 30 * 3600000, 31, 2, [$Z['central'][0] - 0.0015, $Z['central'][1]], 0.00005, $cont); // ayer
     paseo($l, $T - 2 * 3600000, 16, 2, [$Z['central'][0] - 0.0015, $Z['central'][1]], 0.00005, $cont);  // hoy
-    $pu->cerrarDias(null);
     $d = $pu->dias('U-48213');
-    igual(['2026-11-07'], array_keys($d));
-    igual([60, 24], [$d['2026-11-07']['minutos'], $d['2026-11-07']['puntos']]);
-    igual(0, (int) $bd->query('SELECT COUNT(*) FROM revision')->fetchColumn(), 'sin días sospechosos');
+    igual(['2026-11-07'], array_column($d, 'fecha'));
+    igual([60, 24], [(int) $d[0]['minutos'], (int) $d[0]['puntos']]);
+    igual(1, (int) $bd->query("SELECT COUNT(*) FROM puntos_dia")->fetchColumn(), 'hoy no se guarda');
     $c = $pu->cuenta(['id' => 'U-48213']);
     igual(24, $c['puntos']);
     igual(30, $c['hoy']['minutos'], 'hoy en directo');
+    igual(['min' => 5, 'mult' => 2, 'max' => 100], $c['reglas']);
+});
+
+prueba('puntos_dia: se calcula una vez; un dato atrasado de ese día lo rehace', function () {
+    global $T, $Z;
+    [$bd, $l, $pu] = entorno();
+    $cont = 0;
+    $p = [$Z['central'][0] - 0.0015, $Z['central'][1]];
+    paseo($l, $T - 30 * 3600000, 31, 2, $p, 0.00005, $cont);    // ayer: 60 min, 24 puntos
+    igual(24, $pu->saldo('U-48213'));
+    $bd->exec("UPDATE puntos_dia SET puntos = 7");               // lo guardado manda: no se recalcula
+    igual(7, $pu->saldo('U-48213'));
+    paseo($l, $T - 27 * 3600000, 31, 2, $p, 0.00005, $cont);    // llega tarde otro paseo de ayer
+    igual(0, (int) $bd->query("SELECT COUNT(*) FROM puntos_dia")->fetchColumn(), 'la fila de ayer se borra');
+    igual(48, $pu->saldo('U-48213'), 'se vuelve a calcular con los dos paseos');
 });
 
 prueba('canje: resta puntos y stock; sin saldo o agotado, no', function () {
@@ -214,31 +226,11 @@ prueba('entrega: reparto la marca; no se puede entregar dos veces', function () 
     lanza(ProhibidoException::class, function () use ($pu) { $pu->comprobarCanje(['id' => 'A-0002', 'rol' => 'tecnico'], 'CJ-ZZZZ'); });
 });
 
-prueba('revisión: aprobar mantiene los puntos; anular los quita y guarda el motivo', function () {
-    [$bd, , $pu] = entorno();
-    andar($bd, '2026-11-05', 520);      // 100: «Llega al máximo diario»
-    andar($bd, '2026-11-06', 450);      // 90: «Llega al 90 % del máximo diario»
-    $admin = ['id' => 'A-0001', 'rol' => 'admin'];
-    igual(2, count($pu->revisiones($admin)));
-    $ids = array_column($pu->revisiones($admin), 'id', 'fecha');
-    $ids = [$ids['2026-11-05'], $ids['2026-11-06']];
-    igual('ok', $pu->revisar($admin, $ids[0], 'aprobar')['estado']);
-    lanza(DatosNoValidosException::class, function () use ($pu, $admin, $ids) { $pu->revisar($admin, $ids[1], 'anular', 'corto'); });
-    $x = $pu->revisar($admin, $ids[1], 'anular', 'El sensor estuvo en un coche');
-    igual(['anulado', 'El sensor estuvo en un coche'], [$x['estado'], $x['razon']]);
-    igual(100, $pu->saldo('U-48213'));
-    lanza(ConflictoException::class, function () use ($pu, $admin, $ids) { $pu->revisar($admin, $ids[0], 'anular', 'otra vez no se puede'); });
-});
-
-prueba('reglas: se validan y se aplican desde mañana', function () {
+prueba('reglas: fijas en el código; solo administración las consulta', function () {
     [, , $pu] = entorno();
-    $admin = ['id' => 'A-0001', 'rol' => 'admin'];
-    $e = lanza(ErroresDeCamposException::class, function () use ($pu, $admin) { $pu->guardarReglas($admin, '0', 'x', '9999'); });
-    igual(['min', 'mult', 'max'], array_keys($e->errores));
-    $r = $pu->guardarReglas($admin, '10', '3', '150');
-    igual(5, $r['min'], 'hoy sigue igual');
-    igual(['min' => 10, 'mult' => 3, 'max' => 150], $r['desde_manana']);
-    igual(10, $pu->reglasDe('2026-11-09')['min']);
+    igual(['min' => 5, 'mult' => 2, 'max' => 100], $pu->reglas(['id' => 'A-0001', 'rol' => 'admin']));
+    igual(100, Puntos::puntosDe(600, 0), 'máximo diario');
+    igual(36, Puntos::puntosDe(120, 60), '120/5 + 60/5');
     lanza(ProhibidoException::class, function () use ($pu) { $pu->reglas(['id' => 'A-0002', 'rol' => 'tecnico']); });
 });
 

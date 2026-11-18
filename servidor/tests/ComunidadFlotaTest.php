@@ -84,14 +84,32 @@ prueba('percepción: solo la autora la edita (tipo y nivel) o la borra', functio
 prueba('flota: alta de un sensor y validaciones', function () {
     global $TECNICO, $REPARTO;
     [$bd, , $f] = entorno();
-    $n = $f->altaNodo($TECNICO, ['codigo' => 'rsp-7z2k', 'tipo' => 'bus', 'magnitudes' => ['o3', 'ruido'], 'asignado_a' => 'Línea 3 · Bus 12']);
+    $n = $f->altaNodo($TECNICO, ['codigo' => 'rsp-7z2k', 'tipo' => 'autobus', 'magnitudes' => ['o3', 'ruido'], 'asignado_a' => 'Línea 3 · Bus 12']);
     igual(['RSP-7Z2K', 'activo', ['o3', 'ruido'], 'Línea 3 · Bus 12'], [$n['codigo'], $n['estado'], $n['magnitudes'], $n['asignado_a']]);
-    igual(['No asignado', 'Sin incidencias'], array_values($bd->query("SELECT asignado_a, motivo FROM nodo WHERE codigo = 'RSP-4F7K'")->fetch(PDO::FETCH_ASSOC)), 'sin NULL');
+    igual(['No asignado', 'Sin incidencias'], array_values($bd->query("SELECT asignado_a, incidencia FROM nodo WHERE codigo = 'RSP-4F7K'")->fetch(PDO::FETCH_ASSOC)), 'sin NULL');
     $e = lanza(ErroresDeCamposException::class, function () use ($f, $TECNICO) {
-        $f->altaNodo($TECNICO, ['codigo' => 'RSP-7Z2K', 'tipo' => 'trab', 'magnitudes' => [], 'asignado_a' => 'x', 'mantenimiento' => true]);
+        $f->altaNodo($TECNICO, ['codigo' => 'RSP-7Z2K', 'tipo' => 'trabajador', 'magnitudes' => [], 'asignado_a' => 'x', 'mantenimiento' => true]);
     });
     igual(['codigo', 'magnitudes', 'asignado_a', 'motivo'], array_keys($e->errores));
     lanza(ProhibidoException::class, function () use ($f, $REPARTO) { $f->altaNodo($REPARTO, ['codigo' => 'RSP-AAAA']); });
+});
+
+prueba('ayuntamiento: el sensor nuevo es del único ayuntamiento; con dos, hay que elegirlo', function () {
+    global $ADMIN;
+    [$bd, , $f] = entorno();
+    $n = $f->altaNodo($ADMIN, ['codigo' => 'RSP-A001', 'tipo' => 'bici', 'magnitudes' => ['o3'], 'asignado_a' => 'Estación 1']);
+    igual('gandia', $n['ayuntamiento'], 'solo hay uno: se pone solo');
+    $bd->exec("INSERT INTO ayuntamiento (id, nombre, comarca, desde, activo) VALUES ('oliva', 'Oliva', 'La Safor', '2027-01-01', 1)");
+    $e = lanza(DatosNoValidosException::class, function () use ($f, $ADMIN) {
+        $f->altaNodo($ADMIN, ['codigo' => 'RSP-A002', 'tipo' => 'bici', 'magnitudes' => ['o3'], 'asignado_a' => 'Estación 2']);
+    });
+    igual('ayuntamiento', $e->campo);
+    igual('oliva', $f->altaNodo($ADMIN, ['codigo' => 'RSP-A002', 'tipo' => 'bici', 'magnitudes' => ['o3'],
+        'asignado_a' => 'Estación 2', 'ayuntamiento' => 'oliva'])['ayuntamiento']);
+    lanza(DatosNoValidosException::class, function () use ($f, $ADMIN) {
+        $f->altaNodo($ADMIN, ['codigo' => 'RSP-A003', 'tipo' => 'bici', 'magnitudes' => ['o3'], 'asignado_a' => 'X 3', 'ayuntamiento' => 'denia']);
+    });
+    igual(['gandia'], array_values(array_unique(array_column($f->puntosReparto(), 'ayuntamiento'))));
 });
 
 prueba('préstamo: el punto de reparto presta (plazo de 10 días) y la app lo reconoce', function () {
@@ -113,7 +131,7 @@ prueba('préstamo: el punto de reparto presta (plazo de 10 días) y la app lo re
 prueba('préstamo: mismos errores que el panel (usuario, sensor ocupado o no prestable)', function () {
     global $REPARTO, $ADMIN;
     [, , $f] = entorno();
-    $f->altaNodo($ADMIN, ['codigo' => 'RSP-B12A', 'tipo' => 'bus', 'magnitudes' => ['o3'], 'asignado_a' => 'Línea 2']);
+    $f->altaNodo($ADMIN, ['codigo' => 'RSP-B12A', 'tipo' => 'autobus', 'magnitudes' => ['o3'], 'asignado_a' => 'Línea 2']);
     $f->prestar($REPARTO, 'U-48213', 'RSP-4F7K', 1);
     $e = lanza(ErroresDeCamposException::class, function () use ($f, $REPARTO) { $f->prestar($REPARTO, 'U-48213', 'RSP-4F7K', 1); });
     cierto(strpos($e->errores['usuario'], 'ya tiene un sensor') !== false, 'usuario');
@@ -155,7 +173,7 @@ prueba('app: mensajes del código (formato, no existe, sin prestar) y trabajador
     lanza(NoEncontradoException::class, function () use ($f, $u) { $f->sensorParaLaApp($u, 'RSP-ZZZZ'); });
     $e = lanza(ConflictoException::class, function () use ($f, $u) { $f->sensorParaLaApp($u, 'RSP-4F7K'); });
     cierto(strpos($e->getMessage(), 'con tu ID U-48213') !== false, 'sin prestar');
-    $f->altaNodo($ADMIN, ['codigo' => 'RSP-L1MP', 'tipo' => 'trab', 'magnitudes' => ['o3'], 'asignado_a' => 'Limpieza viaria']);
+    $f->altaNodo($ADMIN, ['codigo' => 'RSP-L1MP', 'tipo' => 'trabajador', 'magnitudes' => ['o3'], 'asignado_a' => 'Limpieza viaria']);
     $t = ['id' => 'T-0001', 'rol' => 'trabajador'];
     igual('RSP-L1MP', $f->sensorParaLaApp($t, 'RSP-L1MP')['codigo']);
     lanza(ConflictoException::class, function () use ($f, $t) { $f->sensorParaLaApp($t, 'RSP-4F7K'); });
@@ -170,7 +188,7 @@ prueba('baja: solo administración, no si está prestado; desaparece del panel',
     $f->devolver($REPARTO, 'RSP-4F7K', 'Correcto');
     $f->bajaNodo($ADMIN, 'RSP-4F7K', 'Perdido');
     igual(0, count($f->nodosPanel($ADMIN)));
-    igual(['baja', 'Perdido'], array_values($bd->query("SELECT estado, motivo FROM nodo WHERE codigo = 'RSP-4F7K'")->fetch(PDO::FETCH_ASSOC)), 'un solo motivo');
+    igual(['baja', 'Perdido'], array_values($bd->query("SELECT estado, incidencia FROM nodo WHERE codigo = 'RSP-4F7K'")->fetch(PDO::FETCH_ASSOC)), 'un solo motivo');
 });
 
 prueba('panel: «hace cuánto» sale de las mediciones (no se guarda en nodo)', function () {
@@ -192,11 +210,11 @@ prueba('editar: no cambia el tipo de uno prestado; mantenimiento con motivo', fu
     });
     igual(['tipo'], array_keys($e->errores));
     $f->devolver($REPARTO, 'RSP-4F7K', 'Correcto');
-    $n = $f->editarNodo($ADMIN, 'RSP-4F7K', ['tipo' => 'vol', 'magnitudes' => ['o3', 'temp'], 'mantenimiento' => true, 'motivo' => 'Cambio de pila']);
+    $n = $f->editarNodo($ADMIN, 'RSP-4F7K', ['tipo' => 'voluntariado', 'magnitudes' => ['o3', 'temp'], 'mantenimiento' => true, 'motivo' => 'Cambio de pila']);
     igual(['mant', 'Cambio de pila', ['o3', 'temp']], [$n['estado'], $n['motivo_mant'], $n['magnitudes']]);
-    $n = $f->editarNodo($ADMIN, 'RSP-4F7K', ['tipo' => 'vol', 'magnitudes' => ['o3', 'temp']]);
+    $n = $f->editarNodo($ADMIN, 'RSP-4F7K', ['tipo' => 'voluntariado', 'magnitudes' => ['o3', 'temp']]);
     igual(['disponible', null], [$n['estado'], $n['motivo_mant']]);
-    igual('Sin incidencias', $bd->query("SELECT motivo FROM nodo WHERE codigo = 'RSP-4F7K'")->fetchColumn());
+    igual('Sin incidencias', $bd->query("SELECT incidencia FROM nodo WHERE codigo = 'RSP-4F7K'")->fetchColumn());
 });
 
 prueba('público: ayuntamientos y puntos de reparto', function () {

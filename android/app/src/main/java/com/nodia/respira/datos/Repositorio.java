@@ -847,10 +847,7 @@ public final class Repositorio {
         JSONArray hist = o.getJSONArray("historial");
         for (int i = 0; i < hist.length(); i++) {
             JSONObject m = hist.getJSONObject(i);
-            String rev = m.isNull("revision") ? null : m.getString("revision");
-            String razon = m.isNull("razon") ? null : m.getString("razon");
-            String nota = "anulado".equals(rev) ? "Anulado" + (razon == null ? "" : ": " + razon)
-                    : "pend".equals(rev) ? "En revisión: el ayuntamiento lo está comprobando" : razon;
+            String nota = m.isNull("razon") ? null : m.getString("razon");   // p. ej. canje caducado
             c.historial.add(new Movimiento(fechaCorta(m.getString("fecha")), m.getInt("minutos"),
                     m.getInt("minutos_parque"), m.getInt("descartados"), m.getInt("puntos"),
                     m.isNull("canje") ? null : m.getString("canje"), nota,

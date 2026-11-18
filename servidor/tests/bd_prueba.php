@@ -4,7 +4,7 @@
 // Descripción: Crea una BD SQLite con las MISMAS tablas que esquema.sql
 //              (se traducen solas: SQLite no entiende ENUM, SET, ENGINE,
 //              COMMENT ni AUTO_INCREMENT) y carga los datos base
-//              (zonas, nodo real, regalos, reglas, puntos de reparto).
+//              (zonas, nodo real, regalos, puntos de reparto).
 //              Los datos de demostración no se cargan: cada test crea
 //              lo que necesita.
 // Autor:       Aaron Blasco Blay

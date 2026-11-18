@@ -4,8 +4,8 @@
 // Descripción: Cuentas y seguridad: registro de vecinos (app), inicio y
 //              cierre de sesión (app y web), enlaces de un solo uso
 //              (recuperar la contraseña) y alta de trabajadores
-//              municipales desde administración: quedan como
-//              «invitación» hasta que activan su cuenta con el enlace.
+//              municipales desde administración (que pone también su
+//              contraseña: la cuenta queda activa al momento).
 //
 //   - Las contraseñas se guardan con password_hash (bcrypt).
 //   - Los tokens de sesión y de los enlaces son 32 bytes aleatorios; en
@@ -23,7 +23,6 @@ class Cuentas extends Base {
 
     const SESION_APP_MS = 90 * Base::DIA_MS;   // la app no pide la contraseña cada día
     const SESION_WEB_MS = 12 * Base::HORA_MS;  // el panel caduca en una jornada
-    const ACTIVAR_MS = 48 * Base::HORA_MS;
     const RECUPERAR_MS = 1 * Base::HORA_MS;
     const ROLES_PANEL = ['admin', 'tecnico', 'reparto'];
     const ROLES_APP = ['vecino', 'trabajador'];
@@ -198,7 +197,7 @@ class Cuentas extends Base {
         }
         $this->transaccion(function () use ($u) {
             // (SQLite no aplica ON DELETE si no se activan las FK: se hace a mano)
-            foreach (['alerta', 'favorito', 'token', 'percepcion', 'revision'] as $t) {
+            foreach (['alerta', 'favorito', 'token', 'percepcion', 'puntos_dia'] as $t) {
                 $this->ejecutar("DELETE FROM {$this->p}$t WHERE usuario_id = ?", [$u['id']]);
             }
             $this->ejecutar("UPDATE {$this->p}medicion SET portador_id = NULL WHERE portador_id = ?", [$u['id']]);
@@ -297,8 +296,7 @@ class Cuentas extends Base {
 
     // ==============================================================
     // Enlaces de un solo uso
-    //   recuperar  fila en «token» (1 h), para cuentas que ya existen
-    //   activar    la propia «invitacion» del trabajador (48 h)
+    //   recuperar  fila en «token» (1 h): crear una contraseña nueva
     // ==============================================================
 
     private function crearEnlaceRecuperar(string $usuarioId): string {
@@ -339,21 +337,18 @@ class Cuentas extends Base {
         $h = self::hashToken($token);
         $f = $this->fila("SELECT 'recuperar' AS tipo, t.caduca, u.id, u.nombre, u.email, u.rol
             FROM {$this->p}token t JOIN {$this->p}usuario u ON u.id = t.usuario_id
-            WHERE t.token_hash = ? AND t.tipo = 'recuperar'", [$h])
-            ?? $this->fila("SELECT 'activar' AS tipo, caduca, id, nombre, email, 'trabajador' AS rol
-            FROM {$this->p}invitacion WHERE token_hash = ?", [$h]);
+            WHERE t.token_hash = ? AND t.tipo = 'recuperar'", [$h]);
         if (!$f) {
             return ['estado' => 'no_valido'];
         }
         $estado = self::msDeFechaBD($f['caduca']) < $this->ahora() ? 'caducado' : 'valido';
         return ['estado' => $estado, 'tipo' => $f['tipo'], 'id' => $f['id'], 'nombre' => $f['nombre'],
-            'email' => $f['email'], 'rol' => $f['rol'], 'horas' => $f['tipo'] === 'activar' ? 48 : 1];
+            'email' => $f['email'], 'rol' => $f['rol'], 'horas' => 1];
     }
 
     // --------------------------------------------------------------
     // token, clave --> usarEnlace() --> email
-    //   activar:   crea la cuenta (usuario + empleado) y borra la invitación
-    //   recuperar: cambia la contraseña y cierra las sesiones abiertas
+    // Cambia la contraseña y cierra las sesiones abiertas.
     // --------------------------------------------------------------
     public function usarEnlace(string $token, string $clave): string {
         $v = $this->verEnlace($token);
@@ -368,20 +363,10 @@ class Cuentas extends Base {
             throw new DatosNoValidosException($e, 'clave');
         }
         $hash = password_hash($clave, PASSWORD_DEFAULT);
-        $ahora = $this->ahora();
-        $this->transaccion(function () use ($v, $hash, $ahora) {
-            if ($v['tipo'] === 'activar') {
-                $inv = $this->fila("SELECT * FROM {$this->p}invitacion WHERE id = ?", [$v['id']]);
-                $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, alta) VALUES (?, 'trabajador', ?, ?, ?, ?)",
-                    [$inv['id'], $inv['nombre'], $inv['email'], $hash, self::fechaBD($ahora)]);
-                $this->ejecutar("INSERT INTO {$this->p}empleado (usuario_id, num_empleado, servicio) VALUES (?, ?, ?)",
-                    [$inv['id'], $inv['num_empleado'], $inv['servicio']]);
-                $this->ejecutar("DELETE FROM {$this->p}invitacion WHERE id = ?", [$inv['id']]);
-            } else {
-                $this->ejecutar("UPDATE {$this->p}usuario SET clave_hash = ? WHERE id = ?", [$hash, $v['id']]);
-                // el enlace ya no sirve y las sesiones abiertas se cierran
-                $this->ejecutar("DELETE FROM {$this->p}token WHERE usuario_id = ?", [$v['id']]);
-            }
+        $this->transaccion(function () use ($v, $hash) {
+            $this->ejecutar("UPDATE {$this->p}usuario SET clave_hash = ? WHERE id = ?", [$hash, $v['id']]);
+            // el enlace ya no sirve y las sesiones abiertas se cierran
+            $this->ejecutar("DELETE FROM {$this->p}token WHERE usuario_id = ?", [$v['id']]);
         });
         return $v['email'];
     }
@@ -391,39 +376,29 @@ class Cuentas extends Base {
     // ==============================================================
 
     // --------------------------------------------------------------
-    // trabajadores() --> [{id, nombre, email, num_empleado, servicio, alta,
-    //                      estado: activo|pendiente|caducado}]
-    //   activos: usuario + empleado · pendientes: invitaciones
+    // trabajadores() --> [{id, ayuntamiento, nombre, email, num_empleado, servicio, alta}]
     // --------------------------------------------------------------
     public function trabajadores(?array $quien): array {
         self::exigirRol($quien, ['admin']);
-        $ahora = $this->ahora();
         $out = [];
-        foreach ($this->filas("SELECT u.id, u.nombre, u.email, u.alta, e.num_empleado, e.servicio
+        foreach ($this->filas("SELECT u.id, u.nombre, u.email, u.alta, e.ayuntamiento_id, e.num_empleado, e.servicio
             FROM {$this->p}usuario u JOIN {$this->p}empleado e ON e.usuario_id = u.id
-            WHERE u.rol = 'trabajador'") as $t) {
-            $out[] = ['id' => $t['id'], 'nombre' => $t['nombre'], 'email' => $t['email'], 'num_empleado' => $t['num_empleado'],
-                'servicio' => $t['servicio'], 'alta' => self::isoDeBD($t['alta']), 'estado' => 'activo'];
+            WHERE u.rol = 'trabajador' ORDER BY u.id") as $t) {
+            $out[] = ['id' => $t['id'], 'ayuntamiento' => $t['ayuntamiento_id'], 'nombre' => $t['nombre'], 'email' => $t['email'],
+                'num_empleado' => $t['num_empleado'],
+                'servicio' => $t['servicio'], 'alta' => self::isoDeBD($t['alta'])];
         }
-        foreach ($this->filas("SELECT * FROM {$this->p}invitacion") as $t) {
-            $cad = self::msDeFechaBD($t['caduca']);
-            $out[] = ['id' => $t['id'], 'nombre' => $t['nombre'], 'email' => $t['email'], 'num_empleado' => $t['num_empleado'],
-                'servicio' => $t['servicio'], 'alta' => self::fechaISO($cad - self::ACTIVAR_MS),
-                'estado' => $cad < $ahora ? 'caducado' : 'pendiente'];
-        }
-        usort($out, function ($a, $b) { return strcmp($a['id'], $b['id']); });
         return $out;
     }
 
-    private function trabajador(?array $quien, string $id): array {
-        return array_values(array_filter($this->trabajadores($quien), function ($x) use ($id) { return $x['id'] === $id; }))[0];
-    }
-
     // --------------------------------------------------------------
-    // Alta de un trabajador: queda como invitación hasta que él mismo
-    // crea su contraseña con el enlace (48 h). --> {trabajador, token}
+    // Alta de un trabajador. Administración pone también su contraseña
+    // (mismas reglas que el personal: 10 caracteres, letras y números) y
+    // se la da en mano; él puede cambiarla luego con «He olvidado mi
+    // contraseña». La cuenta queda activa al momento. --> {trabajador}
     // --------------------------------------------------------------
-    public function altaTrabajador(?array $quien, string $nombre, string $email, string $numEmpleado, string $servicio): array {
+    public function altaTrabajador(?array $quien, string $nombre, string $email, string $numEmpleado, string $servicio,
+                                   string $clave, ?string $ayuntamiento = null): array {
         self::exigirRol($quien, ['admin']);
         $n = preg_replace('/\s+/', ' ', trim($nombre));
         $m = strtolower(trim($email));
@@ -440,51 +415,38 @@ class Cuentas extends Base {
             $e['email'] = 'El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';
         } elseif (substr($m, -8) !== '@ayto.es') {
             $e['email'] = 'Tiene que ser un correo municipal (termina en @ayto.es).';
-        } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE email = ?", [$m])
-            || $this->fila("SELECT id FROM {$this->p}invitacion WHERE email = ?", [$m])) {
+        } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE email = ?", [$m])) {
             $e['email'] = 'Ya hay una cuenta con este correo.';
         }
         if ($emp === '') {
             $e['num_empleado'] = 'Escribe el número de empleado.';
         } elseif (!preg_match('/^\d{6}$/', $emp)) {
             $e['num_empleado'] = 'Son 6 cifras, por ejemplo 104233.';
-        } elseif ($this->fila("SELECT usuario_id FROM {$this->p}empleado WHERE num_empleado = ?", [$emp])
-            || $this->fila("SELECT id FROM {$this->p}invitacion WHERE num_empleado = ?", [$emp])) {
+        } elseif ($this->fila("SELECT usuario_id FROM {$this->p}empleado WHERE num_empleado = ?", [$emp])) {
             $e['num_empleado'] = 'Este número de empleado ya tiene una cuenta.';
         }
         if (!in_array($servicio, self::SERVICIOS, true)) {
             $e['servicio'] = 'Elige el servicio.';
         }
+        $ec = self::errorClave('trabajador', $clave, $m);
+        if ($ec) {
+            $e['clave'] = $ec;
+        }
         if ($e) {
             throw new ErroresDeCamposException($e);
         }
-        return $this->transaccion(function () use ($quien, $n, $m, $emp, $servicio) {
-            $max = max((int) substr((string) $this->valor("SELECT MAX(id) FROM {$this->p}usuario WHERE rol = 'trabajador'"), 2),
-                (int) substr((string) $this->valor("SELECT MAX(id) FROM {$this->p}invitacion"), 2));
+        $ayto = $this->ayuntamientoDe($ayuntamiento);
+        $hash = password_hash($clave, PASSWORD_DEFAULT);
+        return $this->transaccion(function () use ($quien, $n, $m, $emp, $servicio, $hash, $ayto) {
+            $max = (int) substr((string) $this->valor("SELECT MAX(id) FROM {$this->p}usuario WHERE rol = 'trabajador'"), 2);
             $id = 'T-' . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
-            $token = self::tokenNuevo();
-            $this->ejecutar("INSERT INTO {$this->p}invitacion (id, nombre, email, num_empleado, servicio, token_hash, caduca)
-                VALUES (?, ?, ?, ?, ?, ?, ?)",
-                [$id, $n, $m, $emp, $servicio, self::hashToken($token), self::fechaBD($this->ahora() + self::ACTIVAR_MS)]);
-            return ['trabajador' => $this->trabajador($quien, $id), 'token' => $token];
+            $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, alta) VALUES (?, 'trabajador', ?, ?, ?, ?)",
+                [$id, $n, $m, $hash, self::fechaBD($this->ahora())]);
+            $this->ejecutar("INSERT INTO {$this->p}empleado (usuario_id, ayuntamiento_id, num_empleado, servicio) VALUES (?, ?, ?, ?)",
+                [$id, $ayto, $emp, $servicio]);
+            $t = array_values(array_filter($this->trabajadores($quien), function ($x) use ($id) { return $x['id'] === $id; }));
+            return ['trabajador' => $t[0]];
         });
-    }
-
-    // --------------------------------------------------------------
-    // Enlace de activación nuevo (el anterior deja de servir) --> {trabajador, token}
-    // --------------------------------------------------------------
-    public function reenviarActivacion(?array $quien, string $id): array {
-        self::exigirRol($quien, ['admin']);
-        if (!$this->fila("SELECT id FROM {$this->p}invitacion WHERE id = ?", [$id])) {
-            if ($this->fila("SELECT id FROM {$this->p}usuario WHERE id = ? AND rol = 'trabajador'", [$id])) {
-                throw new ConflictoException('Esta cuenta ya está activada.');
-            }
-            throw new NoEncontradoException("No existe el trabajador $id.");
-        }
-        $token = self::tokenNuevo();
-        $this->ejecutar("UPDATE {$this->p}invitacion SET token_hash = ?, caduca = ? WHERE id = ?",
-            [self::hashToken($token), self::fechaBD($this->ahora() + self::ACTIVAR_MS), $id]);
-        return ['trabajador' => $this->trabajador($quien, $id), 'token' => $token];
     }
 
     // --------------------------------------------------------------

@@ -11,7 +11,7 @@ return [
     'clave'   => 'pon_aqui_la_contraseña',
     'prefijo' => '',
     // Opcional. Dirección de la web: se usa en los enlaces de los correos
-    // (recuperar contraseña) y de activación de trabajadores. Si se deja
+    // (recuperar contraseña). Si se deja
     // vacía, se deduce sola (…/respira/api → …/respira/web/).
     'url_web' => '',
     // Mediciones simuladas para que todas las zonas tengan datos (salvo las

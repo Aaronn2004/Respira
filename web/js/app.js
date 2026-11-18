@@ -145,7 +145,6 @@ let SENS=[
 const byCode=c=>SENS.find(s=>s.code===c);
 let LOANS=[{code:'RSP-4F7K',user:'U-48213',ini:'2 nov 09:12',fin:null,punto:'Biblioteca Central'},{code:'RSP-2B9Q',user:'U-11902',ini:'1 nov 10:05',fin:null,punto:'Centro Cívico Norte'},{code:'RSP-7H3M',user:'U-48213',ini:'31 oct 17:40',fin:'1 nov 09:02',punto:'Biblioteca Central',estDev:'Correcto'}];
 let RULES={min:5,mult:2,max:100};
-let SOSP=[{id:'d1',user:'U-30577',d:'1 nov',min:520,pts:100,mot:'Llega al máximo diario',estado:'pend'},{id:'d2',user:'U-11902',d:'1 nov',min:180,pts:58,mot:'Sensor 3 h sin moverse en el mismo punto (descontado)',estado:'pend'},{id:'d3',user:'U-48213',d:'31 oct',min:310,pts:91,mot:'Llega al 90 % del máximo',estado:'ok'}];
 let GIFTS=[{id:'g1',n:'Bolsa de tela',c:100,stock:0},{id:'g2',n:'Gorra Respira',c:150,stock:12},{id:'g3',n:'Cantimplora',c:250,stock:8},{id:'g4',n:'Mochila del ayuntamiento',c:600,stock:3}];
 let CANJES=[{code:'CJ-8R2T',user:'U-48213',gift:'g2',cad:'2026-11-06',estado:'pendiente'},{code:'CJ-2K9L',user:'U-11902',gift:'g3',cad:'2026-10-30',estado:'pendiente'},{code:'CJ-5P7Q',user:'U-30577',gift:'g2',cad:'2026-11-04',estado:'entregado'}];
 let STAFF=[{n:'Ana García',e:'admin@ayto.es',p:'Admin2026!',r:'admin'},{n:'Luis Pérez',e:'tecnico@ayto.es',p:'Tecnico2026!',r:'tecnico'},{n:'Marta Ruiz',e:'reparto@ayto.es',p:'Reparto2026!',r:'reparto',punto:'Biblioteca Central'}];
@@ -154,7 +153,7 @@ let STAFF=[{n:'Ana García',e:'admin@ayto.es',p:'Admin2026!',r:'admin'},{n:'Luis
    conoce ni fija su contraseña. En la versión real el token solo existe en el servidor (hash). */
 STAFF.push(
  {n:'Pablo Sanz Gil',e:'psanz@ayto.es',p:'Trabajo2026!',r:'trabajador',id:'T-0001',emp:'104233',serv:'Limpieza viaria',estado:'activo',alta:'28 oct',por:'admin@ayto.es'},
- {n:'Elena Mora Vidal',e:'emora@ayto.es',p:null,r:'trabajador',id:'T-0002',emp:'104587',serv:'Parques y jardines',estado:'pendiente',alta:'3 nov',por:'admin@ayto.es',token:null,caduca:Date.now()-36e5});
+ {n:'Elena Mora Vidal',e:'emora@ayto.es',p:'Parques2026!',r:'trabajador',id:'T-0002',emp:'104587',serv:'Parques y jardines',estado:'activo',alta:'3 nov',por:'admin@ayto.es'});
 const SERVICIOS=['Limpieza viaria','Parques y jardines','Mantenimiento urbano','Policía local','Movilidad','Otro servicio municipal'];
 const TRAB=()=>STAFF.filter(x=>x.r==='trabajador');
 const nuevoToken=()=>{const a=new Uint8Array(24);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('')};
@@ -163,7 +162,7 @@ const ROL={admin:'Administración',tecnico:'Técnico',reparto:'Punto de reparto'
 
 /* ---------- estado y rutas ---------- */
 const S={tabIni:'o3',iniVisto:false,view:{x:0,y:0,w:900,h:560},tilt:false,layer:'zonas',mag:'gen',sel:null,q:'',menu:false,hist:{id:'central',mag:'o3',per:'24h',desde:'',hasta:''},cmp:{a:'ribera',b:'central',mag:'o3',per:'24h'},avf:0,avt:'todos',
- user:null,tries:0,lock:false,f:{},e:{},modal:null,edit:null,fT:'todos',fE:'todos',fQ:'',recOk:false,canje:null,rules:{...RULES}};
+ user:null,tries:0,lock:false,f:{},e:{},modal:null,edit:null,fT:'todos',fE:'todos',fQ:'',recOk:false,canje:null};
 const PUB=['inicio','mapa','comunidad','historial','comparar','como-funciona','privacidad'];
 const PAN=['panel','panel-sensores','panel-editar','panel-prestamos','panel-puntos','panel-regalos','panel-trabajadores'];
 const ACCESS={admin:PAN,tecnico:['panel','panel-sensores','panel-editar','panel-prestamos'],reparto:['panel-prestamos','panel-regalos'],trabajador:[]};
@@ -420,7 +419,7 @@ function vInicio(){
 
  <section class="tv-sec" id="para-ayuntamientos"><div class="tv-in tv-ayu">
   <div class="rv"><span class="tv-eyebrow">Para ayuntamientos</span><h2>Un panel para gestionar todo el servicio</h2><p class="tv-mut">El personal municipal entra con su cuenta y ve solo lo que le corresponde según su rol: administración, técnico o punto de reparto.</p><div class="tv-fila"><a class="btn" href="#acceso">Acceso ayuntamiento</a></div></div>
-  <ul class="tv-lista rv" style="--i:1">${[['Flota de sensores','Estado, batería y último dato de cada sensor.'],['Préstamos','Prestar y recoger sensores en los puntos de reparto.'],['Puntos','Reglas de cálculo y revisión de días sospechosos.'],['Regalos y canjes','Catálogo, stock y entrega con código CJ-XXXX.']].map(x=>`<li><b>${x[0]}</b><span class="tv-mut">${x[1]}</span></li>`).join('')}</ul>
+  <ul class="tv-lista rv" style="--i:1">${[['Flota de sensores','Estado, batería y último dato de cada sensor.'],['Préstamos','Prestar y recoger sensores en los puntos de reparto.'],['Puntos','Reglas de cálculo de los puntos del voluntariado.'],['Regalos y canjes','Catálogo, stock y entrega con código CJ-XXXX.']].map(x=>`<li><b>${x[0]}</b><span class="tv-mut">${x[1]}</span></li>`).join('')}</ul>
  </div></section>
 
  <footer class="tv-pie"><div class="tv-in"><span>Respira es un servicio de <b>NODIA</b></span><span>Proyecto de Biometría, GTI, UPV. <a href="#privacidad">Privacidad</a></span></div></footer>
@@ -650,7 +649,7 @@ function vComo(){return header('como-funciona')+`<main class="page wrap"><div cl
  <section class="ef-sec" style="display:flex;flex-direction:column;gap:14px"><div><span class="lbl">Efectos en la salud</span><h2 style="font-size:26px">Qué te puede pasar</h2><p class="muted" style="margin:6px 0 0">Cuanto más sube, más daño. Así afecta cada nivel.</p></div>
  ${efectosHTML()}<p class="note">${EF_AVISO_B}</p></section>
  <section style="display:flex;flex-direction:column;gap:14px"><h2 style="font-size:26px">Hazte voluntario</h2>
- <div style="display:flex;flex-direction:column;gap:14px"><ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;color:var(--ink-2)"><li><b style="color:var(--ink)">Crea una cuenta en la app</b> y apunta tu ID de usuario (U-XXXXX).</li><li><b style="color:var(--ink)">Recoge un sensor</b> en un punto de reparto dando tu ID.</li><li><b style="color:var(--ink)">Escribe en la app el código</b> que lleva el sensor (RSP-XXXX) y pasea con el móvil.</li><li><b style="color:var(--ink)">Devuélvelo</b> en cualquier punto de reparto antes de 24 h.</li></ol>
+ <div style="display:flex;flex-direction:column;gap:14px"><ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;color:var(--ink-2)"><li><b style="color:var(--ink)">Crea una cuenta en la app</b> y apunta tu ID de usuario (U-XXXXX).</li><li><b style="color:var(--ink)">Recoge un sensor</b> en un punto de reparto dando tu ID.</li><li><b style="color:var(--ink)">Escribe en la app el código</b> que lleva el sensor (RSP-XXXX) y pasea con el móvil.</li><li><b style="color:var(--ink)">Devuélvelo</b> en cualquier punto de reparto antes de 10 días.</li></ol>
  <div class="tw"><table><thead><tr><th scope="col">Punto de reparto</th><th scope="col">Dirección</th><th scope="col">Horario</th></tr></thead><tbody>${PUNTOS_REPARTO.map(p=>`<tr><td><b>${p[0]}</b></td><td>${p[1]}</td><td>${p[2]}</td></tr>`).join('')}</tbody></table></div>
  <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b style="display:flex;gap:8px;align-items:center">${I.coin} Cómo se ganan los puntos</b><p class="muted" style="margin:0">Cada noche sumamos ${RULES.min===5?'1 punto cada 5 minutos':'1 punto cada '+RULES.min+' minutos'} con datos válidos, el doble dentro de los parques, hasta ${RULES.max} al día. No cuentan los ratos con el sensor parado ni a velocidad de vehículo.</p>
  <div style="display:flex;gap:8px;flex-wrap:wrap">${GIFTS.map(g=>`<span class="badge ${g.stock?'b-real':'b-none'}" style="font-size:13px;padding:6px 12px">${I.gift} ${esc(g.n)} · ${g.c} pts${g.stock?'':' · agotado'}</span>`).join('')}</div></div></div></section>
@@ -678,7 +677,7 @@ function vAcceso(rec){
 // fuera de plazo: no devuelto y pasada la fecha límite (10 días desde la recogida)
 const pendDev=()=>LOANS.filter(l=>!l.fin&&l.ini!==undefined&&(l.limMs!=null?Date.now()>l.limMs:/^1 nov|^31 oct/.test(l.ini)));
 const sinDatos=s=>['activo','prestado'].includes(s.est)&&(s.ult==null||s.ult>1440);
-function pshell(cur,inner){const u=S.user;const L=[['panel','Flota',I.grid],['panel-sensores','Sensores',I.pin],['panel-prestamos','Préstamos',I.box,pendDev().length],['panel-puntos','Puntos',I.coin,SOSP.filter(d=>d.estado==='pend').length],['panel-regalos','Regalos y canjes',I.gift],['panel-trabajadores','Trabajadores',I.users,TRAB().filter(t=>t.estado==='pendiente').length]].filter(l=>ACCESS[u.r].includes(l[0]));
+function pshell(cur,inner){const u=S.user;const L=[['panel','Flota',I.grid],['panel-sensores','Sensores',I.pin],['panel-prestamos','Préstamos',I.box,pendDev().length],['panel-puntos','Puntos',I.coin],['panel-regalos','Regalos y canjes',I.gift],['panel-trabajadores','Trabajadores',I.users]].filter(l=>ACCESS[u.r].includes(l[0]));
  return `<div class="panel"><nav class="pside" aria-label="Panel"><a class="logo" href="#${HOME[u.r]}" aria-label="Respira, panel" style="flex-direction:column;align-items:flex-start;gap:4px">${LOGO(26,'#FFFFFF','#FFFFFF','#5FC4C0')}<span style="font-family:var(--f-body);font-size:12px;font-weight:600;color:var(--side-mut);letter-spacing:.06em;text-transform:uppercase">Panel municipal</span></a>${L.map(([h,n,ic,c])=>`<a href="#${h}" ${cur===h||(h==='panel-sensores'&&cur==='panel-editar')?'aria-current="page"':''}>${ic}${n}${c?`<span class="cnt">${c}</span>`:''}</a>`).join('')}<div class="who"><b>${esc(u.n)}</b><span>${ROL[u.r]}${u.punto?' · '+u.punto:''}</span><a href="#mapa" style="padding:0;color:#9EE3C9">Ver web pública</a><button data-act="logout">Cerrar sesión</button></div></nav><main class="pmain">${inner}</main></div>`}
 const stCell=s=>{const m={activo:['var(--lv-bajo)','Activo'],prestado:['var(--primary)','Prestado'],disponible:['var(--ink-3)','Disponible'],mant:['var(--mant)','Mantenimiento']}[s.est];return `<span class="st"><i style="background:${m[0]}"></i>${m[1]}</span>`};
 const portador=s=>s.tipo==='vol'?(s.est==='prestado'?`Prestado a <b class="mono">${s.user}</b>`:'<span class="hint">En el punto de reparto</span>'):esc(s.asig);
@@ -725,18 +724,12 @@ function vPrestamos(){const f=S.f;const abiertos=LOANS.filter(l=>!l.fin);const c
  <h2 style="font-size:20px">Devoluciones recientes</h2>
  <div class="tw"><table><thead><tr><th scope="col">Sensor</th><th scope="col">Usuario</th><th scope="col">Prestado</th><th scope="col">Fecha límite</th><th scope="col">Cómo llegó</th></tr></thead><tbody>${cerrados.map(l=>`<tr><td class="mono">${l.code}</td><td class="mono">${l.user}</td><td>${l.ini}</td><td>${l.lim||l.fin}</td><td>${l.estDev}</td></tr>`).join('')}</tbody></table></div>`)}
 
-function vPuntos(){const r=S.rules;
- return pshell('panel-puntos',`<div class="pagehead"><div><h1>Puntos del voluntariado</h1><span class="hint">El cálculo se hace cada noche con los datos válidos del día</span></div></div>
- <div class="grid2"><form class="card" id="f-rules" style="padding:20px;display:flex;flex-direction:column;gap:14px" novalidate><h2 style="font-size:20px">Reglas de cálculo</h2>
- <div class="formgrid"><div class="field"><label for="r-min">Minutos válidos por punto</label><input class="input mono" id="r-min" data-bind="rules.min" value="${esc(r.min)}" inputmode="numeric" ${inv('rmin')}><span class="hint">Entre 1 y 60.</span>${err('rmin')}</div>
- <div class="field"><label for="r-mult">Multiplicador en parques</label><input class="input mono" id="r-mult" data-bind="rules.mult" value="${esc(r.mult)}" inputmode="numeric" ${inv('rmult')}><span class="hint">Entre 1 y 5.</span>${err('rmult')}</div>
- <div class="field"><label for="r-max">Máximo de puntos al día</label><input class="input mono" id="r-max" data-bind="rules.max" value="${esc(r.max)}" inputmode="numeric" ${inv('rmax')}><span class="hint">Entre 10 y 500.</span>${err('rmax')}</div></div>
- <p class="note">Siempre se descartan los datos con el sensor parado más de 15 minutos o a velocidad de vehículo (más de 25 km/h). Los cambios se aplican desde el día siguiente.</p>
- <button class="btn" type="submit" style="align-self:flex-start">Guardar reglas</button></form>
- <aside class="card" style="padding:20px;display:flex;flex-direction:column;gap:8px;align-self:start"><b>Ejemplo con las reglas actuales</b><span class="muted">Un voluntario con 120 minutos válidos, 40 de ellos en parques:</span><b class="mono" style="font-size:26px">${Math.min(RULES.max,Math.floor(120/RULES.min)+Math.floor(40/RULES.min)*(RULES.mult-1))} puntos</b></aside></div>
- <h2 style="font-size:20px">Días para revisar</h2>
- <div class="tw"><table><thead><tr><th scope="col">Usuario</th><th scope="col">Día</th><th scope="col">Min. válidos</th><th scope="col">Puntos</th><th scope="col">Motivo</th><th scope="col">Estado</th><th scope="col"><span class="hint" style="text-transform:none;letter-spacing:0">Acciones</span></th></tr></thead><tbody>${SOSP.map(d=>`<tr><td class="mono">${d.user}</td><td>${d.d}</td><td class="mono">${d.min}</td><td class="mono"><b>${d.pts}</b></td><td>${esc(d.mot)}${d.razon?`<br><span class="hint">${esc(d.razon)}</span>`:''}</td><td>${d.estado==='pend'?'<span class="badge b-medio">Pendiente</span>':d.estado==='ok'?'<span class="badge b-bajo">Aprobado</span>':'<span class="badge b-alto">Anulado</span>'}</td><td style="white-space:nowrap">${d.estado==='pend'?`<button class="link" data-act="aprobar" data-arg="${d.id}">Aprobar</button> · <button class="link" style="color:var(--lv-alto)" data-act="anular" data-arg="${d.id}">Anular</button>`:'<span class="hint">Revisado</span>'}</td></tr>`).join('')}</tbody></table></div>
- <p class="note">El voluntario ve el resultado en su historial de puntos. Al anular, se le restan los puntos de ese día.</p>`)}
+function vPuntos(){const r=RULES,fila=(t,v,h)=>`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-bottom:1px solid var(--line);padding:10px 0"><span>${t}<br><span class="hint">${h}</span></span><b class="mono" style="font-size:20px">${v}</b></div>`;
+ return pshell('panel-puntos',`<div class="pagehead"><div><h1>Puntos del voluntariado</h1><span class="hint">Los puntos de cada día se calculan y se guardan cuando acaba el día</span></div></div>
+ <div class="grid2"><section class="card" style="padding:20px;display:flex;flex-direction:column;gap:6px"><h2 style="font-size:20px">Reglas de cálculo</h2>
+ ${fila('Minutos válidos por punto',r.min,'1 punto cada '+r.min+' minutos con datos válidos')}${fila('Multiplicador en parques','×'+r.mult,'Los minutos dentro de un parque cuentan '+r.mult+' veces')}${fila('Máximo de puntos al día',r.max,'Aunque se ande más, no se suma más')}
+ <p class="note" style="margin-top:8px">Las reglas son fijas: están en el código del servidor y no se cambian desde el panel. Siempre se descartan los datos con el sensor parado más de 15 minutos o a velocidad de vehículo (más de 25 km/h).</p></section>
+ <aside class="card" style="padding:20px;display:flex;flex-direction:column;gap:8px;align-self:start"><b>Ejemplo</b><span class="muted">Un voluntario con 120 minutos válidos, 40 de ellos en parques:</span><b class="mono" style="font-size:26px">${Math.min(r.max,Math.floor(120/r.min)+Math.floor(40/r.min)*(r.mult-1))} puntos</b></aside></div>`)}
 
 function vRegalos(){const admin=S.user.r==='admin';const c=S.canje;const g=c&&(GIFTS.find(x=>x.id===c.gift)||{n:c.giftN||'Regalo retirado',stock:0});
  const entregar=`<form class="card" id="f-canje" style="padding:20px;display:flex;flex-direction:column;gap:14px" novalidate><h2 style="font-size:20px">Entregar un regalo canjeado</h2>
@@ -749,12 +742,11 @@ function vRegalos(){const admin=S.user.r==='admin';const c=S.canje;const g=c&&(G
  <h2 style="font-size:20px">Canjes</h2><div class="tw"><table><thead><tr><th scope="col">Código</th><th scope="col">Usuario</th><th scope="col">Regalo</th><th scope="col">Caduca</th><th scope="col">Estado</th></tr></thead><tbody>${CANJES.map(x=>`<tr><td class="mono">${x.code}</td><td class="mono">${x.user}</td><td>${esc((GIFTS.find(y=>y.id===x.gift)||{n:x.giftN||'Regalo retirado'}).n)}</td><td>${fecha(x.cad)}</td><td>${x.estado==='entregado'?'<span class="badge b-bajo">Entregado</span>':x.cad<TODAY?'<span class="badge b-none">Caducado · puntos devueltos</span>':'<span class="badge b-medio">Pendiente</span>'}</td></tr>`).join('')}</tbody></table></div>`:''}`)}
 
 /* ---------- trabajadores municipales (alta desde administración) ---------- */
-const estTrab=t=>t.estado==='activo'?'<span class="badge b-bajo">Activa</span>':t.caduca<Date.now()?'<span class="badge b-alto">Enlace caducado</span>':'<span class="badge b-medio">Pendiente de activar</span>';
 function vTrabajadores(){
  if(!S.user||S.user.r!=='admin')return '';   // doble barrera: la ruta ya lo impide
  const f=S.f,ok=S.altaOk&&STAFF.find(x=>x.id===S.altaOk);
  return pshell('panel-trabajadores',`<div class="pagehead"><div><h1>Trabajadores municipales</h1><span class="hint">Cuentas del personal que lleva sensores. No dan acceso a este panel.</span></div></div>
- ${ok?`<div class="alert ok" role="status">${I.check}<span style="flex:1"><b>${esc(ok.n)}</b> dado de alta como trabajador municipal (<b class="mono">${ok.id}</b>). Le hemos enviado a <b>${esc(ok.e)}</b> un enlace para activar la cuenta y crear su contraseña; caduca en ${ACTIV_H} h y solo sirve una vez.</span><a class="btn sm sec" href="#activar/${ok.token}" title="Solo en el prototipo: abre el enlace que recibiría por correo">Abrir correo de prueba</a></div>`:''}
+ ${ok?`<div class="alert ok" role="status">${I.check}<span style="flex:1"><b>${esc(ok.n)}</b> dado de alta como trabajador municipal (<b class="mono">${ok.id}</b>). Ya puede entrar en la app Respira con <b>${esc(ok.e)}</b> y la contraseña que has puesto. Dásela en persona, no por correo.</span></div>`:''}
  <form class="card trab-form" id="f-trab" novalidate>
   <h2 style="font-size:20px">Dar de alta un trabajador</h2>
   <div class="formgrid">
@@ -762,12 +754,14 @@ function vTrabajadores(){
    <div class="field"><label for="t-e">Correo municipal</label><input class="input" id="t-e" type="email" data-bind="f.te" value="${esc(f.te||'')}" placeholder="nombre@ayto.es" autocomplete="off" ${inv('te')}>${err('te')}</div>
    <div class="field"><label for="t-emp">Nº de empleado</label><input class="input mono" id="t-emp" data-bind="f.temp" value="${esc(f.temp||'')}" placeholder="6 cifras" inputmode="numeric" maxlength="6" ${inv('temp')}>${err('temp')}</div>
    <div class="field"><label for="t-s">Servicio</label><select class="input" id="t-s" data-bind="f.ts" ${inv('ts')}><option value="">Elige un servicio…</option>${SERVICIOS.map(x=>`<option ${f.ts===x?'selected':''}>${x}</option>`).join('')}</select>${err('ts')}</div>
+   <div class="field"><label for="t-p1">Contraseña</label><input class="input" id="t-p1" type="password" data-bind="f.tp1" value="" autocomplete="new-password" ${inv('tp1')}>${err('tp1')}<span class="hint">Mínimo 10 caracteres, con letras y números, sin su usuario.</span></div>
+   <div class="field"><label for="t-p2">Repite la contraseña</label><input class="input" id="t-p2" type="password" data-bind="f.tp2" value="" autocomplete="new-password" ${inv('tp2')}>${err('tp2')}</div>
   </div>
-  <p class="note" style="margin:0">La cuenta se crea con el perfil <b>Trabajador municipal</b>: puede llevar un sensor asignado, pero <b>no tiene acceso al panel</b> ni a ninguna función de administración. La contraseña la crea el propio trabajador con el enlace de activación; administración no la ve nunca. El sensor se asigna aparte, en <a href="#panel-sensores">Sensores</a>.</p>
+  <p class="note" style="margin:0">La cuenta se crea con el perfil <b>Trabajador municipal</b>: puede llevar un sensor asignado, pero <b>no tiene acceso al panel</b> ni a ninguna función de administración. La contraseña la pones tú y la cuenta queda activa al momento: dásela al trabajador en persona. Si la olvida, puede crear otra con «He olvidado mi contraseña». El sensor se asigna aparte, en <a href="#panel-sensores">Sensores</a>.</p>
   <div><button class="btn" type="submit">${I.users} Dar de alta</button></div>
  </form>
- <div class="tw"><table><thead><tr><th scope="col">Trabajador</th><th scope="col">ID de cuenta</th><th scope="col">Nº empleado</th><th scope="col">Servicio</th><th scope="col">Alta</th><th scope="col">Estado</th><th scope="col"><span class="hint" style="text-transform:none;letter-spacing:0">Acciones</span></th></tr></thead><tbody>
- ${TRAB().map(t=>`<tr><td><b>${esc(t.n)}</b><br><span class="hint">${esc(t.e)}</span></td><td class="mono">${t.id}</td><td class="mono">${t.emp}</td><td>${esc(t.serv)}</td><td>${t.alta}</td><td>${estTrab(t)}</td><td style="white-space:nowrap">${t.estado==='pendiente'?`<button class="link" data-act="reenviarActiv" data-arg="${t.id}">Reenviar enlace</button>`:'<span class="hint">—</span>'}</td></tr>`).join('')}
+ <div class="tw"><table><thead><tr><th scope="col">Trabajador</th><th scope="col">ID de cuenta</th><th scope="col">Nº empleado</th><th scope="col">Servicio</th><th scope="col">Alta</th></tr></thead><tbody>
+ ${TRAB().map(t=>`<tr><td><b>${esc(t.n)}</b><br><span class="hint">${esc(t.e)}</span></td><td class="mono">${t.id}</td><td class="mono">${t.emp}</td><td>${esc(t.serv)}</td><td>${t.alta}</td></tr>`).join('')}
  </tbody></table></div>`)}
 
 function vActivar(){
@@ -786,7 +780,6 @@ function vActivar(){
 /* ---------- modales ---------- */
 function modal(){const m=S.modal;if(!m)return '';let b='';
  if(m.k==='baja'){b=`<h2>¿Dar de baja ${m.id}?</h2><p class="muted" style="margin:0">Dejará de aparecer en la flota y no se podrá prestar. Sus mediciones anteriores se conservan.</p><form id="f-baja" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="b-mot">Motivo</label><select class="input" id="b-mot" data-bind="f.bmot" ${inv('bmot')}><option value="">Elige un motivo…</option>${['Perdido o no devuelto','Avería sin reparación','Sustituido por otro sensor','Otro'].map(o=>`<option ${S.f.bmot===o?'selected':''}>${o}</option>`).join('')}</select>${err('bmot')}</div><div class="field"><label for="b-conf">Para confirmar, escribe <b class="mono">${m.id}</b></label><input class="input mono" id="b-conf" data-bind="f.bconf" value="${esc(S.f.bconf||'')}" autocomplete="off" ${inv('bconf')}>${err('bconf')}</div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn danger" type="submit">Dar de baja</button></div></form>`}
- if(m.k==='anular'){b=`<h2>Anular los puntos del ${SOSP.find(d=>d.id===m.id).d}</h2><form id="f-anular" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="a-mot">Motivo (lo verá el voluntario)</label><textarea class="input" id="a-mot" data-bind="f.amot" maxlength="200" ${inv('amot')}>${esc(S.f.amot||'')}</textarea>${err('amot')}</div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn danger" type="submit">Anular puntos</button></div></form>`}
  if(m.k==='regalo'){b=`<h2>${m.id?'Editar regalo':'Nuevo regalo'}</h2><form id="f-regalo" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="g-n">Nombre</label><input class="input" id="g-n" data-bind="f.gn" value="${esc(S.f.gn||'')}" ${inv('gn')}>${err('gn')}</div><div class="formgrid"><div class="field"><label for="g-c">Coste en puntos</label><input class="input mono" id="g-c" data-bind="f.gc" value="${esc(S.f.gc||'')}" inputmode="numeric" ${inv('gc')}>${err('gc')}</div><div class="field"><label for="g-s">Existencias</label><input class="input mono" id="g-s" data-bind="f.gs" value="${esc(S.f.gs||'')}" inputmode="numeric" ${inv('gs')}>${err('gs')}</div></div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn" type="submit">Guardar</button></div></form>`}
  if(m.k==='guia'){b=`<div class="gv-modal-top"><div><span class="lbl">Guía</span><h2>Qué significan los valores</h2></div><button type="button" class="btn ghost sm" data-act="closeModal" aria-label="Cerrar">${I.x}</button></div>${guiaHTML()}`}
  if(m.k==='confirm'){b=`<h2>${m.t}</h2><p class="muted" style="margin:0">${m.p}</p><div class="acts"><button class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn ${m.danger?'danger':''}" data-act="confirmOk">${m.ok}</button></div>`}
@@ -844,7 +837,6 @@ const A={
  swap:()=>{const c=S.cmp;[c.a,c.b]=[c.b,c.a];render()},
  showPass:()=>{S.showPass=!S.showPass;render()}, unlock:()=>{S.lock=false;S.tries=0;S.e={};render()}, recBack:()=>{S.recOk=false},
  logout:()=>{window.RespiraDatos&&RespiraDatos.cerrarSesion();S.user=null;S.f={};S.altaOk=null;toast('Has cerrado sesión');nav('acceso')},
- reenviarActiv:id=>{if(!S.user||S.user.r!=='admin'){toast('Solo administración puede hacerlo');return}if(SRV('reenviar',{id}))return;const t=STAFF.find(x=>x.id===id&&x.r==='trabajador'&&x.estado==='pendiente');if(!t)return;t.token=nuevoToken();t.caduca=Date.now()+ACTIV_H*36e5;S.altaOk=t.id;render();toast(`Enlace nuevo enviado a ${t.e}. El anterior ya no sirve.`)},
  fT:a=>{S.fT=a;render()}, fE:a=>{S.fE=S.fE===a&&a!=='todos'?'todos':a;if(route()!=='panel')nav('panel');else render()},
  editar:a=>{const s=a&&byCode(a);S.edit=s?{orig:s.code,code:s.code,mags:[...s.mags],tipo:s.tipo,asig:s.asig||'',estado:s.est==='mant'?'mant':'ok',motivo:s.motivo||''}:{orig:null,code:'',mags:[],tipo:'vol',asig:'',estado:'ok',motivo:''};S.e={};nav('panel-editar')},
  emag:a=>{const m=S.edit.mags;const i=m.indexOf(a);i>=0?m.splice(i,1):m.push(a);delete S.e.mags;render()},
@@ -852,8 +844,6 @@ const A={
  eest:a=>{S.edit.estado=a;delete S.e.motivo;render()},
  baja:a=>{if(S.user.r!=='admin')return;S.f.bmot='';S.f.bconf='';S.e={};S.modal={k:'baja',id:a};render()},
  dest:a=>{S.f.dest=a;render()},
- aprobar:a=>{if(SRV('revisar',{id:a,decision:'aprobar'}))return;SOSP.find(d=>d.id===a).estado='ok';render();toast('Día aprobado: los puntos se mantienen')},
- anular:a=>{S.f.amot='';S.e={};S.modal={k:'anular',id:a};render()},
  nuevoRegalo:()=>{S.f.gn='';S.f.gc='';S.f.gs='';S.e={};S.modal={k:'regalo',id:null};render()},
  editRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.f.gn=g.n;S.f.gc=String(g.c);S.f.gs=String(g.stock);S.e={};S.modal={k:'regalo',id:a};render()},
  retirarRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.modal={k:'confirm',t:`¿Retirar «${g.n}»?`,p:'Dejará de verse en la app. Los canjes pendientes de este regalo se podrán seguir entregando.',ok:'Retirar',danger:true,fn:()=>{if(SRV('retirar',{id:a}))return;GIFTS=GIFTS.filter(x=>x.id!==a);toast('Regalo retirado del catálogo')}};render()},
@@ -867,7 +857,7 @@ const A={
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t||t.disabled)return;if((t.dataset.act==='backdrop'||t.dataset.act==='menuBackdrop')&&e.target!==t)return;const f=A[t.dataset.act];if(!f)return;if(!e.target.closest('a[href]'))e.preventDefault();f(t.dataset.arg,t,e)});
 document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('g[role=button]')){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}))}if(e.key==='Escape'){if(S.modal)A.closeModal();else if(S.menu)A.menuClose();else if(S.sel)A.sel('')}});
 function setPath(b,v){const p=b.split('.');let o=S;for(let i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=v}
-const ERRKEY={'f.mail':'mail','f.pass':'pass','f.rmail':'rmail','f.puser':'puser','f.pcode':'pcode','f.dcode':'dcode','f.ccode':'ccode','f.bconf':'bconf','f.amot':'amot','f.gn':'gn','f.gc':'gc','f.gs':'gs','edit.code':'code','edit.asig':'asig','edit.motivo':'motivo','rules.min':'rmin','rules.mult':'rmult','rules.max':'rmax','hist.desde':'desde','hist.hasta':'hasta'};
+const ERRKEY={'f.mail':'mail','f.pass':'pass','f.rmail':'rmail','f.puser':'puser','f.pcode':'pcode','f.dcode':'dcode','f.ccode':'ccode','f.bconf':'bconf','f.gn':'gn','f.gc':'gc','f.gs':'gs','edit.code':'code','edit.asig':'asig','edit.motivo':'motivo','hist.desde':'desde','hist.hasta':'hasta'};
 $r.addEventListener('input',e=>{const el=e.target,b=el.dataset.bind;if(!b||el.tagName==='SELECT')return;setPath(b,el.value);
  if(el.dataset.live){render();return}
  const key=ERRKEY[b];if(key&&S.e[key]){delete S.e[key];el.removeAttribute('aria-invalid');const x=document.getElementById('e-'+key);x&&x.remove()}});
@@ -889,11 +879,14 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
   if(!m)er.te='Escribe el correo municipal.';else if(!vEmail(m))er.te='El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';else if(!m.endsWith('@ayto.es'))er.te='Tiene que ser un correo municipal (termina en @ayto.es).';else if(STAFF.some(x=>x.e.toLowerCase()===m))er.te='Ya hay una cuenta con este correo.';
   if(!emp)er.temp='Escribe el número de empleado.';else if(!/^\d{6}$/.test(emp))er.temp='Son 6 cifras, por ejemplo 104233.';else if(TRAB().some(x=>x.emp===emp))er.temp='Este número de empleado ya tiene una cuenta.';
   if(!sv)er.ts='Elige el servicio.';
-  if(!ok())return;
-  if(SRV('trabajador',{nombre:n,email:m,num_empleado:emp,servicio:sv}))return;
+  const p1=S.f.tp1||'',p2=S.f.tp2||'';
+  if(!p1)er.tp1='Escribe una contraseña.';else if(p1.length<10)er.tp1=`Tiene que tener al menos 10 caracteres (has escrito ${p1.length}).`;else if(!/[a-z]/i.test(p1)||!/\d/.test(p1))er.tp1='Tiene que llevar letras y números.';else if(m&&p1.toLowerCase().includes(m.split('@')[0]))er.tp1='No puede contener su nombre de usuario.';
+  if(!er.tp1&&p2!==p1)er.tp2='Las dos contraseñas no coinciden.';
+  if(!ok()){S.f.tp1='';S.f.tp2='';render();return}
+  if(SRV('trabajador',{nombre:n,email:m,num_empleado:emp,servicio:sv,clave:p1}))return;
   const num=Math.max(0,...TRAB().map(x=>+x.id.slice(2)))+1,cid='T-'+String(num).padStart(4,'0');
-  const t={n,e:m,p:null,r:'trabajador',id:cid,emp,serv:sv,estado:'pendiente',alta:'4 nov',por:S.user.e,token:nuevoToken(),caduca:Date.now()+ACTIV_H*36e5};
-  STAFF.push(t);S.altaOk=cid;S.f.tn='';S.f.te='';S.f.temp='';S.f.ts='';render();toast(`Trabajador ${cid} dado de alta`);return}
+  const t={n,e:m,p:p1,r:'trabajador',id:cid,emp,serv:sv,estado:'activo',alta:'4 nov',por:S.user.e};
+  STAFF.push(t);S.altaOk=cid;S.f.tn='';S.f.te='';S.f.temp='';S.f.ts='';S.f.tp1='';S.f.tp2='';render();toast(`Trabajador ${cid} dado de alta`);return}
  if(id==='f-activar'){const t=enlaceAct();
   if(!t||t.caduca<Date.now()){render();return}
   const p1=S.f.ap1||'',p2=S.f.ap2||'';
@@ -926,10 +919,6 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
   if(!c)er.dcode='Escribe el código del sensor.';else if(!/^RSP-[A-Z0-9]{4}$/.test(c))er.dcode='Formato no válido: RSP- y 4 letras o números.';else if(!s)er.dcode=`No existe ningún sensor ${c}.`;else if(!l)er.dcode=`${c} no figura como prestado.`;
   if(!ok())return;if(SRV('devolver',{codigo:c,estado:S.f.dest||'Correcto'}))return;const st=S.f.dest||'Correcto';l.fin='2 nov 10:42';l.estDev=st;s.user=null;if(st==='Defectuoso'){s.est='mant';s.motivo='No se ha entregado en buenas condiciones'}else{s.est='disponible'}
   S.f.dcode='';S.f.dest='Correcto';render();toast(st==='Defectuoso'?`${c} devuelto y en mantenimiento`:`${c} devuelto`);return}
- if(id==='f-rules'){const r=S.rules;const chk=(k,v,a,b,msg)=>{const n=String(v).trim();if(!/^\d+$/.test(n))er[k]='Escribe un número entero.';else if(+n<a||+n>b)er[k]=msg};
-  chk('rmin',r.min,1,60,'Debe estar entre 1 y 60 minutos.');chk('rmult',r.mult,1,5,'Debe estar entre 1 y 5.');chk('rmax',r.max,10,500,'Debe estar entre 10 y 500 puntos.');
-  if(!ok())return;if(SRV('reglas',{min:r.min,mult:r.mult,max:r.max}))return;RULES={min:+r.min,mult:+r.mult,max:+r.max};render();toast('Reglas guardadas: se aplican desde mañana');return}
- if(id==='f-anular'){const t=(S.f.amot||'').trim();if(t.length<10)er.amot='Explica el motivo con al menos 10 caracteres: el voluntario lo verá.';if(!ok())return;if(SRV('revisar',{id:S.modal.id,decision:'anular',razon:t}))return;const d=SOSP.find(x=>x.id===S.modal.id);d.estado='anulado';d.razon=t;S.modal=null;render();toast(`Puntos anulados: se restan ${d.pts} a ${d.user}`);return}
  if(id==='f-regalo'){const n=(S.f.gn||'').trim(),c=String(S.f.gc||'').trim(),st=String(S.f.gs||'').trim();
   if(n.length<3)er.gn='Escribe un nombre de al menos 3 caracteres.';else if(GIFTS.some(g=>g.n.toLowerCase()===n.toLowerCase()&&g.id!==S.modal.id))er.gn='Ya hay un regalo con ese nombre.';
   if(!/^\d+$/.test(c)||+c<1||+c>5000)er.gc='Entre 1 y 5000 puntos.';if(!/^\d+$/.test(st)||+st>999)er.gs='Entre 0 y 999 unidades.';
@@ -939,7 +928,7 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
   if(!ok())return;S.canje=x;render();return}
 });
 /* Lo que necesita js/mapa-google.js */
-window.Respira={S,ZONAS,AVISOS,MAG,PERC,nivel,est,fmt,hace,esc,avOk,render,byZ,sens:()=>SENS,nav,toast,HOME,estado:{get SENS(){return SENS},set SENS(v){SENS=v},get LOANS(){return LOANS},set LOANS(v){LOANS=v},get RULES(){return RULES},set RULES(v){RULES=v},get SOSP(){return SOSP},set SOSP(v){SOSP=v},get GIFTS(){return GIFTS},set GIFTS(v){GIFTS=v},get CANJES(){return CANJES},set CANJES(v){CANJES=v},get STAFF(){return STAFF},set STAFF(v){STAFF=v},get APPUSERS(){return APPUSERS},set APPUSERS(v){APPUSERS=v},AYTOS,PUNTOS_REPARTO}};
+window.Respira={S,ZONAS,AVISOS,MAG,PERC,nivel,est,fmt,hace,esc,avOk,render,byZ,sens:()=>SENS,nav,toast,HOME,estado:{get SENS(){return SENS},set SENS(v){SENS=v},get LOANS(){return LOANS},set LOANS(v){LOANS=v},get RULES(){return RULES},set RULES(v){RULES=v},get GIFTS(){return GIFTS},set GIFTS(v){GIFTS=v},get CANJES(){return CANJES},set CANJES(v){CANJES=v},get STAFF(){return STAFF},set STAFF(v){STAFF=v},get APPUSERS(){return APPUSERS},set APPUSERS(v){APPUSERS=v},AYTOS,PUNTOS_REPARTO}};
 window.Respira.zonaMapa=zonaMapa;
 aplicarTema();
 render();

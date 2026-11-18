@@ -142,6 +142,27 @@ abstract class Base {
         return $v === false ? null : $v;
     }
 
+    // --------------------------------------------------------------
+    // pedido: id | null --> ayuntamientoDe() --> id del ayuntamiento
+    // Para lo que se da de alta (sensores, trabajadores). Si no se dice y
+    // solo hay un ayuntamiento activo, es ese; si hay varios, hay que elegirlo.
+    // ponytail: el panel aún no tiene selector (hoy solo hay Gandia); con un
+    // segundo ayuntamiento, el formulario tendrá que mandar «ayuntamiento».
+    // --------------------------------------------------------------
+    protected function ayuntamientoDe(?string $pedido): string {
+        $ids = array_column($this->filas("SELECT id FROM {$this->p}ayuntamiento WHERE activo = 1 ORDER BY id"), 'id');
+        if ($pedido !== null && $pedido !== '') {
+            if (!in_array($pedido, $ids, true)) {
+                throw new DatosNoValidosException('Ese ayuntamiento no existe o no está activo.', 'ayuntamiento');
+            }
+            return $pedido;
+        }
+        if (count($ids) !== 1) {
+            throw new DatosNoValidosException('Elige el ayuntamiento.', 'ayuntamiento');
+        }
+        return $ids[0];
+    }
+
     // Ejecuta fn() en una transacción (si ya hay una abierta, se une a ella)
     protected function transaccion(callable $fn) {
         if ($this->bd->inTransaction()) {

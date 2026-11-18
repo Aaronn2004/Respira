@@ -10,7 +10,7 @@ Este documento recoge **solo lo que cambia o se añade** en este sprint respecto
 | Historial: alertas y picos | Ficha de zona › «Alertas y picos» | Historial › tarjeta «Alertas y picos» | `GET /zonas/{id}/serie` › `eventos` |
 | Mediciones valoradas, historial de cada zona | Insignia Bajo/Medio/Alto en cada valor y en cada alerta o pico | Igual | Límites en `Logica::LIMITES` |
 | Separar «Iniciar sesión» y «Crear cuenta» | Pantallas separadas (Login y Registro) | Solo acceso de trabajadores | `POST /sesiones` · `POST /usuarios` |
-| Los trabajadores los registra administración | — | Panel › Trabajadores (enlace de activación por correo y en pantalla) | `POST /panel/trabajadores` (solo admin) |
+| Los trabajadores los registra administración | — | Panel › Trabajadores (administración pone la contraseña; la cuenta queda activa) | `POST /panel/trabajadores` (solo admin) |
 | Interpolar (aproximado) | Gráfica: línea de puntos | Gráfica: línea de puntos | `serie` › `aprox` |
 | Promedio de las mediciones en la info de cada zona | «Media de las últimas 24 h» | «Media de las últimas 24 h» | `GET /zonas` › `media_24h` |
 | Portada: parques de mejor a peor, mejor medida | — | Portada › «Los parques ahora» | `GET /zonas` › `mejor` |

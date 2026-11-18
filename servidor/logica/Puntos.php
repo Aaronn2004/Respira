@@ -5,12 +5,15 @@
 //
 //   - Los puntos los calcula el SERVIDOR con las mediciones que llevan
 //     el ID de la persona como portador (no los manda el móvil).
-//   - Los puntos de cada día NO se guardan: se calculan cada vez con las
-//     mediciones (así nunca se descuadran). Solo se guardan los días
-//     sospechosos que revisa administración (tabla «revision»); se
-//     detectan la primera vez que alguien pide los datos después de que
-//     acabe el día (no hace falta una tarea programada).
-//   - Saldo = puntos de los días acabados no anulados − canjes no caducados.
+//   - Las reglas están aquí, en el código (REGLAS): 1 punto cada 5 min
+//     válidos, los minutos en parques valen x2 y como mucho 100 al día.
+//   - Los puntos de cada día acabado se guardan en «puntos_dia» (una fila
+//     por usuario y día). Se calculan la primera vez que la persona pide
+//     su cuenta después de que acabe el día (no hace falta una tarea
+//     programada). Hoy no se guarda: se calcula en directo. Si llegan
+//     mediciones atrasadas de un día guardado, Logica borra su fila y se
+//     vuelve a calcular.
+//   - Saldo = suma de «puntos_dia» − canjes no caducados.
 //     Un canje caducado sin recoger devuelve los puntos y la unidad.
 //
 //   Minutos válidos (entre dos datos seguidos del mismo portador):
@@ -32,62 +35,21 @@ class Puntos extends Base {
     const VELOCIDAD_MAX_KMH = 25;
     const PARADO_M = 20;
     const PARADO_MAX_MIN = 15;
-    const DIAS_ATRAS = 60;      // como mucho se recalculan 60 días
     const CANJE_DIAS = 7;       // días para recoger un regalo
 
     // ==============================================================
-    // Reglas
+    // Reglas (fijas, en el código)
     // ==============================================================
 
-    // dia 'YYYY-MM-DD' --> reglasDe() --> {min, mult, max}
-    public function reglasDe(string $dia): array {
-        $r = $this->fila("SELECT min_por_punto, mult_parque, max_dia FROM {$this->p}reglas_puntos
-            WHERE desde <= ? ORDER BY desde DESC, id DESC LIMIT 1", [$dia]);
-        if (!$r) {
-            return ['min' => 5, 'mult' => 2, 'max' => 100];
-        }
-        return ['min' => (int) $r['min_por_punto'], 'mult' => (int) $r['mult_parque'], 'max' => (int) $r['max_dia']];
-    }
+    const REGLAS = ['min' => 5, 'mult' => 2, 'max' => 100];   // min por punto, x parques, máximo al día
 
-    // --------------------------------------------------------------
-    // reglas() --> {min, mult, max, desde_manana: {min, mult, max} | null}
-    // --------------------------------------------------------------
+    // reglas() --> {min, mult, max}   (el panel las enseña; no se cambian desde ahí)
     public function reglas(?array $quien): array {
         self::exigirRol($quien, ['admin']);
-        $hoy = self::diaLocal($this->ahora());
-        $r = $this->reglasDe($hoy);
-        $m = $this->reglasDe(self::sumarDias($hoy, 1));
-        $r['desde_manana'] = $m == array_intersect_key($r, $m) ? null : $m;
-        return $r;
+        return self::REGLAS;
     }
 
-    // --------------------------------------------------------------
-    // Cambiar las reglas: se aplican desde mañana (los días ya empezados no cambian)
-    // --------------------------------------------------------------
-    public function guardarReglas(?array $quien, $min, $mult, $max): array {
-        self::exigirRol($quien, ['admin']);
-        $e = [];
-        $chk = function ($k, $v, $a, $b, $msg) use (&$e) {
-            if (!preg_match('/^\d+$/', trim((string) $v))) {
-                $e[$k] = 'Escribe un número entero.';
-            } elseif ((int) $v < $a || (int) $v > $b) {
-                $e[$k] = $msg;
-            }
-        };
-        $chk('min', $min, 1, 60, 'Debe estar entre 1 y 60 minutos.');
-        $chk('mult', $mult, 1, 5, 'Debe estar entre 1 y 5.');
-        $chk('max', $max, 10, 500, 'Debe estar entre 10 y 500 puntos.');
-        if ($e) {
-            throw new ErroresDeCamposException($e);
-        }
-        $manana = self::sumarDias(self::diaLocal($this->ahora()), 1);
-        $this->ejecutar("DELETE FROM {$this->p}reglas_puntos WHERE desde = ?", [$manana]);
-        $this->ejecutar("INSERT INTO {$this->p}reglas_puntos (min_por_punto, mult_parque, max_dia, desde) VALUES (?, ?, ?, ?)",
-            [(int) $min, (int) $mult, (int) $max, $manana]);
-        return $this->reglas($quien);
-    }
-
-    public static function puntosDe(int $min, int $minParque, array $r): int {
+    public static function puntosDe(int $min, int $minParque, array $r = self::REGLAS): int {
         $p = intdiv($min, $r['min']) + intdiv($minParque, $r['min']) * ($r['mult'] - 1);
         return max(0, min($r['max'], $p));
     }
@@ -107,11 +69,10 @@ class Puntos extends Base {
 
     // --------------------------------------------------------------
     // usuarioId, dia, hastaMs? --> calcularDia() -->
-    //   {minutos, minutos_parque, descartados, puntos, motivo | null,
+    //   {minutos, minutos_parque, descartados, puntos,
     //    inicio | null, fin | null, duracion_min, distancia_m, lecturas, parques: [nombre]}
     // Estadísticas del recorrido: inicio y fin = primera y última medición del día;
     // distancia = lo andado en los tramos válidos (sin huecos ni vehículo).
-    // motivo != null: el día se marca para revisar
     // --------------------------------------------------------------
     public function calcularDia(string $usuarioId, string $dia, ?int $hastaMs = null): array {
         $ini = self::inicioDia($dia);
@@ -139,7 +100,7 @@ class Puntos extends Base {
             $puntos[] = ['t' => $t, 'lat' => $f['lat'] === null ? null : (float) $f['lat'],
                 'lng' => $f['lng'] === null ? null : (float) $f['lng'], 'parque' => $f['tipo_zona'] === 'parque'];
         }
-        $valido = 0.0; $parque = 0.0; $desc = 0.0; $paradoTotal = 0.0; $dist = 0.0;
+        $valido = 0.0; $parque = 0.0; $desc = 0.0; $dist = 0.0;
         // rato «parado»: desde ancla, sin alejarse más de PARADO_M
         $ancla = null; $rato = 0.0; $ratoParque = 0.0; $descartando = false;
         $reiniciar = function () use (&$ancla, &$rato, &$ratoParque, &$descartando) {
@@ -165,13 +126,13 @@ class Puntos extends Base {
                 if (self::metros($ancla['lat'], $ancla['lng'], $b['lat'], $b['lng']) < self::PARADO_M) {
                     $rato += $dt;
                     if ($descartando) {
-                        $desc += $dt; $paradoTotal += $dt;
+                        $desc += $dt;
                         continue;
                     }
                     if ($rato > self::PARADO_MAX_MIN) {   // todo el rato parado deja de contar
                         $valido -= ($rato - $dt);
                         $parque -= $ratoParque;
-                        $desc += $rato; $paradoTotal += $rato;
+                        $desc += $rato;
                         $descartando = true;
                         continue;
                     }
@@ -191,21 +152,11 @@ class Puntos extends Base {
         }
         $min = (int) floor(max(0, $valido));
         $minParque = (int) floor(max(0, min($parque, $valido)));
-        $r = $this->reglasDe($dia);
-        $pts = self::puntosDe($min, $minParque, $r);
-        $motivo = null;
-        if ($paradoTotal >= 60) {
-            $motivo = 'Sensor ' . ($paradoTotal >= 120 ? round($paradoTotal / 60) . ' h' : round($paradoTotal) . ' min')
-                . ' sin moverse en el mismo punto (descontado)';
-        } elseif ($pts >= $r['max']) {
-            $motivo = 'Llega al máximo diario';
-        } elseif ($pts >= 0.9 * $r['max']) {
-            $motivo = 'Llega al 90 % del máximo diario';
-        }
+        $pts = self::puntosDe($min, $minParque);
         $iniMs = $puntos ? $puntos[0]['t'] : null;
         $finMs = $puntos ? end($puntos)['t'] : null;
         return ['minutos' => $min, 'minutos_parque' => $minParque, 'descartados' => (int) round($desc),
-            'puntos' => $pts, 'motivo' => $motivo,
+            'puntos' => $pts,
             'inicio' => $iniMs === null ? null : self::fechaISO($iniMs), 'fin' => $finMs === null ? null : self::fechaISO($finMs),
             'duracion_min' => $iniMs === null ? 0 : (int) round(($finMs - $iniMs) / 60000),
             'distancia_m' => (int) round($dist), 'lecturas' => count($puntos), 'parques' => array_keys($parques)];
@@ -218,62 +169,43 @@ class Puntos extends Base {
     }
 
     // --------------------------------------------------------------
-    // usuarioId --> dias() --> ['YYYY-MM-DD' => calcularDia(), ...]
-    // Días ya acabados en los que llevó un sensor (del más reciente al más antiguo)
+    // usuarioId --> cerrarDias()
+    // Guarda en «puntos_dia» los días ya acabados en los que llevó un
+    // sensor y que aún no estén guardados.
     // --------------------------------------------------------------
-    private $cacheDias = [];
-
-    public function dias(string $usuarioId): array {
+    public function cerrarDias(string $usuarioId): void {
         $hoy = self::diaLocal($this->ahora());
-        if (isset($this->cacheDias[$usuarioId . '|' . $hoy])) {
-            return $this->cacheDias[$usuarioId . '|' . $hoy];
-        }
+        $hechos = array_flip(array_column($this->filas("SELECT fecha FROM {$this->p}puntos_dia WHERE usuario_id = ?",
+            [$usuarioId]), 'fecha'));
         $dias = [];
         // una fila por hora con datos (no una por medición) y se pasa a día en hora de España
         foreach ($this->filas("SELECT DISTINCT SUBSTR(fecha_medicion, 1, 13) AS h FROM {$this->p}medicion
             WHERE portador_id = ? AND fecha_medicion < ?", [$usuarioId, self::fechaBD(self::inicioDia($hoy))]) as $f) {
             $dias[self::diaLocal(self::msDeFechaBD($f['h'] . ':00:00'))] = true;
         }
-        krsort($dias);
-        $out = [];
         foreach (array_keys($dias) as $d) {
+            if (isset($hechos[(string) $d])) {
+                continue;
+            }
             $c = $this->calcularDia($usuarioId, (string) $d);
-            if ($c['minutos'] > 0 || $c['descartados'] > 0) {
-                $out[(string) $d] = $c;
-            }
-        }
-        return $this->cacheDias[$usuarioId . '|' . $hoy] = $out;
-    }
-
-    // --------------------------------------------------------------
-    // Marca para revisar los días acabados sospechosos que aún no estén en
-    // «revision» (solo los de los últimos 60 días). usuarioId null = todos.
-    // --------------------------------------------------------------
-    public function cerrarDias(?string $usuarioId = null): void {
-        $hoy = self::diaLocal($this->ahora());
-        $desde = self::sumarDias($hoy, -self::DIAS_ATRAS);
-        $usuarios = $usuarioId ? [$usuarioId] : array_column($this->filas("SELECT DISTINCT portador_id FROM {$this->p}medicion
-            WHERE portador_id IS NOT NULL AND fecha_medicion >= ?", [self::fechaBD(self::inicioDia($desde))]), 'portador_id');
-        foreach ($usuarios as $u) {
-            foreach ($this->dias($u) as $dia => $c) {
-                if ((string) $dia < $desde || !$c['motivo']) {
-                    continue;
-                }
-                if (!$this->fila("SELECT id FROM {$this->p}revision WHERE usuario_id = ? AND fecha = ?", [$u, $dia])) {
-                    $this->ejecutar("INSERT INTO {$this->p}revision (usuario_id, fecha, motivo, estado, razon) VALUES (?, ?, ?, 'pend', 'Sin revisar')",
-                        [$u, $dia, $c['motivo']]);
+            try {
+                $this->ejecutar("INSERT INTO {$this->p}puntos_dia (usuario_id, fecha, minutos, minutos_parque, descartados, puntos)
+                    VALUES (?, ?, ?, ?, ?, ?)", [$usuarioId, (string) $d, $c['minutos'], $c['minutos_parque'], $c['descartados'], $c['puntos']]);
+            } catch (PDOException $e) {
+                // otra petición a la vez ya lo guardó (misma clave): no pasa nada
+                if ($e->getCode() !== '23000') {
+                    throw $e;
                 }
             }
         }
     }
 
-    // usuarioId --> revisionesDe() --> ['YYYY-MM-DD' => {estado, razon}]
-    private function revisionesDe(string $usuarioId): array {
-        $out = [];
-        foreach ($this->filas("SELECT fecha, estado, razon FROM {$this->p}revision WHERE usuario_id = ?", [$usuarioId]) as $r) {
-            $out[$r['fecha']] = $r;
-        }
-        return $out;
+    // usuarioId --> dias() --> [{fecha, minutos, minutos_parque, descartados, puntos}]  (más reciente primero)
+    // Solo los días con algo que enseñar (minutos válidos o descartados).
+    public function dias(string $usuarioId, int $max = 60): array {
+        $this->cerrarDias($usuarioId);
+        return $this->filas("SELECT fecha, minutos, minutos_parque, descartados, puntos FROM {$this->p}puntos_dia
+            WHERE usuario_id = ? AND (minutos > 0 OR descartados > 0) ORDER BY fecha DESC LIMIT " . (int) $max, [$usuarioId]);
     }
 
     // Canjes no recogidos a tiempo: caducan, y la unidad vuelve al stock
@@ -288,13 +220,8 @@ class Puntos extends Base {
     }
 
     public function saldo(string $usuarioId): int {
-        $rev = $this->revisionesDe($usuarioId);
-        $mas = 0;
-        foreach ($this->dias($usuarioId) as $dia => $c) {
-            if (($rev[$dia]['estado'] ?? '') !== 'anulado') {
-                $mas += $c['puntos'];
-            }
-        }
+        $this->cerrarDias($usuarioId);
+        $mas = (int) $this->valor("SELECT COALESCE(SUM(puntos), 0) FROM {$this->p}puntos_dia WHERE usuario_id = ?", [$usuarioId]);
         $menos = (int) $this->valor("SELECT COALESCE(SUM(coste), 0) FROM {$this->p}canje WHERE usuario_id = ? AND estado <> 'caducado'", [$usuarioId]);
         return $mas - $menos;
     }
@@ -304,20 +231,17 @@ class Puntos extends Base {
     //   historial: días con sensor y canjes, del más reciente al más antiguo
     // --------------------------------------------------------------
     public function cuenta(array $u): array {
-        $this->cerrarDias($u['id']);
         $this->caducarCanjes();
         $ahora = $this->ahora();
         $hoy = self::diaLocal($ahora);
         $h = $this->calcularDia($u['id'], $hoy, $ahora);
         $mov = [];
-        $rev = $this->revisionesDe($u['id']);
-        foreach (array_slice($this->dias($u['id']), 0, 60, true) as $dia => $c) {
-            $estado = $rev[$dia]['estado'] ?? 'auto';
-            $mov[] = ['tipo' => 'dia', 'fecha' => (string) $dia, 'minutos' => $c['minutos'],
-                'minutos_parque' => $c['minutos_parque'], 'descartados' => $c['descartados'],
-                'puntos' => $estado === 'anulado' ? 0 : $c['puntos'], 'revision' => $estado,
-                'razon' => $estado === 'anulado' ? $rev[$dia]['razon'] : null, 'canje' => null,
-                'recorrido' => self::recorridoJSON($c)];
+        foreach ($this->dias($u['id']) as $d) {
+            // el recorrido (distancia, horas, parques) no se guarda: sale de las mediciones de ese día
+            $mov[] = ['tipo' => 'dia', 'fecha' => $d['fecha'], 'minutos' => (int) $d['minutos'],
+                'minutos_parque' => (int) $d['minutos_parque'], 'descartados' => (int) $d['descartados'],
+                'puntos' => (int) $d['puntos'], 'razon' => null, 'canje' => null,
+                'recorrido' => self::recorridoJSON($this->calcularDia($u['id'], $d['fecha']))];
         }
         $canjes = [];
         foreach ($this->filas("SELECT c.*, r.nombre FROM {$this->p}canje c JOIN {$this->p}regalo r ON r.id = c.regalo_id
@@ -326,14 +250,14 @@ class Puntos extends Base {
                 'caduca' => $c['caduca'], 'estado' => $c['estado'], 'coste' => (int) $c['coste']];
             $mov[] = ['tipo' => 'canje', 'fecha' => self::diaLocal(self::msDeFechaBD($c['creado'])), 'minutos' => 0,
                 'minutos_parque' => 0, 'descartados' => 0, 'puntos' => $c['estado'] === 'caducado' ? 0 : -(int) $c['coste'],
-                'revision' => null, 'razon' => $c['estado'] === 'caducado' ? 'Caducado sin recoger: puntos devueltos' : null,
+                'razon' => $c['estado'] === 'caducado' ? 'Caducado sin recoger: puntos devueltos' : null,
                 'canje' => $c['nombre']];
         }
         usort($mov, function ($a, $b) { return strcmp($b['fecha'], $a['fecha']); });
         return ['puntos' => $this->saldo($u['id']),
             'hoy' => ['minutos' => $h['minutos'], 'minutos_parque' => $h['minutos_parque'],
                 'descartados' => $h['descartados'], 'puntos' => $h['puntos'], 'recorrido' => self::recorridoJSON($h)],
-            'historial' => $mov, 'canjes' => $canjes, 'reglas' => $this->reglasDe($hoy)];
+            'historial' => $mov, 'canjes' => $canjes, 'reglas' => self::REGLAS];
     }
 
     // ==============================================================
@@ -477,52 +401,5 @@ class Puntos extends Base {
         $x['estado'] = 'entregado';
         $x['stock'] = (int) $this->valor("SELECT stock FROM {$this->p}regalo WHERE id = ?", [$x['regalo_id']]);
         return $x;
-    }
-
-    // ==============================================================
-    // Revisión de días sospechosos (administración)
-    // ==============================================================
-
-    public function revisiones(?array $quien): array {
-        self::exigirRol($quien, ['admin']);
-        $this->cerrarDias(null);
-        $out = [];
-        foreach ($this->filas("SELECT * FROM {$this->p}revision
-            ORDER BY CASE WHEN estado = 'pend' THEN 0 ELSE 1 END, fecha DESC LIMIT 100") as $r) {
-            $c = $this->calcularDia($r['usuario_id'], $r['fecha']);
-            $out[] = ['id' => (int) $r['id'], 'usuario' => $r['usuario_id'], 'fecha' => $r['fecha'],
-                'minutos' => $c['minutos'], 'puntos' => $c['puntos'], 'motivo' => $r['motivo'],
-                'estado' => $r['estado'], 'razon' => $r['estado'] === 'anulado' ? $r['razon'] : null];
-        }
-        return $out;
-    }
-
-    // decision: 'aprobar' | 'anular' (con razón de 10+ caracteres)
-    public function revisar(?array $quien, int $id, string $decision, string $razon = ''): array {
-        self::exigirRol($quien, ['admin']);
-        $r = $this->fila("SELECT * FROM {$this->p}revision WHERE id = ?", [$id]);
-        if (!$r) {
-            throw new NoEncontradoException('No existe ese día.');
-        }
-        if ($r['estado'] !== 'pend') {
-            throw new ConflictoException('Este día ya está revisado.');
-        }
-        if ($decision === 'anular') {
-            $t = trim($razon);
-            if (mb_strlen($t) < 10) {
-                throw new DatosNoValidosException('Explica el motivo con al menos 10 caracteres: el voluntario lo verá.', 'razon');
-            }
-            $this->ejecutar("UPDATE {$this->p}revision SET estado = 'anulado', razon = ? WHERE id = ?", [mb_substr($t, 0, 200), $id]);
-        } elseif ($decision === 'aprobar') {
-            $this->ejecutar("UPDATE {$this->p}revision SET estado = 'ok', razon = 'Aprobado' WHERE id = ?", [$id]);
-        } else {
-            throw new DatosNoValidosException('decision: aprobar o anular');
-        }
-        foreach ($this->revisiones($quien) as $x) {
-            if ($x['id'] === $id) {
-                return $x;
-            }
-        }
-        throw new NoEncontradoException('No existe ese día.');
     }
 }

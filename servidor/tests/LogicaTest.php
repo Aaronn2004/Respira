@@ -143,6 +143,7 @@ prueba('zonas(): media de la última hora, minutos desde el último dato y zonas
     igual(2, $zonas['central']['n'], 'n');
     igual(null, $zonas['ribera']['hace_min'], 'ribera sin datos');
     igual(true, count($zonas['central']['poligono']) >= 3, 'poligono');
+    igual('gandia', $zonas['central']['ayuntamiento'], 'zona.ayuntamiento_id');
 });
 
 prueba('una zona cuyo último dato tiene más de 24 h queda sin datos', function () {

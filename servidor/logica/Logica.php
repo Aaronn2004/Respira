@@ -82,10 +82,12 @@ class Logica extends Base {
 
     private function leerZonas(): array {
         if ($this->cacheZonas === null) {
-            $filas = $this->bd->query("SELECT id, nombre, tipo, poligono, etiqueta_lat, etiqueta_lng
-                FROM {$this->p}zona ORDER BY orden, id")->fetchAll(PDO::FETCH_ASSOC);
+            // por orden alfabético; «area» (el contorno en JSON) se lee como lista de puntos
+            $filas = $this->bd->query("SELECT id, ayuntamiento_id, nombre, tipo, area, etiqueta_lat, etiqueta_lng
+                FROM {$this->p}zona ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($filas as &$f) {
-                $f['poligono'] = json_decode($f['poligono'], true);
+                $f['poligono'] = json_decode($f['area'], true);
+                unset($f['area']);
             }
             $this->cacheZonas = $filas;
         }
@@ -173,6 +175,10 @@ class Logica extends Base {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'real')");
             $st->execute([$nodo, $magnitud, $valor, self::fechaBD($medidaEn), $lat, $lng, $zona, $portador]);
             $id = (int) $this->bd->lastInsertId();
+            // dato atrasado de un día ya cerrado: sus puntos se vuelven a calcular
+            if ($portador !== null && self::diaLocal($medidaEn) < self::diaLocal($this->ahora())) {
+                $this->ejecutar("DELETE FROM {$this->p}puntos_dia WHERE usuario_id = ? AND fecha = ?", [$portador, self::diaLocal($medidaEn)]);
+            }
         } catch (PDOException $e) {
             throw new ErrorDeAlmacenamientoException('No se pudo guardar la medición');
         }
@@ -195,7 +201,7 @@ class Logica extends Base {
             return (int) $ok > 0 ? $quien['id'] : null;
         }
         if ($quien['rol'] === 'trabajador') {
-            $ok = $this->valor("SELECT COUNT(*) FROM {$this->p}nodo WHERE codigo = ? AND tipo = 'trab' AND estado = 'activo'", [$nodo]);
+            $ok = $this->valor("SELECT COUNT(*) FROM {$this->p}nodo WHERE codigo = ? AND tipo = 'trabajador' AND estado = 'activo'", [$nodo]);
             return (int) $ok > 0 ? $quien['id'] : null;
         }
         return null;
@@ -244,7 +250,7 @@ class Logica extends Base {
         $stMed = $this->bd->prepare("SELECT tipo AS magnitud, AVG(valor) AS media, MIN(valor) AS minimo, COUNT(*) AS n FROM {$this->p}medicion
             WHERE zona_id = ? AND origen = ? AND fecha_medicion BETWEEN ? AND ? GROUP BY tipo");
         foreach ($this->leerZonas() as $z) {
-            $fila = ['id' => $z['id'], 'nombre' => $z['nombre'], 'tipo' => $z['tipo'],
+            $fila = ['id' => $z['id'], 'ayuntamiento' => $z['ayuntamiento_id'], 'nombre' => $z['nombre'], 'tipo' => $z['tipo'],
                 'poligono' => $z['poligono'], 'etiqueta' => [(float) $z['etiqueta_lat'], (float) $z['etiqueta_lng']],
                 'hace_min' => null, 'n' => 0, 'o3' => null, 'temp' => null, 'ruido' => null,
                 'media_24h' => ['o3' => null, 'temp' => null, 'ruido' => null],

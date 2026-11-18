@@ -6,44 +6,45 @@ MariaDB 10.11 en Plesk. Todo lo que usan la app y la web está aquí:
 |---|---|
 | `servidor/bd/esquema.sql` | BD completa desde cero: **borra** las tablas y las vuelve a crear, con los datos base y los de demostración |
 | `servidor/bd/actualizar_desde_v1.sql` | Pasa de la versión 1 (solo `zona`, `nodo`, `medicion`) a la actual **sin perder las mediciones válidas** |
-| `servidor/bd/actualizar_seguimiento.sql` | Añade `favorito` y `alerta` a una BD importada con el `esquema.sql` del 10/11/2026 (la de Plesk). **No borra nada** y se puede repetir |
+| `servidor/bd/actualizar_plesk.sql` | Pone al día la BD de Plesk (la del `esquema.sql` del 10/11/2026 o posterior) sin tocar mediciones ni cuentas: añade `favorito`, `alerta` y `puntos_dia`; quita `invitacion`, `reglas_puntos` y `revision`; renombra `zona.poligono` → `area` y `nodo.motivo` → `incidencia`, quita `zona.orden`, pone `nodo.tipo` con palabras y añade `ayuntamiento_id` a `zona`, `nodo`, `punto_reparto` y `empleado` (lo que ya hay pasa a `gandia`). Se puede repetir |
 
 Todas las fechas se guardan en **UTC** (`DATETIME(3)`, con milisegundos). Los «días» de los puntos se cuentan en hora de España.
 
-**17 tablas y 99 campos.** Reglas del diseño:
+**15 tablas, 90 campos y 19 claves ajenas.** Reglas del diseño:
 
 - **Todo lo que apunta a otra tabla es una clave ajena (FK).** Por ejemplo, `medicion.id_nodo` → `nodo.codigo`.
 - **Ningún campo admite NULL** salvo tres, que se vacían a propósito:
   - `medicion.portador_id`: cuando nadie con sesión llevaba el sensor (o es simulada).
   - `prestamo.usuario_id` y `canje.usuario_id`: cuando un vecino borra su cuenta (sus datos personales desaparecen, pero el historial del sensor y del regalo se conserva).
-- Lo que se puede calcular a partir de otros datos no se guarda dos veces (puntos de cada día, última medición de un sensor, UUID del iBeacon).
+- Lo que se puede calcular a partir de otros datos no se guarda dos veces (última medición de un sensor, UUID del iBeacon, orden de las zonas). Excepción a propósito: los puntos de cada día acabado se guardan en `puntos_dia`.
 
 ```
 punto_reparto ─< prestamo >─ nodo ─< medicion >─ zona
                     │                   │
 usuario ────────────┴───────────────────┘ (portador)
-usuario ─< token · revision · canje >─ regalo · percepcion
+usuario ─< token · puntos_dia · canje >─ regalo · percepcion
 usuario ─< favorito >─ zona          favorito ─── alerta (una por parque seguido)
-usuario ─── empleado (trabajadores)       invitacion (trabajadores sin activar)
-ayuntamiento (portada) · reglas_puntos (historial de reglas)
+usuario ─── empleado (trabajadores)
+ayuntamiento ─< zona · nodo · punto_reparto · empleado
 ```
 
 ## 1. Mapa y sensores
 
-**ayuntamiento**: los municipios que usan Respira (portada de la web). Campos: `id`, `nombre`, `comarca`, `desde`, `activo`. No se enlaza con nada porque hoy solo hay uno (Gandia); con un segundo municipio habría que añadir `ayuntamiento_id` a `zona` y `punto_reparto`.
+**ayuntamiento**: los municipios que usan Respira (portada de la web). Campos: `id`, `nombre`, `comarca`, `desde`, `activo`. **`zona`, `nodo`, `punto_reparto` y `empleado` tienen `ayuntamiento_id` (FK)**, así se sabe de qué municipio es cada parque, sensor, punto de reparto y trabajador. Las mediciones y los préstamos lo heredan de su zona o su sensor. Al dar de alta un sensor o un trabajador, si solo hay un ayuntamiento activo se pone solo; si hay varios, la API pide `ayuntamiento`. No se puede borrar un ayuntamiento con cosas suyas (se desactiva con `activo = 0`).
 
-**zona**: parques y barrios. `poligono` es JSON `[[lat,lng],…]` con `CHECK (JSON_VALID)`. `etiqueta_lat/lng` es dónde se escribe el nombre. Se cargan las 9 zonas de la web y el **Campus UPV** (rectángulo **aproximado**: compruébalo). Si un punto cae en un parque y en un barrio, cuenta para el parque.
+**zona**: parques y barrios. `area` es el contorno en JSON `[[lat,lng],…]` con `CHECK (JSON_VALID)` (la API lo sigue mandando como `poligono`, para no cambiar la app). Se listan por orden alfabético del `nombre`: no hay campo de orden. `etiqueta_lat/lng` es dónde se escribe el nombre. Se cargan las 9 zonas de la web y el **Campus UPV** (rectángulo **aproximado**: compruébalo). Si un punto cae en un parque y en un barrio, cuenta para el parque.
 
 **nodo**: cada sensor físico.
 
 | Campo | Para qué |
 |---|---|
 | `codigo` PK | `RSP-XXXX` (`CHECK REGEXP`). El UUID que anuncia el Arduino es `RESPIRA-` + código: no hace falta guardarlo |
-| `tipo` | `vol` (se presta), `trab` (de un servicio), `bici`, `bus` |
+| `ayuntamiento_id` FK | de qué ayuntamiento es el sensor |
+| `tipo` | `voluntariado` (se presta), `trabajador` (de un servicio municipal), `bici`, `autobus` |
 | `magnitudes` | SET de `o3`, `temp`, `ruido` |
 | `estado` | `disponible`, `prestado`, `activo`, `mant`, `baja` |
 | `asignado_a` | servicio o vehículo (nunca una persona). **«No asignado»** en los de voluntariado |
-| `motivo` | **«Sin incidencias»**, o por qué está en mantenimiento o de baja |
+| `incidencia` | **«Sin incidencias»**, o qué le pasa (por qué está en mantenimiento o de baja) |
 
 «Hace cuánto mandó el último dato» sale de `medicion` (índice `id_nodo, tipo, fecha_medicion`).
 
@@ -62,9 +63,9 @@ ayuntamiento (portada) · reglas_puntos (historial de reglas)
 - Un vecino no puede registrarse sin aceptar las condiciones, así que su `alta` es también el momento en que las aceptó.
 - No hay bloqueo por contraseñas fallidas (decisión del sprint): se puede reintentar sin límite.
 
-**empleado**: los datos de empleado de cada trabajador (`usuario_id` PK y FK, `num_empleado` UNIQUE, `servicio`). Están aparte para que los vecinos no tengan esos campos vacíos.
+**empleado**: los datos de empleado de cada trabajador (`usuario_id` PK y FK, `ayuntamiento_id` FK: para qué ayuntamiento trabaja, `num_empleado` UNIQUE, `servicio`). Están aparte para que los vecinos no tengan esos campos vacíos.
 
-**invitacion**: un trabajador dado de alta por administración que aún no ha puesto su contraseña. Guarda `id` (el `T-XXXX` que tendrá), `nombre`, `email`, `num_empleado`, `servicio`, el sha256 del enlace (`token_hash`) y `caduca` (48 h). Al activar la cuenta se crean su `usuario` y su `empleado`, y la invitación se borra. Pedir un enlace nuevo cambia el token y la caducidad.
+**Alta de trabajadores**: la hace administración desde el panel y pone también la contraseña (10 caracteres, letras y números, sin su usuario). Se crean a la vez su `usuario` y su `empleado` y la cuenta queda activa; la contraseña se le da en persona. Si la olvida, la cambia con «He olvidado mi contraseña». (Hasta el 13/11/2026 había una tabla `invitacion` con un enlace de activación de 48 h; se quitó por simplicidad.)
 
 **token**: sesiones abiertas y enlaces de «he olvidado mi contraseña» (`token_hash`, `usuario_id`, `tipo`, `caduca`). Solo se guarda el **sha256**: quien lea la BD no puede usarlos.
 
@@ -106,20 +107,12 @@ Solo se guardan mediciones **válidas**. El servidor rechaza (400) las que no tr
 
 ## 4. Puntos, regalos y canjes
 
-**reglas_puntos**: historial de reglas (`min_por_punto`, `mult_parque`, `max_dia`, `desde`). Vale la última con `desde` ≤ el día. Los cambios del panel se aplican **desde mañana**.
+**Las reglas están en el código** (`Puntos::REGLAS`): 1 punto cada 5 min válidos, los minutos en parques cuentan ×2, máximo 100 al día. El panel las enseña pero no las cambia.
 
-**Los puntos de cada día no se guardan.** El servidor los calcula cada vez con las mediciones que tienen a esa persona como portador, con las reglas de ese día:
+**puntos_dia**: los puntos de cada usuario y día (PK `usuario_id` + `fecha`, en hora de España). Campos: `minutos` (válidos), `minutos_parque`, `descartados` y `puntos`. El servidor calcula el día con las mediciones que tienen a esa persona como portador y guarda la fila la primera vez que la persona pide su cuenta después de que acabe el día. Hoy no se guarda (se calcula en directo). Si llega una medición atrasada de un día ya guardado, se borra su fila y se vuelve a calcular. **Saldo** = suma de `puntos_dia.puntos` − canjes no caducados.
 
 - **Qué no cuenta:** entre dos datos seguidos, si hay más de 15 min sin datos, si va a más de 25 km/h o si está parado (menos de 20 m) más de 15 min, esos minutos no cuentan.
 - **Cálculo:** puntos = ⌊min / N⌋ + ⌊min en parques / N⌋ · (mult − 1), con un máximo diario.
-
-**revision**: solo los días sospechosos, que revisa administración. Un día se marca cuando llega al 90 % del máximo o el sensor pasa 1 h o más parado. Campos: `usuario_id`, `fecha` (UNIQUE juntos), `motivo` (por qué se marcó), `estado` y `razon`.
-
-| `estado` | Qué significa | `razon` |
-|---|---|---|
-| `pend` | sin revisar (los puntos cuentan mientras tanto) | «Sin revisar» |
-| `ok` | aprobado | «Aprobado» |
-| `anulado` | no suma puntos | la explicación del administrador, que ve el voluntario |
 
 **regalo**: catálogo (`coste`, `stock`, `activo`: retirar = 0).
 
@@ -172,13 +165,12 @@ Están al final de `esquema.sql` (entre `@@DEMO:INICIO` y `@@DEMO:FIN`). Si no l
 | marcos@correo.es (U-11902) | Marcos2026 | app |
 | ana.v@correo.es (U-30577) | AnaV2026 | app |
 | psanz@ayto.es (T-0001) | Trabajo2026! | app (trabajador) |
+| emora@ayto.es (T-0002) | Parques2026! | app (trabajador) |
 | admin@ayto.es / tecnico@ayto.es / reparto@ayto.es | Admin2026! / Tecnico2026! / Reparto2026! | panel web |
 
 Además incluye:
 - 11 sensores y 3 préstamos (el de Marcos, fuera de plazo).
-- Elena (T-0002): trabajadora invitada con el enlace caducado.
 - Recorridos de días pasados (una lectura por minuto) que dan los puntos: Lucía 340, Marcos 120, Ana 127.
-- 3 días en revisión: 1 aprobado y 2 pendientes.
 - 3 canjes: CJ-8R2T (válido), CJ-2K9L (caducado) y CJ-5P7Q (entregado).
 - 8 percepciones, que desaparecen del mapa a las 24 h de importar.
 - Lucía sigue el Parque de la Ribera y el Parque Central, con una alerta de ruido en nivel Alto en el Central.
