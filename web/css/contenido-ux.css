@@ -1,0 +1,449 @@
+/* Vistas informativas y de acceso de la web pública. */
+.contenido-pagina {
+  padding-block: clamp(28px, 5vw, 68px) clamp(48px, 6vw, 88px);
+}
+
+.contenido-cabecera {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
+.contenido-cabecera h1 {
+  max-width: 23ch;
+  font-size: clamp(2.25rem, 5.3vw, 4.75rem);
+  line-height: 1;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+}
+
+.contenido-cabecera p,
+.contenido-titulo p,
+.contenido-politica p {
+  margin: 0;
+  max-width: 65ch;
+  color: var(--ink-2);
+  line-height: 1.55;
+}
+
+.contenido-cabecera p {
+  font-size: clamp(1rem, 1.4vw, 1.18rem);
+}
+
+.contenido-accesos {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 18px;
+  row-gap: 6px;
+  margin-top: 6px;
+}
+
+.contenido-accesos a:not(.btn),
+.acceso-cabecera > a,
+.acceso-enlace {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 650;
+  text-underline-offset: .25em;
+}
+
+.contenido-pasos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 22px;
+  margin: clamp(24px, 4vw, 44px) 0 0;
+  padding-inline-start: 0;
+  list-style-position: inside;
+}
+
+.contenido-pasos li {
+  border-top: 2px solid var(--line);
+  padding: 14px 8px 0 0;
+}
+
+.contenido-pasos li::marker {
+  color: var(--ink-2);
+  font-size: .95rem;
+  font-weight: 750;
+}
+
+.contenido-paso-icono {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-inline-start: 4px;
+  color: var(--primary);
+}
+
+.contenido-pasos h2 {
+  font-size: 1.15rem;
+  line-height: 1.25;
+  margin-block: 9px 6px;
+}
+
+.contenido-pasos p,
+.contenido-puntos p {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.contenido-seccion {
+  display: grid;
+  gap: 18px;
+  margin-top: clamp(42px, 7vw, 85px);
+  scroll-margin-top: calc(90px + env(safe-area-inset-top, 0px));
+}
+
+.contenido-seccion h2 {
+  font-size: clamp(1.65rem, 3vw, 2.5rem);
+  line-height: 1.1;
+  letter-spacing: -.035em;
+}
+
+.contenido-titulo p {
+  margin-top: 7px;
+}
+
+.contenido-seccion .gv-estado {
+  margin: 0;
+}
+
+.contenido-seccion .gv-est,
+.gv-box .gv-est {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.gv-sw.gv-estimado {
+  border: 2px dashed var(--primary);
+}
+
+.contenido-seccion .gv-nota,
+.gv-box .gv-nota {
+  color: var(--ink-2);
+}
+
+.contenido-voluntariado {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 1fr);
+  gap: 22px;
+}
+
+.contenido-instrucciones {
+  margin: 0;
+  padding-inline-start: 1.3rem;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  color: var(--ink-2);
+}
+
+.contenido-instrucciones b {
+  color: var(--ink);
+}
+
+.contenido-puntos {
+  display: grid;
+  gap: 10px;
+  padding: clamp(14px, 2vw, 22px);
+  background: var(--surface-2);
+}
+
+.contenido-puntos h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.2rem;
+}
+
+.contenido-puntos h3 svg {
+  flex: none;
+  color: var(--primary);
+}
+
+.contenido-premios,
+.contenido-reparto > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.contenido-premios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.contenido-premios .badge {
+  padding: 4px 9px;
+  white-space: normal;
+}
+
+.contenido-premios .badge svg {
+  flex: none;
+}
+
+.contenido-reparto {
+  padding-block-start: 8px;
+}
+
+.contenido-reparto h3 {
+  margin-bottom: 7px;
+  font-size: 1.3rem;
+}
+
+.contenido-reparto > ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 22px;
+}
+
+.contenido-reparto li {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  padding-block-start: 11px;
+  border-top: 1px solid var(--line);
+}
+
+.contenido-reparto dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: .9rem;
+}
+
+.contenido-reparto dt {
+  font-weight: 650;
+}
+
+.contenido-reparto dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.contenido-personal {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.contenido-faq > div {
+  max-width: 75ch;
+  border-block: 1px solid var(--line);
+}
+
+.contenido-faq details {
+  padding: 0;
+}
+
+.contenido-faq details + details {
+  border-top: 1px solid var(--line);
+}
+
+.contenido-faq summary {
+  min-height: 46px;
+  padding: 12px 4px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.contenido-faq summary:hover {
+  color: var(--primary);
+}
+
+.contenido-faq details p {
+  margin: 0 0 14px;
+  padding-inline-start: 18px;
+  color: var(--ink-2);
+}
+
+.contenido-privacidad,
+.acceso-pagina {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  align-items: start;
+  gap: clamp(28px, 6vw, 86px);
+}
+
+.contenido-cabecera .contenido-version {
+  font-size: .9rem;
+  color: var(--ink-2);
+}
+
+.contenido-politica {
+  max-width: 70ch;
+}
+
+.contenido-politica section {
+  display: grid;
+  gap: 6px;
+  padding-block: 15px;
+  border-top: 1px solid var(--line);
+}
+
+.contenido-politica section:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.contenido-politica h2 {
+  font-size: clamp(1.2rem, 2vw, 1.55rem);
+}
+
+.acceso-pagina {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: min(600px, 70svh);
+}
+
+.acceso-contenido {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 32rem);
+  padding: clamp(16px, 3vw, 30px);
+  min-width: 0;
+}
+
+.acceso-contenido form {
+  display: grid;
+  gap: 15px;
+  min-width: 0;
+}
+
+.acceso-contenido h2 {
+  font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+}
+
+.acceso-contenido p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.acceso-contenido .hint {
+  color: var(--ink-2);
+}
+
+.acceso-contenido .note a,
+.contenido-pagina a:not(.btn) {
+  text-underline-offset: .22em;
+}
+
+.acceso-enlace {
+  justify-self: start;
+}
+
+.login-presentacion p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  color: #b9cfc4;
+}
+
+.login-presentacion b {
+  color: #fff;
+  letter-spacing: .08em;
+}
+
+.login-mapa {
+  color: #9ee3c9;
+}
+
+.login-titulo {
+  font-size: 30px;
+}
+
+.login-recuperar {
+  align-self: center;
+  text-underline-offset: .22em;
+}
+
+.acceso-clave {
+  position: relative;
+}
+
+.acceso-clave input {
+  padding-inline-end: 6rem;
+}
+
+.acceso-ver {
+  position: absolute;
+  inset-inline-end: 2px;
+  inset-block-start: 2px;
+  min-height: 42px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.acceso-ver:hover {
+  background: var(--surface-2);
+}
+
+.acceso-prueba h3 {
+  font-size: 1rem;
+}
+
+.acceso-prueba ul {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acceso-prueba li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.acceso-prueba li > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.acceso-prueba button {
+  flex-shrink: 0;
+  min-height: 44px;
+}
+
+@media (max-width: 850px) {
+  .contenido-pasos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 16px;
+  }
+
+  .contenido-privacidad,
+  .acceso-pagina {
+    grid-template-columns: 1fr;
+  }
+
+  .contenido-seccion .gv-est,
+  .gv-box .gv-est {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 580px) {
+  .contenido-pasos,
+  .contenido-voluntariado,
+  .contenido-reparto > ul,
+  .contenido-seccion .gv-est,
+  .gv-box .gv-est {
+    grid-template-columns: 1fr;
+  }
+
+  .contenido-cabecera h1 {
+    text-wrap: pretty;
+  }
+
+  .acceso-contenido {
+    width: 100%;
+  }
+}

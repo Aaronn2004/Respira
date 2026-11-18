@@ -7,9 +7,10 @@ window.RESPIRA_CONFIG = {
   // Opcional: ID de un mapa VECTORIAL (Google Cloud > Map Management).
   // Activa el botón 3D (inclinar y girar). Vacío = sin botón 3D.
   MAP_ID: '',
-  // API de Respira (servidor/api/index.php). Con ella, la web enseña datos REALES;
-  // vacía o sin responder, enseña los de demostración (y lo avisa).
+  // API de Respira para el panel municipal, ayuntamientos y puntos de reparto.
   //   Plesk:            'https://TU_DOMINIO/respira/api/index.php'
   //   En tu PC (php -S): 'http://localhost:8080/index.php'
   API_URL: 'https://TU_DOMINIO/respira/api/index.php',
+  // Activa las cuentas precargadas en el acceso de una web de pruebas con API de demostración.
+  MOSTRAR_CUENTAS_PRUEBA: false,
 };

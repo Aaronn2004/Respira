@@ -4,6 +4,7 @@
   "private": true,
   "description": "Respira Web: mapa público y panel municipal (Nodia)",
   "scripts": {
-    "start": "npx --yes serve -l 5500 ."
+    "start": "npx --yes serve -l 5500 .",
+    "test": "node tests/series.test.js"
   }
 }

@@ -74,7 +74,7 @@ public class AlertaActivity extends AppCompatActivity {
         chips.setSingleSelection(true);
         chips.setSelectionRequired(true);
         for (Magnitud m : Magnitud.values()) {
-            Chip chip = new Chip(this, null, com.google.android.material.R.attr.chipChoiceStyle);
+            Chip chip = new Chip(this, null, com.google.android.material.R.attr.chipStyle);
             chip.setText(m.nombre);
             chip.setCheckable(true);
             chip.setChecked(m == magnitud);

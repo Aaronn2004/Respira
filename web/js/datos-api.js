@@ -4,12 +4,8 @@
    Dirección de la API: js/config.js (RESPIRA_CONFIG.API_URL), p. ej.
      https://TU_DOMINIO/respira/api/index.php
 
-   Parte pública (mapa, historial, comparar, comunidad, portada):
-   - GET /zonas al abrir y cada minuto: valores de cada zona y polígono.
-   - GET /zonas/{id}/serie para las gráficas (con caché).
-   - GET /percepciones (capa Comunidad), /ayuntamientos, /puntos-reparto.
-   - Si la API no responde, se queda con los datos de DEMOSTRACIÓN y lo
-     dice en pantalla.
+   La API carga ayuntamientos y puntos de reparto. La vista pública del
+   Grau i Platja usa un escenario local de mediciones simuladas.
 
    Panel municipal (#acceso y #panel-…): con API_URL, TODO va al
    servidor (no hay modo demo): inicio de sesión con token (en
@@ -28,30 +24,9 @@
   const R = () => window.Respira;
   const E = () => R().estado;          // getters/setters de los datos de app.js
 
-  // Misma caja de Gandia que el lienzo SVG de 900 x 560 (ver mapa-google.js)
-  const NORTE = 38.9815, SUR = 38.9540, OESTE = -0.2050, ESTE = -0.1610;
-  const aLienzo = (lat, lng) => ({ x: (lng - OESTE) / (ESTE - OESTE) * 900, y: (NORTE - lat) / (NORTE - SUR) * 560 });
-
-  const D = {
-    version: 0,
-    estado: URL_API ? 'cargando' : 'off',   // off | cargando | ok | error   (datos públicos)
-    series: {},
-    pedidas: {},
-    enlaces: {},                            // token del enlace de contraseña nueva --> datos del enlace
-  };
+  const D = { version: 0, enlaces: Object.create(null) };
   window.RespiraDatos = D;
-
-  D.real = () => D.estado === 'ok';
   D.conApi = () => !!URL_API;
-
-  // Aviso que app.js pinta en el mapa y en el historial
-  D.avisoHTML = () => {
-    if (D.estado === 'ok') return '';
-    const txt = D.estado === 'cargando' ? 'Conectando con el servidor de Respira…'
-      : D.estado === 'error' ? '<b>Datos de demostración:</b> no hay conexión con el servidor de Respira.'
-        : '<b>Datos de demostración:</b> falta API_URL en js/config.js.';
-    return `<p class="note" role="status" style="border-left:3px solid var(--lv-medio)">${txt}</p>`;
-  };
 
   // ---------------- repintar sin molestar ----------------
   let firmaPintada = '';
@@ -61,7 +36,7 @@
     const a = document.activeElement;
     if (!forzar && a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;   // no borrar lo que se escribe
     if (!forzar && r.S.modal) return;
-    const firma = D.estado + '|' + D.version;
+    const firma = D.version;
     if (!forzar && firma === firmaPintada) return;
     firmaPintada = firma;
     r.render();
@@ -77,16 +52,16 @@
       this.codigo = codigo;
       this.errores = (j && j.errores) || {};
       if (j && j.campo) this.errores[j.campo] = j.error;
-      this.quedan = j && j.quedan;
     }
   }
 
   async function pedir(ruta, metodo = 'GET', cuerpo) {
+    const tokenPeticion = token;
     let res;
     try {
       const h = { Accept: 'application/json' };
       if (cuerpo !== undefined) h['Content-Type'] = 'application/json';
-      if (token) h['X-Respira-Token'] = token;
+      if (tokenPeticion) h['X-Respira-Token'] = tokenPeticion;
       res = await fetch(URL_API + ruta, { method: metodo, cache: 'no-store', headers: h,
         body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) });
     } catch (e) {
@@ -95,7 +70,7 @@
     let j = null;
     try { j = await res.json(); } catch (_) { /* sin cuerpo JSON */ }
     if (!res.ok) {
-      if (res.status === 401 && token && !/^\/sesiones/.test(ruta)) sesionCaducada();
+      if (res.status === 401 && tokenPeticion && token === tokenPeticion && !/^\/sesiones/.test(ruta)) sesionCaducada();
       throw new ErrorApi(res.status, j);
     }
     return j;
@@ -112,153 +87,65 @@
   // DATOS PÚBLICOS
   // ==============================================================
 
-  const huellaZonas = l => JSON.stringify(l.map(z => [z.id, z.hace_min, z.n, z.o3, z.temp, z.ruido]));
-  let ultimaHuella = '';
-
-  function zonaNueva(s) {
-    // Zona que no está en el lienzo de demostración (p. ej. el campus):
-    // su geometría SVG sale del polígono del servidor.
-    const z = { id: s.id, tipo: s.tipo, n: s.nombre };
-    const pts = s.poligono.map(p => aLienzo(p[0], p[1]));
-    const e = aLienzo(s.etiqueta[0], s.etiqueta[1]);
-    if (s.tipo === 'parque') {
-      z.path = 'M' + pts.map(p => p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' L') + 'z';
-      z.x = e.x; z.y = e.y;
-    } else {
-      const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
-      const x = Math.min(...xs), y = Math.min(...ys);
-      z.rect = [x, y, Math.max(...xs) - x, Math.max(...ys) - y];
-      z.lx = e.x - 40; z.ly = e.y;
-    }
-    return z;
-  }
-
-  async function cargarZonas() {
-    try {
-      const lista = await pedir('/zonas');
-      if (!Array.isArray(lista)) throw new Error('respuesta de /zonas no válida');
-      const { ZONAS } = R();
-      lista.forEach(s => {
-        let z = ZONAS.find(q => q.id === s.id);
-        if (!z) { z = zonaNueva(s); ZONAS.push(z); }
-        z.n = s.nombre;
-        z.poligono = s.poligono;
-        z.hace = s.hace_min;
-        z.nm = s.n;
-        z.o3 = s.o3; z.temp = s.temp; z.ruido = s.ruido;
-        z.m24 = s.media_24h;
-        z.mejor = s.mejor || null;   // mejor medida (la más baja) de la última hora
-      });
-      // Zonas de la demo que el servidor no tiene: sin datos
-      ZONAS.forEach(z => {
-        if (!lista.some(s => s.id === z.id)) { z.hace = null; z.nm = 0; z.o3 = z.temp = z.ruido = null; }
-      });
-      ZONAS.forEach(z => { if (!lista.some(s => s.id === z.id)) { z.m24 = null; z.mejor = null; } });
-      const huella = huellaZonas(lista);
-      if (D.estado !== 'ok' || huella !== ultimaHuella) {
-        ultimaHuella = huella;
-        D.series = {};          // las gráficas se vuelven a pedir con los datos nuevos
-        D.version++;
-      }
-      D.estado = 'ok';
-    } catch (e) {
-      console.warn('[Respira] No se pudieron leer las zonas de la API:', e.message || e);
-      if (D.estado !== 'ok') { D.estado = 'error'; D.version++; }
-    }
-  }
-
-  // Capa Comunidad: percepciones de las últimas 24 h
-  async function cargarPercepciones() {
-    try {
-      const l = await pedir('/percepciones');
-      const { AVISOS } = R();
-      const nuevos = l.map(p => {
-        const c = aLienzo(p.lat, p.lng);
-        return { id: p.id, tipo: p.tipo, x: Math.round(c.x), y: Math.round(c.y), lat: p.lat, lng: p.lng,
-          niv: p.nivel, min: p.hace_min, dir: p.direccion };
-      });
-      if (JSON.stringify(nuevos) !== JSON.stringify(AVISOS)) {
-        AVISOS.splice(0, AVISOS.length, ...nuevos);
-        D.version++;
-      }
-    } catch (e) {
-      console.warn('[Respira] Percepciones no disponibles:', e.message || e);
-    }
-  }
-
-  let fijosCargados = false;
+  let ayuntamientosCargados = false;
+  let puntosCargados = false;
+  D.ayuntamientosVerificados = () => ayuntamientosCargados;
+  D.repartoVerificado = () => puntosCargados;
   let idsPuntos = {};
-  async function cargarFijos() {
-    if (fijosCargados) return;
-    try {
-      const [aytos, puntos] = await Promise.all([pedir('/ayuntamientos'), pedir('/puntos-reparto')]);
-      const { AYTOS, PUNTOS_REPARTO } = E();
-      AYTOS.splice(0, AYTOS.length, ...aytos.map(a => {
-        const d = new Date(a.desde + 'T12:00');
-        return { id: a.id, n: a.nombre, zona: a.comarca, desde: MES_LARGO[d.getMonth()] + ' ' + d.getFullYear(), activo: a.activo };
-      }));
-      PUNTOS_REPARTO.splice(0, PUNTOS_REPARTO.length, ...puntos.map(p => [p.nombre, p.direccion, p.horario]));
-      idsPuntos = Object.fromEntries(puntos.map(p => [p.nombre, p.id]));   // nombre --> id (para prestar)
-      fijosCargados = true;
-      D.version++;
-    } catch (e) {
-      console.warn('[Respira] Ayuntamientos o puntos de reparto no disponibles:', e.message || e);
-    }
+  async function cargarAyuntamientos() {
+    if (ayuntamientosCargados) return;
+    const aytos = await pedir('/ayuntamientos');
+    const { AYTOS } = E();
+    AYTOS.splice(0, AYTOS.length, ...aytos.map(a => {
+      const d = new Date(a.desde + 'T12:00');
+      return { id: a.id, n: a.nombre, zona: a.comarca, desde: MES_LARGO[d.getMonth()] + ' ' + d.getFullYear(), activo: a.activo };
+    }));
+    ayuntamientosCargados = true;
+    D.version++;
   }
 
-  // ---------------- series (Historial y Comparar) ----------------
-  // clave de la caché (con rango de fechas en el historial) | null si el rango no vale
-  function claveSerie(id, mag, per) {
-    const h = R().S.hist;
-    let q = 'periodo=' + per;
-    if (location.hash === '#historial' && h.per === 'custom' && id === h.id && mag === h.mag) {
-      if (!h.desde || !h.hasta || h.hasta < h.desde) return null;
-      q = 'periodo=rango&desde=' + h.desde + '&hasta=' + h.hasta;
-    }
-    return { k: id + '|' + mag + '|' + q, q };
+  async function cargarPuntos() {
+    if (puntosCargados) return;
+    const puntos = await pedir('/puntos-reparto');
+    const { PUNTOS_REPARTO } = E();
+    PUNTOS_REPARTO.splice(0, PUNTOS_REPARTO.length, ...puntos.map(p => [p.nombre, p.direccion, p.horario]));
+    idsPuntos = Object.fromEntries(puntos.map(p => [p.nombre, p.id]));
+    puntosCargados = true;
+    D.version++;
   }
-
-  // Devuelve los valores (o nulos mientras llegan) con .aprox (huecos cortos
-  // aproximados). null = usar la demo.
-  D.serie = (id, mag, per) => {
-    if (D.estado !== 'ok') return null;
-    const n = per === '24h' ? 48 : per === '7d' ? 56 : 60;
-    const c = claveSerie(id, mag, per);
-    if (!c) return new Array(60).fill(null);
-    const guardada = D.series[c.k];
-    if (guardada) {
-      const v = guardada.valores.slice();
-      v.aprox = guardada.aprox;
-      return v;
-    }
-    if (!D.pedidas[c.k]) {
-      D.pedidas[c.k] = true;
-      pedir('/zonas/' + encodeURIComponent(id) + '/serie?magnitud=' + mag + '&' + c.q)
-        .then(j => {
-          const ok = Array.isArray(j.valores) && j.valores.length === n;
-          D.series[c.k] = { valores: ok ? j.valores : new Array(n).fill(null), aprox: ok && j.aprox ? j.aprox : null,
-            eventos: j.eventos || null };
-        })
-        .catch(e => { console.warn('[Respira] Serie no disponible:', e.message || e); D.series[c.k] = { valores: new Array(n).fill(null), aprox: null, eventos: null }; })
-        .finally(() => { delete D.pedidas[c.k]; D.version++; repintar(true); });
-    }
-    return new Array(n).fill(null);
-  };
-
-  // Alertas y picos del periodo (los calcula la API) | null
-  D.eventos = (id, mag, per) => {
-    if (D.estado !== 'ok') return null;
-    const c = claveSerie(id, mag, per);
-    const g = c && D.series[c.k];
-    return g && g.eventos ? { alertas: g.eventos.alertas.map(a => ({ ...a, desde: Date.parse(a.desde), hasta: Date.parse(a.hasta) })),
-      picos: g.eventos.picos.map(p => ({ ...p, momento: Date.parse(p.momento) })) } : null;
-  };
 
   // ==============================================================
   // PANEL MUNICIPAL
   // ==============================================================
 
   const PANEL = ['admin', 'tecnico', 'reparto'];
+  const DATOS_VISTA = {
+    panel: ['SENS', 'LOANS'],
+    'panel-sensores': ['SENS'],
+    'panel-editar': ['SENS'],
+    'panel-prestamos': ['SENS', 'LOANS', 'APPUSERS', 'PUNTOS_REPARTO'],
+    'panel-puntos': ['RULES'],
+    'panel-regalos': ['GIFTS', 'CANJES'],
+    'panel-trabajadores': ['STAFF'],
+  };
+  let datosPanel = {};
+  let ultimaCarga = 0;
+  D.estadoPanel = (ruta, rol) => {
+    if (!URL_API) return null;
+    const datos = ruta === 'panel-regalos' && rol === 'reparto' ? [] : DATOS_VISTA[ruta];
+    return {
+      listo: datos.every(k => datosPanel[k]?.listo),
+      error: datos.some(k => datosPanel[k]?.error),
+    };
+  };
+
+  function reiniciarPanel() {
+    datosPanel = {};
+    const estado = E();
+    for (const clave of ['SENS', 'LOANS', 'APPUSERS', 'GIFTS', 'CANJES', 'STAFF']) estado[clave] = [];
+    const S = R().S;
+    S.canje = null; S.edit = null; S.altaOk = null;
+  }
 
   function guardarToken(t) {
     token = t;
@@ -273,6 +160,7 @@
     guardarToken(null);
     const r = R();
     if (r && r.S.user) {
+      reiniciarPanel();
       r.S.user = null;
       r.toast('Tu sesión ha caducado. Vuelve a entrar.');
       r.nav('acceso');
@@ -299,37 +187,59 @@
   // Carga lo que necesita el panel según el rol.
   async function cargarPanel() {
     const S = R().S;
-    if (!S.user || !PANEL.includes(S.user.r)) return;
-    const rol = S.user.r;
-    const t = [];
-    t.push(pedir('/panel/nodos').then(l => { E().SENS = l.map(aSensor); }));
-    t.push(pedir('/panel/prestamos').then(p => { E().LOANS = p.abiertos.concat(p.cerrados).map(aPrestamo); }));
-    t.push(pedir('/panel/vecinos').then(l => { E().APPUSERS = l.map(u => ({ id: u.id, n: u.nombre })); }));
-    t.push(pedir('/regalos').then(l => { E().GIFTS = l.map(aRegalo); }));
-    if (rol === 'admin') {
-      t.push(pedir('/panel/reglas').then(r => { E().RULES = { min: r.min, mult: r.mult, max: r.max }; }));
-      t.push(pedir('/panel/canjes').then(l => { E().CANJES = l.map(aCanje); }));
-      t.push(pedir('/panel/trabajadores').then(l => {
-        E().STAFF = [{ n: S.user.n, e: S.user.e, p: null, r: S.user.r }].concat(l.map(aTrabajador));
-      }));
-    } else {
-      E().STAFF = [{ n: S.user.n, e: S.user.e, p: null, r: S.user.r }];
-      E().CANJES = [];
-    }
-    const res = await Promise.allSettled(t);
-    res.filter(x => x.status === 'rejected').forEach(x => console.warn('[Respira] Panel:', x.reason && x.reason.message));
+    const usuario = S.user;
+    if (!usuario || !PANEL.includes(usuario.r)) return;
+    const carga = ++ultimaCarga;
+    const consultas = [
+      ['SENS', pedir('/panel/nodos').then(l => l.map(aSensor))],
+      ['LOANS', pedir('/panel/prestamos').then(p => p.abiertos.concat(p.cerrados).map(aPrestamo))],
+      ['APPUSERS', pedir('/panel/vecinos').then(l => l.map(u => ({ id: u.id, n: u.nombre })))],
+      ['PUNTOS_REPARTO', cargarPuntos()],
+    ];
+    if (usuario.r === 'admin') consultas.push(
+      ['GIFTS', pedir('/regalos').then(l => l.map(aRegalo))],
+      ['RULES', pedir('/panel/reglas').then(r => {
+        if (![r?.min, r?.mult, r?.max].every(Number.isFinite)) throw new Error('Reglas no disponibles.');
+        return r;
+      })],
+      ['CANJES', pedir('/panel/canjes').then(l => l.map(aCanje))],
+      ['STAFF', pedir('/panel/trabajadores').then(l => [{ ...usuario, p: null }, ...l.map(aTrabajador)])],
+    );
+    const resultados = await Promise.allSettled(consultas.map(([, peticion]) => peticion));
+    if (S.user !== usuario || carga !== ultimaCarga) return;
+    const estado = E();
+    resultados.forEach((resultado, i) => {
+      const clave = consultas[i][0];
+      const anterior = datosPanel[clave];
+      if (resultado.status === 'rejected') {
+        datosPanel[clave] = { listo: Boolean(anterior?.listo), error: true };
+        console.warn('[Respira] Panel:', resultado.reason?.message);
+        return;
+      }
+      if (clave === 'RULES') {
+        const { min, mult, max } = resultado.value;   // fijas en el servidor: solo se enseñan
+        estado.RULES = { min, mult, max };
+      } else if (clave !== 'PUNTOS_REPARTO') estado[clave] = resultado.value;
+      datosPanel[clave] = { listo: true, error: false };
+    });
     D.version++;
   }
   D.cargarPanel = cargarPanel;
+  D.reintentarPanel = async () => { await cargarPanel(); repintar(true); };
 
   // Al abrir la web con una sesión guardada (recargar la página del panel)
   async function restaurarSesion() {
-    if (!token) return;
+    const guardado = token;
+    if (!guardado) return;
     try {
       const j = await pedir('/yo');
+      if (token !== guardado) return;
       if (!PANEL.includes(j.usuario.rol)) { guardarToken(null); return; }
-      R().S.user = aUsuarioWeb(j.usuario);
+      reiniciarPanel();
+      const usuario = aUsuarioWeb(j.usuario);
+      R().S.user = usuario;
       await cargarPanel();
+      if (R().S.user !== usuario) return;
       const inicial = (window.__respiraRutaInicial || '').slice(1);
       if (inicial && inicial.startsWith('panel') && location.hash !== '#' + inicial) location.hash = inicial;
       else R().render();
@@ -341,9 +251,10 @@
   D.cerrarSesion = () => {
     if (token) pedir('/sesiones', 'DELETE').catch(() => { /* la sesión caduca sola */ });
     guardarToken(null);
+    if (URL_API) reiniciarPanel();
   };
 
-  // Enlace de contraseña nueva: undefined = cargando, null = no vale
+  // undefined = cargando, null = enlace no válido, false = comprobación fallida.
   D.enlace = tok => {
     if (!tok) return null;
     if (!(tok in D.enlaces)) {
@@ -351,9 +262,14 @@
       pedir('/enlaces/' + encodeURIComponent(tok)).then(v => {
         D.enlaces[tok] = v.estado === 'no_valido' ? null : { n: v.nombre, e: v.email, id: v.id, rol: v.rol, tipo: v.tipo,
           caduca: v.estado === 'caducado' ? 0 : Date.now() + 36e5, token: tok, horas: v.horas };
-      }).catch(() => { D.enlaces[tok] = null; }).finally(() => { D.version++; repintar(true); });
+      }).catch(() => { D.enlaces[tok] = false; }).finally(() => { D.version++; repintar(true); });
     }
     return D.enlaces[tok];
+  };
+  D.reintentarEnlace = tok => {
+    if (D.enlaces[tok] !== false) return;
+    delete D.enlaces[tok];
+    repintar(true);
   };
 
   // ---------- errores del servidor --> campos del formulario ----------
@@ -382,21 +298,25 @@
   // ==============================================================
   // Acciones del panel (las llama app.js después de validar)
   // ==============================================================
+  let altaTrabajadorPendiente = null;
+  D.altaTrabajadorEnCurso = () => altaTrabajadorPendiente !== null && altaTrabajadorPendiente === R().S.user;
+
   const ACC = {
     async login({ email, clave }) {
       const S = R().S;
       try {
         const j = await pedir('/sesiones', 'POST', { email, clave, cliente: 'web' });
         guardarToken(j.token);
-        S.user = aUsuarioWeb(j.usuario); S.tries = 0; S.f = {}; S.e = {};
+        reiniciarPanel();
+        const usuario = aUsuarioWeb(j.usuario);
+        S.user = usuario; S.f = {}; S.e = {};
         await cargarPanel();
+        if (S.user !== usuario) return;
         R().toast('Hola, ' + S.user.n.split(' ')[0]);
         R().nav(R().HOME[S.user.r]);
       } catch (e) {
         S.f.pass = '';
-        if (e.codigo === 423) { S.lock = true; S.e = {}; }
-        else S.e = { login: e.codigo === 401 ? '<b>Correo o contraseña incorrectos.</b>' + (e.quedan != null
-          ? ` Te quedan ${e.quedan} intento${e.quedan === 1 ? '' : 's'} antes del bloqueo temporal.` : '') : R().esc(e.message) };
+        S.e = { login: e.codigo === 401 ? 'Correo o contraseña incorrectos.' : R().esc(e.message) };
         R().render();
       }
     },
@@ -446,7 +366,7 @@
     async prestar({ usuario, codigo, punto }) {
       const S = R().S;
       try {
-        await cargarFijos();
+        await cargarPuntos();
         await pedir('/panel/prestamos', 'POST', { usuario, codigo, punto: idsPuntos[punto] ?? null });
         S.f.puser = ''; S.f.pcode = ''; await cargarPanel(); R().render();
         R().toast(`${codigo} prestado a ${usuario}. Ya puede escribir el código en su app.`);
@@ -480,29 +400,69 @@
 
     async comprobarCanje({ codigo }) {
       const S = R().S;
+      const usuario = S.user;
+      const vigente = () => S.user === usuario && location.hash === '#panel-regalos' && S.f.ccode?.trim().toUpperCase() === codigo;
       try {
         const c = await pedir('/panel/canjes/' + encodeURIComponent(codigo));
+        if (!vigente()) return;
         S.canje = aCanje(c); S.e = {}; R().render();
-      } catch (e) { S.canje = null; mostrarError('comprobarCanje', e, 'ccode'); }
+      } catch (e) {
+        if (!vigente()) return;
+        S.canje = null; mostrarError('comprobarCanje', e, 'ccode');
+      }
     },
 
     async entregar({ codigo }) {
       const S = R().S;
+      const usuario = S.user;
       try {
         const c = await pedir('/panel/canjes/' + encodeURIComponent(codigo) + '/entrega', 'POST', {});
-        S.canje = null; S.f.ccode = ''; await cargarPanel(); R().render();
+        if (S.user !== usuario) return;
+        if (S.f.ccode?.trim().toUpperCase() === codigo) {
+          S.canje = null; S.f.ccode = '';
+        }
+        await cargarPanel();
+        if (S.user !== usuario) return;
+        R().render();
         R().toast(c.stock === 0 ? `Entregado. «${c.regalo}» queda agotado en la app.` : 'Regalo entregado');
-      } catch (e) { mostrarError('entregar', e, 'ccode'); }
+      } catch (e) {
+        if (S.user !== usuario) return;
+        if (location.hash === '#panel-regalos' && S.f.ccode?.trim().toUpperCase() === codigo) mostrarError('entregar', e, 'ccode');
+        else R().toast(e.message);
+      }
     },
 
     async trabajador({ nombre, email, num_empleado, servicio, clave }) {
       const S = R().S;
+      const usuario = S.user;
+      if (usuario?.r !== 'admin' || D.altaTrabajadorEnCurso()) return;
+      altaTrabajadorPendiente = usuario;
+      R().render();
+      let respuesta, error;
       try {
-        const j = await pedir('/panel/trabajadores', 'POST', { nombre, email, num_empleado, servicio, clave });
+        respuesta = await pedir('/panel/trabajadores', 'POST', { nombre, email, num_empleado, servicio, clave });
+        if (S.user !== usuario) return;
         await cargarPanel();
-        S.altaOk = j.trabajador.id; S.f.tn = ''; S.f.te = ''; S.f.temp = ''; S.f.ts = ''; S.f.tp1 = ''; S.f.tp2 = '';
-        R().render(); R().toast(`Trabajador ${j.trabajador.id} dado de alta`);
-      } catch (e) { S.f.tp1 = ''; S.f.tp2 = ''; mostrarError('trabajador', e); }
+      } catch (e) {
+        error = e;
+      } finally {
+        if (altaTrabajadorPendiente === usuario) altaTrabajadorPendiente = null;
+      }
+      if (S.user !== usuario) return;
+      const enFormulario = location.hash === '#panel-trabajadores';
+      S.f.tp1 = ''; S.f.tp2 = '';
+      if (error) {
+        if (enFormulario) mostrarError('trabajador', error);
+        else R().toast(error.message);
+        return;
+      }
+      const t = respuesta.trabajador;
+      S.f.tn = ''; S.f.te = ''; S.f.temp = ''; S.f.ts = '';
+      if (enFormulario) {
+        S.altaOk = { id: t.id, nombre: t.nombre, email: t.email };
+        R().render();
+      }
+      R().toast(`Trabajador ${t.id} dado de alta`);
     },
 
   };
@@ -516,7 +476,8 @@
   // Ciclo
   // ==============================================================
   async function ciclo() {
-    await Promise.all([cargarZonas(), cargarPercepciones(), cargarFijos()]);
+    const fijos = await Promise.allSettled([cargarAyuntamientos(), cargarPuntos()]);
+    fijos.filter(x => x.status === 'rejected').forEach(x => console.warn('[Respira] Datos públicos:', x.reason?.message));
     const S = R().S;
     if (S.user && /^panel/.test(location.hash.slice(1)) && !S.modal) await cargarPanel();
     repintar();

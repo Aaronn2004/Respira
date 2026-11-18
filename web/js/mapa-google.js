@@ -1,266 +1,269 @@
-/* =============================================================
-   mapa-google.js · Mapa de Respira con Google Maps JavaScript API
-   -------------------------------------------------------------
-   - Se activa solo si js/config.js trae una clave (MAPS_API_KEY).
-     Sin clave, o si la clave falla, app.js usa el mapa SVG.
-   - Las zonas del prototipo están en un lienzo de 900 x 560; aquí
-     se colocan sobre Gandia con una transformación lineal. Son
-     zonas de demostración; con la API (datos-api.js) cada zona trae
-     su polígono real (z.poligono) y se dibuja ese.
-   - El contenedor del mapa se crea UNA vez y se reengancha tras
-     cada render(): así no se crea un mapa nuevo (ni se cobra una
-     carga nueva) cada vez que cambia el estado.
-   ============================================================= */
+/* Google Maps como mapa base. Los contornos de Respira se cargan en WGS84. */
 (function () {
   'use strict';
 
-  const CFG = window.RESPIRA_CONFIG || {};
-  const CLAVE = (CFG.MAPS_API_KEY || '').trim();
-  const MAP_ID = (CFG.MAP_ID || '').trim();
+  const { MAPS_API_KEY = '', MAP_ID = '' } = window.RESPIRA_CONFIG || {};
+  const clave = MAPS_API_KEY.trim();
+  const mapId = MAP_ID.trim();
+  const R = () => window.Respira;
+  const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const posicion = ([lng, lat]) => ({ lat, lng });
+  const colorNivel = nivel => css(nivel === 'none' ? '--lv-none' : '--lv-' + nivel);
+  const temaActual = () => document.documentElement.dataset.tema === 'oscuro' ? 'oscuro' : 'claro';
 
-  // Caja de Gandia que corresponde al lienzo 900 x 560 del prototipo web
-  const NORTE = 38.9815, SUR = 38.9540, OESTE = -0.2050, ESTE = -0.1610;
-  const geo = (x, y) => ({ lat: NORTE - y / 560 * (NORTE - SUR), lng: OESTE + x / 900 * (ESTE - OESTE) });
-  const CENTRO = geo(450, 280);
-  // Zoom para que quepan todas las zonas: el mapa estrecho (móvil, panel lateral) se aleja un nivel o dos
-  const zoomInicial = () => { const w = (contenedor && contenedor.clientWidth) || window.innerWidth; return w < 820 ? 14 : 15; };
+  const PALETAS = {
+    claro: {
+      terreno: '#eef4f1', manzanas: '#e8efec', parques: '#d4e6dc', agua: '#acd7dd',
+      calle: '#ffffff', avenida: '#fcfdfc', borde: '#cbdad7', carretera: '#b3c8c5',
+      texto: '#365154', halo: '#f6faf8', textoAgua: '#265968',
+    },
+    oscuro: {
+      terreno: '#1b2a2c', manzanas: '#223438', parques: '#263e35', agua: '#132e39',
+      calle: '#3d5255', avenida: '#536d70', borde: '#253b3e', carretera: '#647e80',
+      texto: '#ccdfde', halo: '#19282b', textoAgua: '#9ebdcb',
+    },
+  };
 
-  let estado = CLAVE && !/pon_aqui/i.test(CLAVE) ? 'pendiente' : 'off'; // pendiente | cargando | listo | error | off
-  let mapa = null;
-  let capas = [];          // polígonos y etiquetas dibujados
-  let ultimaFirma = '';
-  let ultimaSel = null;
-  let Etiqueta = null;     // clase OverlayView (se define al cargar la API)
+  function estiloCallejero({ terreno, manzanas, parques, agua, calle, avenida, borde, carretera, texto, halo, textoAgua }) {
+    return [
+      { elementType: 'geometry', stylers: [{ color: terreno }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: texto }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: halo }] },
+      { featureType: 'landscape.man_made', elementType: 'geometry.fill', stylers: [{ color: manzanas }] },
+      { featureType: 'poi.park', elementType: 'geometry.fill', stylers: [{ color: parques }] },
+      { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: calle }] },
+      { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: borde }] },
+      { featureType: 'road.arterial', elementType: 'geometry.fill', stylers: [{ color: avenida }] },
+      { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: carretera }] },
+      { featureType: 'water', elementType: 'geometry.fill', stylers: [{ color: agua }] },
+      { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: textoAgua }] },
+    ];
+  }
+
   const contenedor = document.createElement('div');
   contenedor.id = 'gmap';
 
-  const R = () => window.Respira;
-  const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  let estado = clave && !/pon_aqui/i.test(clave) ? 'pendiente' : 'sin-clave';
+  let mapa, ambito, timer, Etiqueta;
+  let ultimaFirma, ultimaSeleccion, ultimoAviso, estiloMapa;
+  const etiquetasZonas = new Map();
+  let avisos = [];
 
-  // ---------------- carga de la API ----------------
-  function cargar() {
-    if (estado !== 'pendiente') return;
-    estado = 'cargando';
-    window.__respiraMapsListo = () => { estado = 'listo'; R().render(); };
-    // Google llama a esto si la clave no vale o no tiene la API activada
-    window.gm_authFailure = () => {
-      estado = 'error';
-      console.warn('[Respira] Google Maps rechazó la clave: se usa el mapa SVG.');
-      mapa = null;
-      R().render();
-    };
-    const s = document.createElement('script');
-    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(CLAVE)
-      + '&v=weekly&language=es&region=ES&loading=async&callback=__respiraMapsListo';
-    s.async = true;
-    s.onerror = () => { estado = 'error'; R().render(); };
-    document.head.appendChild(s);
+  function fallo() {
+    clearTimeout(timer);
+    estado = 'error';
+    R().render();
   }
 
-  // ---------------- creación del mapa ----------------
+  function cargar() {
+    estado = 'cargando';
+    window.gm_authFailure = fallo;
+    window.__respiraMapsListo = () => {
+      clearTimeout(timer);
+      if (estado !== 'cargando') return;
+      estado = 'listo';
+      R().render();
+    };
+    const script = document.createElement('script');
+    const params = new URLSearchParams({
+      key: clave, language: 'es', region: 'ES', v: 'weekly', loading: 'async',
+      callback: '__respiraMapsListo',
+    });
+    script.src = 'https://maps.googleapis.com/maps/api/js?' + params;
+    script.async = true;
+    script.onerror = fallo;
+    timer = setTimeout(fallo, 12000);
+    document.head.append(script);
+  }
+
+  function encuadrar() {
+    mapa.fitBounds(ambito, { top: 36, bottom: 36, left: 32, right: 32 });
+  }
+
+  function actualizarCallejero() {
+    if (mapId) return;
+    const estilo = mapa.getMapTypeId() === google.maps.MapTypeId.ROADMAP ? temaActual() : null;
+    if (estilo === estiloMapa) return;
+    estiloMapa = estilo;
+    mapa.setOptions({ styles: estilo ? estiloCallejero(PALETAS[estilo]) : [] });
+  }
+
   function crear() {
     const opciones = {
-      center: CENTRO,
-      zoom: zoomInicial(),
-      minZoom: 12,
-      gestureHandling: 'greedy',
+      center: { lat: 39.002, lng: -0.165 },
+      zoom: 14,
+      isFractionalZoomEnabled: true,
+      gestureHandling: 'cooperative',
       clickableIcons: false,
-      // Como en el visual: en pantallas estrechas no caben Mapa/Satélite ni pantalla completa
+      streetViewControl: false,
       mapTypeControl: window.innerWidth >= 700,
       mapTypeControlOptions: { position: google.maps.ControlPosition.TOP_RIGHT },
-      streetViewControl: false, // sin Street View (decisión de diseño)
       fullscreenControl: window.innerWidth >= 700,
       zoomControl: true,
+      restriction: {
+        latLngBounds: { north: 39.026, south: 38.981, west: -0.187, east: -0.139 },
+      },
     };
-    if (MAP_ID) opciones.mapId = MAP_ID; // mapa vectorial: permite inclinar y girar (3D)
+    if (mapId) opciones.mapId = mapId;
+    else {
+      estiloMapa = temaActual();
+      opciones.styles = estiloCallejero(PALETAS[estiloMapa]);
+    }
     mapa = new google.maps.Map(contenedor, opciones);
-    mapa.addListener('click', () => { if (R().S.sel) { R().S.sel = null; R().render(); } });
-    definirEtiqueta();
-  }
+    mapa.data.addGeoJson(window.RespiraGrauPlatja);
+    mapa.addListener('zoom_changed', () => contenedor.classList.toggle('gmap-detalle', mapa.getZoom() >= 16));
+    mapa.addListener('maptypeid_changed', actualizarCallejero);
 
-  // Etiqueta HTML anclada a un punto del mapa (no necesita mapId)
-  function definirEtiqueta() {
+    ambito = new google.maps.LatLngBounds();
+    mapa.data.forEach(feature => feature.getGeometry().forEachLatLng(p => ambito.extend(p)));
+    mapa.data.addListener('click', ({ feature }) => R().seleccionarZona(feature.getId()));
+    mapa.addListener('click', () => {
+      if (R().S.sel) R().seleccionarZona(null);
+    });
+
     Etiqueta = class extends google.maps.OverlayView {
-      constructor(pos, html, clase, alPulsar, titulo) {
+      constructor(ancla, elemento) {
         super();
-        this.pos = new google.maps.LatLng(pos.lat, pos.lng);
-        this.div = document.createElement(alPulsar ? 'button' : 'div');
-        this.div.className = clase;
-        this.div.innerHTML = html;
-        if (titulo) this.div.title = titulo;
-        if (alPulsar) {
-          this.div.type = 'button';
-          this.div.addEventListener('click', e => { e.stopPropagation(); alPulsar(); });
-        }
+        this.pos = new google.maps.LatLng(posicion(ancla));
+        this.el = elemento;
       }
       onAdd() {
-        this.getPanes().overlayMouseTarget.appendChild(this.div);
-        google.maps.OverlayView.preventMapHitsAndGesturesFrom(this.div);
+        this.getPanes().overlayMouseTarget.append(this.el);
+        google.maps.OverlayView.preventMapHitsAndGesturesFrom(this.el);
       }
       draw() {
-        const p = this.getProjection().fromLatLngToDivPixel(this.pos);
-        if (p) { this.div.style.left = p.x + 'px'; this.div.style.top = p.y + 'px'; }
+        const punto = this.getProjection().fromLatLngToDivPixel(this.pos);
+        if (!punto) return;
+        this.el.style.left = punto.x + 'px';
+        this.el.style.top = punto.y + 'px';
       }
-      onRemove() { this.div.remove(); }
+      onRemove() { this.el.remove(); }
     };
-  }
 
-  // ---------------- geometría de las zonas ----------------
-  const cacheContornos = {};
-  function contorno(z) {
-    const clave = z.id + (z.poligono ? ':api' : '');
-    if (cacheContornos[clave]) return cacheContornos[clave];
-    let puntos;
-    if (z.poligono && z.poligono.length > 2) {
-      puntos = z.poligono.map(p => ({ lat: p[0], lng: p[1] }));
-    } else if (z.rect) {
-      const [x, y, w, h] = z.rect;
-      puntos = [geo(x, y), geo(x + w, y), geo(x + w, y + h), geo(x, y + h)];
-    } else {
-      // Se muestrea el path SVG del prototipo (getPointAtLength) y se pasa a lat/lng
-      const ns = 'http://www.w3.org/2000/svg';
-      const svg = document.createElementNS(ns, 'svg');
-      svg.setAttribute('width', '0'); svg.setAttribute('height', '0');
-      svg.style.position = 'absolute';
-      const path = document.createElementNS(ns, 'path');
-      path.setAttribute('d', z.path);
-      svg.appendChild(path); document.body.appendChild(svg);
-      const L = path.getTotalLength(), N = 48;
-      puntos = [];
-      for (let i = 0; i < N; i++) { const p = path.getPointAtLength(L * i / N); puntos.push(geo(p.x, p.y)); }
-      svg.remove();
+    for (const zona of R().ZONAS) {
+      const boton = document.createElement('button');
+      boton.type = 'button';
+      boton.dataset.act = 'sel';
+      boton.dataset.arg = zona.id;
+      const etiqueta = new Etiqueta(zona.ancla, boton);
+      etiqueta.setMap(mapa);
+      etiquetasZonas.set(zona.id, etiqueta);
     }
-    return (cacheContornos[clave] = puntos);
+    encuadrar();
   }
 
-  // ---------------- dibujo ----------------
-  function limpiar() {
-    capas.forEach(c => c.setMap(null));
-    capas = [];
-  }
-
-  function colorNivel(l) {
-    return css(l === 'none' ? '--lv-none' : '--lv-' + l) || '#9AA9A2';
-  }
-
-  function dibujarZonas() {
-    const { S, ZONAS, MAG, nivel, est, fmt, hace, esc, zonaMapa } = R();
-    const ordenadas = ZONAS.filter(z => z.tipo === 'barrio').concat(ZONAS.filter(z => z.tipo === 'parque'));
-    ordenadas.forEach(z => {
-      const parque = z.tipo === 'parque';
-      const e = est(z);
-      const zm = zonaMapa(z);       // estado general o la magnitud elegida
-      const l = zm.l;
-      const col = colorNivel(l);
-      const sinDatos = l === 'none', antiguo = e === 'old';
-      const discontinuo = sinDatos || antiguo || !parque;
-      const pol = new google.maps.Polygon({
-        paths: contorno(z),
-        fillColor: col,
-        fillOpacity: parque ? (sinDatos ? .22 : antiguo ? .25 : .42) : (sinDatos ? .10 : .13),
-        strokeOpacity: discontinuo ? 0 : 1,       // los discontinuos se pintan con iconos
-        strokeColor: col,
-        strokeWeight: parque ? 3 : 1.5,
-        zIndex: parque ? 2 : 1,
-        clickable: true,
-        map: mapa,
-      });
-      pol.addListener('click', () => { S.sel = z.id; R().render(); });
-      capas.push(pol);
-
-      if (discontinuo) { // borde discontinuo (sin datos / antiguo / barrio)
-        const ring = contorno(z).concat([contorno(z)[0]]);
-        const linea = new google.maps.Polyline({
-          path: ring, strokeOpacity: 0, clickable: false, zIndex: parque ? 3 : 1, map: mapa,
-          icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: parque ? .95 : .5, strokeColor: antiguo ? css('--ink-2') : col, scale: parque ? 3 : 2 }, offset: '0', repeat: parque ? '12px' : '10px' }],
-        });
-        capas.push(linea);
-      }
-
-      const pos = parque ? geo(z.x, z.y) : geo(z.lx + 40, z.ly);
-      const valor = zm.valor;
-      const html = `<span class="v${sinDatos ? ' none' : ''}" style="${sinDatos ? '' : 'background:' + col}">${valor}</span>${esc(z.n)}${antiguo ? '<span class="reloj" title="Dato antiguo">🕒</span>' : ''}`;
-      const titulo = `${z.n}: ${zm.texto} · ${hace(z.hace)}`;
-      const et = new Etiqueta(pos, html, 'gm-etq' + (parque ? '' : ' barrio') + (S.sel === z.id ? ' sel' : ''),
-        () => { S.sel = z.id; R().render(); }, titulo);
-      et.div.setAttribute('aria-label', titulo);
-      et.setMap(mapa);
-      capas.push(et);
+  function dibujarZonas(enMapa) {
+    const { S, ZONAS, zonaMapa, est, esc, zonaCoincide } = R();
+    const visibles = new Set(enMapa ? ZONAS.filter(zonaCoincide).map(z => z.id) : []);
+    mapa.data.setStyle(feature => {
+      const id = feature.getId();
+      const z = R().byZ(id);
+      const nivel = zonaMapa(z).l;
+      const seleccionada = S.sel === id;
+      const antigua = est(z) === 'old';
+      const color = colorNivel(nivel);
+      return {
+        visible: visibles.has(id),
+        strokeColor: color,
+        strokeOpacity: seleccionada ? 1 : antigua ? .65 : .92,
+        strokeWeight: seleccionada ? 4 : 2,
+        fillColor: color,
+        fillOpacity: seleccionada ? .55 : nivel === 'none' ? .17 : .32,
+        zIndex: seleccionada ? 2 : 1,
+      };
     });
+    for (const z of ZONAS) {
+      const boton = etiquetasZonas.get(z.id).el;
+      const zm = zonaMapa(z);
+      const seleccionada = S.sel === z.id;
+      const antigua = est(z) === 'old';
+      boton.hidden = !visibles.has(z.id);
+      boton.className = 'gm-etq gm-' + zm.l + (antigua ? ' antigua' : '') + (seleccionada ? ' sel' : '');
+      boton.setAttribute('aria-pressed', String(seleccionada));
+      boton.setAttribute('aria-label', z.n + ', ' + zm.texto + (antigua ? ', dato antiguo' : ''));
+      boton.innerHTML = `<span class="gm-marca" aria-hidden="true"></span>
+        <span class="gm-nombre" aria-hidden="true">${esc(z.etiqueta)}<span class="gm-nivel">${esc(zm.l === 'none' ? 'Sin datos' : zm.valor)}</span></span>`;
+    }
   }
 
-  function dibujarPercepciones() {
-    const { AVISOS, PERC, avOk, hace } = R();
-    AVISOS.filter(avOk).forEach(a => {
-      const col = colorNivel(['', 'bajo', 'medio', 'alto'][a.niv]);
-      const letra = a.n ? a.n : { ruido: 'R', temp: 'T', aire: 'A' }[a.tipo];
-      const html = letra;
-      const titulo = `${PERC[a.tipo].n}: ${PERC[a.tipo].lv[a.niv - 1]}${a.n ? ' · ' + a.n + ' avisos' : ''} · ${a.dir} · ${hace(a.min)}`;
-      const et = new Etiqueta(geo(a.x, a.y), html, 'gm-av' + (a.n ? ' grupo' : ''), null, titulo);
-      if (!a.n) et.div.style.background = col;
-      et.setMap(mapa);
-      capas.push(et);
-    });
+  function dibujarAvisos(mostrar) {
+    avisos.forEach(etiqueta => etiqueta.setMap(null));
+    const { AVISOS, PERC, S, avOk } = R();
+    avisos = mostrar ? AVISOS.filter(avOk).map(a => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.dataset.act = 'verPercepcion';
+      el.dataset.arg = a.id;
+      el.setAttribute('aria-pressed', String(S.avSel === a.id));
+      el.className = 'gm-av' + (S.avSel === a.id ? ' sel' : '');
+      el.style.background = colorNivel(['', 'bajo', 'medio', 'alto'][a.niv]);
+      el.textContent = { ruido: 'R', temp: 'T', aire: 'A' }[a.tipo];
+      const nombre = PERC[a.tipo].n + ', ' + PERC[a.tipo].lv[a.niv - 1] + ' · ' + a.dir;
+      el.title = nombre;
+      el.setAttribute('aria-label', nombre);
+      const etiqueta = new Etiqueta(a.ancla, el);
+      etiqueta.setMap(mapa);
+      return etiqueta;
+    }) : [];
   }
 
-  function dibujar() {
-    const { S } = R();
-    const tema = document.documentElement.getAttribute('data-tema') || '';
-    const datos = window.RespiraDatos ? window.RespiraDatos.version : 0;   // se repinta al llegar datos nuevos
-    const firma = [S.layer, S.mag, S.sel, S.avt, S.avf, tema, datos].join('|');
+  function actualizar() {
+    actualizarCallejero();
+    const { S, byZ } = R();
+    const comunidad = S.layer === 'comunidad';
+    const firma = [S.layer, S.mag, S.q, S.sel, S.avt, S.avf, S.avSel, document.documentElement.dataset.tema].join('|');
     if (firma !== ultimaFirma) {
       ultimaFirma = firma;
-      limpiar();
-      if (S.layer === 'comunidad') dibujarPercepciones(); else dibujarZonas();
+      dibujarZonas(!comunidad);
+      dibujarAvisos(comunidad);
     }
-    // Si se elige una zona desde la lista, el mapa va hacia ella
-    if (S.sel && S.sel !== ultimaSel) {
-      const z = R().byZ(S.sel);
-      if (z) mapa.panTo(z.tipo === 'parque' ? geo(z.x, z.y) : geo(z.lx + 40, z.ly));
+    if (!comunidad && S.sel && S.sel !== ultimaSeleccion) {
+      mapa.panTo(posicion(byZ(S.sel).ancla));
     }
-    ultimaSel = S.sel;
+    if (comunidad && S.avSel && S.avSel !== ultimoAviso) {
+      const aviso = R().AVISOS.find(a => a.id === S.avSel);
+      if (aviso) mapa.panTo(posicion(aviso.ancla));
+    }
+    ultimaSeleccion = S.sel;
+    ultimoAviso = S.avSel;
   }
 
-  // ---------------- API pública para app.js ----------------
   window.RespiraMapa = {
-    activo: () => estado !== 'off' && estado !== 'error',
-
-    slotHTML: () => '<div class="gmap-slot"></div>',
-
-    // Solo «vista inicial» y «3D»: el zoom lo ponen los controles de Google
-    controlesHTML: () => `<div class="mapctl"><button aria-label="Vista inicial" data-act="zoom" data-arg="reset">⟲</button>${MAP_ID ? `<button class="t3" aria-label="Vista en perspectiva" aria-pressed="${!!(mapa && mapa.getTilt && mapa.getTilt() > 0)}" data-act="tilt">3D</button>` : ''}</div>`,
+    controlesHTML: () => estado === 'listo'
+      ? `<div class="mapctl"><button type="button" aria-label="Volver a la vista inicial" title="Volver a la vista inicial" data-act="zoom" data-arg="reset">⟲</button>${mapId ? '<button type="button" class="t3" aria-label="Vista en perspectiva" data-act="tilt">3D</button>' : ''}</div>`
+      : '',
 
     montar() {
-      const slot = document.querySelector('.gmap-slot');
-      if (!slot) return;
-      if (estado === 'pendiente' || estado === 'cargando') {
-        slot.innerHTML = '<div class="gmap-cargando"><span class="spinner"></span>Cargando Google Maps…</div>';
-        cargar();
+      const destino = document.querySelector('.gmap-slot');
+      if (!destino) return;
+      if (estado === 'pendiente') cargar();
+      if (estado !== 'listo') {
+        const mensajes = {
+          cargando: 'Cargando Google Maps…',
+          'sin-clave': 'Google Maps requiere configuración. Puedes consultar las zonas en la lista.',
+          error: 'No se ha podido cargar Google Maps. Puedes consultar las zonas en la lista.',
+        };
+        destino.innerHTML = `<p class="gmap-estado" role="status">${mensajes[estado]}</p>`;
         return;
       }
-      if (estado !== 'listo') return;
+      if (contenedor.parentNode !== destino) destino.replaceChildren(contenedor);
       if (!mapa) crear();
-      slot.appendChild(contenedor);
-      dibujar();
+      actualizar();
     },
 
-    zoom(a) {
+    reset() {
       if (!mapa) return;
-      if (a === 'reset') {
-        R().S.sel = null;
-        mapa.moveCamera({ center: CENTRO, zoom: zoomInicial(), tilt: 0, heading: 0 });
-        R().render();
-      } else {
-        mapa.setZoom(mapa.getZoom() + (a === 'in' ? 1 : -1));
-      }
+      R().S.sel = null;
+      R().S.avSel = null;
+      encuadrar();
+      R().render();
     },
 
-    // Vista en perspectiva (requiere MAP_ID de un mapa vectorial)
     perspectiva() {
-      if (!mapa || !MAP_ID) return;
+      if (!mapa || !mapId) return;
       const inclinado = (mapa.getTilt() || 0) > 0;
       mapa.moveCamera({ tilt: inclinado ? 0 : 60, heading: inclinado ? 0 : -25, zoom: Math.max(mapa.getZoom(), 16.5) });
-      R().render();
     },
   };
 })();
