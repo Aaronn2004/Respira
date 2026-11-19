@@ -154,16 +154,6 @@ try {
     $c = in_array($metodo, ['POST', 'PUT', 'DELETE'], true) ? cuerpo() : [];
     $r = $p[0] ?? '';
 
-    if ($metodo === 'PUT' && $ruta === '/yo/clave') {
-        if (!$yo) {
-            throw new NoAutorizadoException('Tu sesión ha caducado. Vuelve a iniciar sesión.');
-        }
-        responder(200, $cuentas->cambiarClaveInicial($yo, (string) ($c['clave'] ?? '')));
-    }
-    if (!empty($yo['requiere_cambio_clave']) && !($metodo === 'DELETE' && $ruta === '/sesiones')) {
-        throw new ProhibidoException('Cambia la contraseña inicial en la app para continuar.');
-    }
-
     // ---------------- público ----------------
     if ($metodo === 'GET' && $ruta === '/estado') {
         $logica->zonas();
@@ -226,19 +216,6 @@ try {
         responder(201, $cuentas->registrar((string) ($c['nombre'] ?? ''), (string) ($c['email'] ?? ''),
             (string) ($c['clave'] ?? ''), !empty($c['acepta'])));
     }
-    if ($metodo === 'POST' && $ruta === '/recuperaciones') {
-        $cuentas->solicitarRecuperacion((string) ($c['email'] ?? ''), $cfg['url_web']);
-        responder(202, ['ok' => true, 'mensaje' => 'Si hay una cuenta con ese correo, recibirá un enlace en unos minutos.']);
-    }
-    if ($n === 2 && $r === 'enlaces') {
-        if ($metodo === 'GET') {
-            responder(200, $cuentas->verEnlace($p[1]));
-        }
-        if ($metodo === 'POST') {
-            responder(200, ['email' => $cuentas->usarEnlace($p[1], (string) ($c['clave'] ?? ''))]);
-        }
-    }
-
     // ---------------- mi cuenta (app) ----------------
     if ($r === 'yo') {
         if (!$yo) {
@@ -352,8 +329,6 @@ try {
     responder(403, ['error' => $e->getMessage()]);
 } catch (NoEncontradoException $e) {
     responder(404, ['error' => $e->getMessage()]);
-} catch (BloqueadoException $e) {
-    responder(423, ['error' => $e->getMessage(), 'hasta' => $e->hasta]);
 } catch (DemasiadasException $e) {
     responder(429, ['error' => $e->getMessage()]);
 } catch (Throwable $e) {

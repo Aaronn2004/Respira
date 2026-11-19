@@ -63,21 +63,19 @@ ayuntamiento ─< zona · nodo · punto_reparto · empleado
 | `admin`, `tecnico`, `reparto` | panel web | `A-XXXX` |
 
 - Un vecino no puede registrarse sin aceptar las condiciones, así que su `alta` es también el momento en que las aceptó.
-- `acceso_intento` registra fallos y caducidad por hash del correo. Al quinto intento el acceso queda bloqueado durante 15 minutos.
 
 **empleado**: los datos de empleado de cada trabajador (`usuario_id` PK y FK, `ayuntamiento_id` FK: para qué ayuntamiento trabaja, `num_empleado` UNIQUE, `servicio`). Están aparte para que los vecinos no tengan esos campos vacíos.
 
-**Alta de trabajadores**: administración entrega en persona una contraseña inicial válida durante 48 h. La cuenta tiene `requiere_cambio_clave` activo hasta que el trabajador elige su contraseña personal en la app o mediante la recuperación por correo.
+**Alta de trabajadores**: administración pone la contraseña al darlo de alta y se la entrega en persona. En este sprint el usuario no puede cambiarla ni recuperarla.
 
-**token**: sesiones abiertas y enlaces de «he olvidado mi contraseña» (`token_hash`, `usuario_id`, `tipo`, `caduca`). Solo se guarda el **sha256**: quien lea la BD no puede usarlos.
+**token**: sesiones abiertas (`token_hash`, `usuario_id`, `tipo`, `caduca`). Solo se guarda el **sha256**: quien lea la BD no puede usarlos.
 
 | `tipo` | Qué es | Dura |
 |---|---|---|
 | `app` | sesión de la app | 90 días |
 | `web` | sesión del panel | 12 h |
-| `recuperar` | enlace para crear una contraseña nueva | 1 h |
+| `recuperar` | sin uso en este sprint (se conserva en el ENUM) | — |
 
-Al usar un enlace de recuperar se borra, y también las sesiones abiertas de esa cuenta.
 
 ## 3. Mediciones y préstamos
 

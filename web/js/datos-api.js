@@ -37,7 +37,7 @@
    * -------------------------------------------------------------- */
   const E = () => R().estado;          // getters/setters de los datos de app.js
 
-  const D = { version: 0, enlaces: Object.create(null) };
+  const D = { version: 0 };
   window.RespiraDatos = D;
   /* --------------------------------------------------------------
    * # effects: lee la dirección configurada del servidor.
@@ -459,40 +459,13 @@
     if (URL_API) reiniciarPanel();
   };
 
-  // undefined = cargando, null = enlace no válido, false = comprobación fallida.
-  /* --------------------------------------------------------------
-   * # effects: consulta o solicita por red la validación del enlace.
-   * token: Text --> D.enlace() --> Datos | Ausente | B
-   * -------------------------------------------------------------- */
-  D.enlace = tok => {
-    if (!tok) return null;
-    if (!(tok in D.enlaces)) {
-      D.enlaces[tok] = undefined;
-      pedir('/enlaces/' + encodeURIComponent(tok)).then(v => {
-        D.enlaces[tok] = v.estado === 'no_valido' ? null : { n: v.nombre, e: v.email, id: v.id, rol: v.rol, tipo: v.tipo,
-          caduca: v.estado === 'caducado' ? 0 : Date.now() + 36e5, token: tok, horas: v.horas };
-      }).catch(() => { D.enlaces[tok] = false; }).finally(() => { D.version++; repintar(true); });
-    }
-    return D.enlaces[tok];
-  };
-  /* --------------------------------------------------------------
-   * # effects: invalida una validación fallida y repinta.
-   * token: Text --> D.reintentarEnlace()
-   * -------------------------------------------------------------- */
-  D.reintentarEnlace = tok => {
-    if (D.enlaces[tok] !== false) return;
-    delete D.enlaces[tok];
-    repintar(true);
-  };
-
   // ---------- errores del servidor --> campos del formulario ----------
   const CAMPOS = {
     prestar: { usuario: 'puser', codigo: 'pcode', punto: 'ppunto' }, devolver: { codigo: 'dcode' },
     sensor: { codigo: 'code', magnitudes: 'mags', asignado_a: 'asig', motivo: 'motivo' },
     baja: { motivo: 'bmot' },
     regalo: { nombre: 'gn', coste: 'gc', stock: 'gs' }, comprobarCanje: { codigo: 'ccode' }, entregar: { codigo: 'ccode' },
-    trabajador: { nombre: 'tn', email: 'te', num_empleado: 'temp', servicio: 'ts', clave: 'tp1' }, activar: { clave: 'ap1' },
-    recuperar: { email: 'rmail' },
+    trabajador: { nombre: 'tn', email: 'te', num_empleado: 'temp', servicio: 'ts', clave: 'tp1' },
   };
   /* --------------------------------------------------------------
    * # effects: distribuye errores entre campos y mensaje general y repinta.
@@ -556,36 +529,6 @@
         S.e = { login: e.codigo === 401 ? 'Correo o contraseña incorrectos.' : R().esc(e.message) };
         R().render();
       }
-    },
-
-    /* --------------------------------------------------------------
-     * # effects: solicita la recuperación por red y muestra su resultado.
-     * -   cuenta: Datos
-     *     -->
-     *         recuperar() --x
-     * -------------------------------------------------------------- */
-    async recuperar({ email }) {
-      try {
-        await pedir('/recuperaciones', 'POST', { email });
-        R().S.recOk = true; R().render();
-      } catch (e) { mostrarError('recuperar', e, 'rmail'); }
-    },
-
-    /* --------------------------------------------------------------
-     * # effects: activa la cuenta por red y limpia las contraseñas del formulario.
-     * -   credenciales: Datos
-     *     -->
-     *         activar() --x
-     * -------------------------------------------------------------- */
-    async activar({ token: tok, clave }) {
-      const S = R().S;
-      try {
-        const v = D.enlaces[tok];
-        const j = await pedir('/enlaces/' + encodeURIComponent(tok), 'POST', { clave });
-        S.activOk = j.email; S.activTipo = v && v.tipo; S.activRol = v && v.rol;
-        S.f.ap1 = ''; S.f.ap2 = ''; delete D.enlaces[tok];
-        R().render();
-      } catch (e) { S.f.ap1 = ''; S.f.ap2 = ''; mostrarError('activar', e, 'ap1'); }
     },
 
     /* --------------------------------------------------------------

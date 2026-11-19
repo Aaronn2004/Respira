@@ -234,20 +234,18 @@ try {
         igual([200, 3], [$c, count(array_filter($l, fn($g) => $g['stock'] > 0))]);
         igual(409, pedir('POST', '/canjes', ['regalo' => 'g2'], $TOK['lucia'])[0]);
     });
-    prueba('trabajador: alta y cambio obligatorio de la contraseña antes de usar la app', function () use (&$TOK) {
+    prueba('trabajador: alta y acceso directo; no se puede cambiar ni recuperar la contraseña', function () use (&$TOK) {
         $datos = ['nombre' => 'Pablo Sanz Gil', 'email' => 'psanz@ayto.es', 'num_empleado' => '104233', 'servicio' => 'Limpieza viaria'];
         [$c, $j] = pedir('POST', '/panel/trabajadores', $datos + ['clave' => 'corta'], $TOK['admin']);
         igual([400, ['clave']], [$c, array_keys($j['errores'])]);
         [$c, $j] = pedir('POST', '/panel/trabajadores', $datos + ['clave' => 'Trabajo2026!'], $TOK['admin']);
         igual([201, 'T-0001'], [$c, $j['trabajador']['id']]);
         cierto(!isset($j['enlace']) && !isset($j['token']), 'ya no hay enlace de activación');
-        [$c, $inicial] = pedir('POST', '/sesiones', ['email' => 'psanz@ayto.es', 'clave' => 'Trabajo2026!']);
-        igual([201, true], [$c, $inicial['usuario']['requiere_cambio_clave']]);
-        igual(403, pedir('GET', '/yo', null, $inicial['token'])[0]);
-        [$c, $nueva] = pedir('PUT', '/yo/clave', ['clave' => 'Personal2468!'], $inicial['token']);
-        igual([200, false], [$c, $nueva['usuario']['requiere_cambio_clave']]);
-        igual(401, pedir('GET', '/yo', null, $inicial['token'])[0]);
-        igual(200, pedir('GET', '/yo', null, $nueva['token'])[0]);
+        [$c, $s] = pedir('POST', '/sesiones', ['email' => 'psanz@ayto.es', 'clave' => 'Trabajo2026!']);
+        igual(201, $c);
+        igual(200, pedir('GET', '/yo', null, $s['token'])[0]);
+        igual(404, pedir('PUT', '/yo/clave', ['clave' => 'Personal2468!'], $s['token'])[0]);
+        igual(404, pedir('POST', '/recuperaciones', ['email' => 'psanz@ayto.es'])[0]);
         igual(404, pedir('POST', '/panel/trabajadores/T-0001/enlace', [], $TOK['admin'])[0], 'la ruta de reenviar ya no existe');
     });
     prueba('aviso emitido: se registra una vez y el historial lo devuelve sin identidad de usuario', function () use (&$TOK) {
@@ -265,16 +263,6 @@ try {
         igual(1, count($serie['eventos']['avisos']));
         igual($lectura['momento'], $serie['eventos']['avisos'][0]['momento']);
         cierto(!isset($serie['eventos']['avisos'][0]['usuario_id']));
-    });
-    prueba('recuperar: 202 siempre y el correo trae un enlace que funciona', function () {
-        global $correo;
-        igual(202, pedir('POST', '/recuperaciones', ['email' => 'nadie@correo.es'])[0]);
-        igual(202, pedir('POST', '/recuperaciones', ['email' => 'lucia@correo.es'])[0]);
-        // solo un correo: el de Lucía (al de «nadie» no se manda nada)
-        preg_match_all('/#activar\/([0-9a-f]{64})/', (string) @file_get_contents($correo), $mm);
-        cierto(count($mm[1]) === 1, 'un solo correo, el de recuperación');
-        igual(200, pedir('POST', '/enlaces/' . end($mm[1]), ['clave' => 'Nueva2026'])[0]);
-        igual(201, pedir('POST', '/sesiones', ['email' => 'lucia@correo.es', 'clave' => 'Nueva2026'])[0]);
     });
     prueba('cerrar sesión: el token deja de valer', function () use (&$TOK) {
         [, $j] = pedir('POST', '/sesiones', ['email' => 'admin@ayto.es', 'clave' => 'Admin2026!', 'cliente' => 'web']);

@@ -340,21 +340,20 @@ const SERVICIOS=['Limpieza viaria','Parques y jardines','Mantenimiento urbano','
  * TRAB() --> [Datos]
  * -------------------------------------------------------------- */
 const TRAB=()=>STAFF.filter(x=>x.r==='trabajador');
-const ACTIV_H=48;
 const ROL={admin:'Administración',tecnico:'Técnico',reparto:'Punto de reparto',trabajador:'Trabajador municipal'};
 
 /* ---------- estado y rutas ---------- */
 const S={tabIni:'o3',iniVisto:false,layer:'zonas',mag:'gen',sel:null,q:'',hist:{id:ZONAS[0].id,mag:'o3',per:'24h',desde:'',hasta:''},cmp:{a:ZONAS[0].id,b:ZONAS[1].id,mag:'o3',per:'24h'},avf:0,avt:'todos',avSel:null,
- user:null,f:{},e:{},modal:null,edit:null,fT:'todos',fE:'todos',fQ:'',recOk:false,canje:null};
+ user:null,f:{},e:{},modal:null,edit:null,fT:'todos',fE:'todos',fQ:'',canje:null};
 const PUB=['inicio','mapa','comunidad','historial','comparar','como-funciona','privacidad'];
 const PAN=['panel','panel-sensores','panel-editar','panel-prestamos','panel-puntos','panel-regalos','panel-trabajadores'];
 const ACCESS={admin:PAN,tecnico:['panel','panel-sensores','panel-editar','panel-prestamos'],reparto:['panel-prestamos','panel-regalos'],trabajador:[]};
 const HOME={admin:'panel',tecnico:'panel',reparto:'panel-prestamos'};
 /* --------------------------------------------------------------
- * # effects: lee la URL y conserva el token de activación.
+ * # effects: lee la URL.
  * route() --> Text
  * -------------------------------------------------------------- */
-function route(){const h=location.hash.slice(1);if(h==='valores'||h==='voluntariado')return 'como-funciona';if(h.startsWith('activar/')){S.tok=h.slice(8);return 'activar'}return [...PUB,...PAN,'acceso','recuperar'].includes(h)?h:'inicio'}
+function route(){const h=location.hash.slice(1);if(h==='valores'||h==='voluntariado')return 'como-funciona';return [...PUB,...PAN,'acceso'].includes(h)?h:'inicio'}
 /* --------------------------------------------------------------
  * # effects: cambia la URL, el estado de navegación y el desplazamiento.
  * ruta: Text --> nav()
@@ -393,9 +392,6 @@ addEventListener('hashchange',()=>{
  if(seccionPortada())return;
  transicionVista(()=>{
   S.e={};S.modal=null;
-  if(!location.hash.startsWith('#activar/')||location.hash.slice(9)!==S.tok){
-   S.activOk=null;S.activRol=null;S.activTipo=null;S.f.ap1='';S.f.ap2='';
-  }
   if(!location.hash.startsWith('#panel-trabajadores'))S.altaOk=null;
   render();
   const seccion=desplazarASeccion();
@@ -449,7 +445,7 @@ function header(cur){
   * -------------------------------------------------------------- */
  const activo=h=>h==='comunidad'?cur==='mapa'&&com:h==='mapa'?(cur==='mapa'&&!com)||['historial','comparar'].includes(cur):cur===h;
  const links=TV_LINKS.map(([h,n])=>`<a class="tv-link" href="#${h}"${activo(h)?' aria-current="page"':''}>${n}</a>`).join('');
- const accesoActual=['acceso','recuperar','activar'].includes(cur)?' aria-current="page"':'';
+ const accesoActual=cur==='acceso'?' aria-current="page"':'';
  return `<header class="tv tvh public-nav"><nav class="tv-nav" aria-label="Principal">
   <a class="tv-marca" href="#inicio" aria-label="Respira, inicio"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true">${SYM()}</svg>Respira</a>
   <div class="tv-pill" data-tv-desktop>${links}</div>
@@ -1606,44 +1602,11 @@ function vPriv(){
 
 /* ---------- acceso (WEB-05) ---------- */
 /* --------------------------------------------------------------
- * titulo: Text, descripcion: Text, contenido: Html --> accesoMunicipal() --> Html
+ * # effects: lee el formulario de acceso.
+ * vAcceso() --> Html
  * -------------------------------------------------------------- */
-function accesoMunicipal(titulo,descripcion,contenido){
- return header('acceso')+`<main class="contenido-pagina acceso-pagina wrap">
-  <header class="contenido-cabecera acceso-cabecera">
-   <h1>${titulo}</h1>
-   <p>${descripcion}</p>
-   <a href="#mapa">Volver al mapa público</a>
-  </header>
-  <div class="acceso-contenido card">${contenido}</div>
- </main>`+footer();
-}
-
-/* --------------------------------------------------------------
- * # effects: lee el formulario y los resultados de acceso o recuperación.
- * recuperacion: B --> vAcceso() --> Html
- * -------------------------------------------------------------- */
-function vAcceso(rec){
+function vAcceso(){
  const apiConfigurada=window.RespiraDatos?.conApi() ?? Boolean(window.RESPIRA_CONFIG?.API_URL);
- if(rec){
-  if(!apiConfigurada)return accesoMunicipal('Recuperar contraseña','En el modo de demostración no se envían correos.',`
-   <a class="btn" href="#acceso">Volver a iniciar sesión</a>`);
-  const contenido=S.recOk?`
-   <p class="alert ok" role="status">${I.check}<span>Si <b>${esc(S.f.rmail)}</b> está registrado, recibirás un enlace en unos minutos.</span></p>
-   <a class="btn" href="#acceso" data-act="recBack">Volver a iniciar sesión</a>`:`
-   <form id="f-rec" novalidate>
-    <h2>Solicita un enlace</h2>
-    <div class="field">
-     <label for="r-mail">Correo municipal</label>
-     <input class="input" id="r-mail" type="email" data-bind="f.rmail" value="${esc(S.f.rmail||'')}" placeholder="nombre@ayto.es" autocomplete="email" autocapitalize="none" spellcheck="false" required ${inv('rmail')}>
-     ${err('rmail')}
-    </div>
-    <button class="btn" type="submit">Enviar enlace</button>
-    <p class="note">Por seguridad, la respuesta es la misma para todos los correos.</p>
-    <a class="acceso-enlace" href="#acceso">Volver a iniciar sesión</a>
-   </form>`;
-  return accesoMunicipal('Recuperar contraseña','Te enviaremos un enlace para crear una nueva.',contenido);
- }
  const demoVisible=!apiConfigurada||window.RESPIRA_CONFIG?.MOSTRAR_CUENTAS_PRUEBA===true;
  return `<main class="login">
   <aside class="art">
@@ -1672,7 +1635,6 @@ function vAcceso(rec){
      ${err('pass')}
     </div>
     <button class="btn" type="submit">Entrar</button>
-    <a class="login-recuperar" href="#recuperar">¿Has olvidado la contraseña?</a>
     ${demoVisible?`<section class="demo-creds acceso-prueba" aria-labelledby="acceso-prueba-titulo">
      <h3 id="acceso-prueba-titulo">Acceso de prueba</h3>
      <ul>
@@ -2105,69 +2067,17 @@ function vTrabajadores(){
     <div class="field"><label for="t-s">Servicio</label>
      <select class="input" id="t-s" data-bind="f.ts" required ${inv('ts')}><option value="">Elige un servicio…</option>
       ${SERVICIOS.map(x=>`<option${f.ts===x?' selected':''}>${x}</option>`).join('')}</select>${err('ts')}</div>
-    <div class="field"><label for="t-p1">Contraseña inicial</label>
+    <div class="field"><label for="t-p1">Contraseña</label>
      <input class="input" id="t-p1" type="password" data-bind="f.tp1" value="" autocomplete="new-password" maxlength="72" required aria-describedby="t-p1-ayuda${S.e.tp1?' e-tp1':''}" ${S.e.tp1?'aria-invalid="true"':''}>
      <span class="hint" id="t-p1-ayuda">Mínimo 10 caracteres, con letras y números, sin su usuario.</span>${err('tp1')}</div>
     <div class="field"><label for="t-p2">Repite la contraseña</label>
      <input class="input" id="t-p2" type="password" data-bind="f.tp2" value="" autocomplete="new-password" maxlength="72" required ${inv('tp2')}>${err('tp2')}</div>
    </fieldset>
-   <p class="panel-nota">El trabajador cambia la contraseña inicial al entrar por primera vez en la app. Si la olvida, puede usar «He olvidado mi contraseña». La asignación se hace en <a href="#panel-sensores">Sensores</a>.</p>
+   <p class="panel-nota">El trabajador entra en la app con esta contraseña; no puede cambiarla. La asignación se hace en <a href="#panel-sensores">Sensores</a>.</p>
    <button type="submit" class="btn"${enviando?' disabled':''}>${enviando?'Registrando…':'Dar de alta'}</button>
    ${enviando?'<span class="hint" role="status">Se está enviando el alta.</span>':''}
   </form>
   ${panelTabla('Cuentas de trabajadores',['Trabajador','ID de cuenta','Nº empleado','Servicio','Alta'],filas,'Todavía no hay trabajadores registrados.')}`);
-}
-
-/* --------------------------------------------------------------
- * # effects: consulta el reloj y el formulario; puede validar el enlace por red.
- * vActivar() --> Html
- * -------------------------------------------------------------- */
-function vActivar(){
- const enlace=enlaceAct();
- const recuperacion=enlace?.tipo==='recuperar'||S.activTipo==='recuperar';
- const conocido=Boolean(enlace||S.activOk);
- const titulo=!conocido?'Enlace de acceso':recuperacion?'Crea una contraseña nueva':'Activa tu cuenta de trabajador municipal';
- const descripcion=!conocido?'Activación y recuperación de cuenta de Respira.':recuperacion?'Una vez cambiada, podrás volver a iniciar sesión.':'Usa el enlace que te ha enviado tu ayuntamiento para crear tu contraseña.';
- let contenido;
-
- if(S.activOk){
-  const enPanel=['admin','tecnico','reparto'].includes(S.activRol);
-  contenido=`<p class="alert ok" role="status">${I.check}<span><b>${recuperacion?'Contraseña cambiada.':'Cuenta activada.'}</b>
-   Ya puedes entrar ${enPanel?'en el panel':'en la app Respira'} con <b>${esc(S.activOk)}</b> y la contraseña que acabas de crear.</span></p>
-   ${enPanel?'<a class="btn" href="#acceso">Iniciar sesión</a>':'<a class="btn sec" href="#mapa">Ver el mapa</a>'}
-   ${recuperacion?'':'<p class="note">Tu cuenta de trabajador municipal sirve para llevar el sensor que te asigne tu servicio. La gestión de sensores se hace desde el panel municipal.</p>'}`;
- }else if(enlace===undefined&&window.RespiraDatos?.conApi()){
-  contenido='<p class="muted" role="status">Comprobando el enlace…</p>';
- }else if(enlace===false){
-  contenido=`<p class="alert warn" role="status">${I.alert}<span>No se ha podido comprobar el enlace. Inténtalo de nuevo.</span></p>
-   <button type="button" class="btn" data-act="reintentarEnlace">Reintentar</button>`;
- }else if(!enlace||enlace.caduca<Date.now()){
-  const mensaje=enlace?'<b>El enlace ha caducado.</b>':'<b>Este enlace no es válido.</b> Puede que ya se haya usado o que administración haya enviado uno nuevo.';
-  const siguiente='<a class="btn" href="#recuperar">Solicitar otro enlace</a>';
-  contenido=`<p class="alert bad" role="alert">${I.alert}<span>${mensaje}</span></p>${siguiente}`;
- }else{
-  const norma=enlace.rol==='vecino'?'Mínimo 8 caracteres.':'Mínimo 10 caracteres, con letras y números, sin incluir tu nombre de usuario.';
-  const horas=enlace.horas??ACTIV_H;
-  contenido=`<form id="f-activar" novalidate>
-   <h2>Hola, ${esc(enlace.n.split(' ')[0])}</h2>
-   <p class="muted">Crea la contraseña de tu cuenta <b class="mono">${esc(enlace.id)}</b> (${esc(enlace.e)}).</p>
-   <div class="field">
-    <label for="ac-p1">Contraseña nueva</label>
-    <input class="input" id="ac-p1" type="password" data-bind="f.ap1" autocomplete="new-password" required
-     aria-describedby="ac-norma${S.e.ap1?' e-ap1':''}" ${S.e.ap1?'aria-invalid="true"':''}>
-    <span class="hint" id="ac-norma">${norma}</span>
-    ${err('ap1')}
-   </div>
-   <div class="field">
-    <label for="ac-p2">Repite la contraseña</label>
-    <input class="input" id="ac-p2" type="password" data-bind="f.ap2" autocomplete="new-password" required ${inv('ap2')}>
-    ${err('ap2')}
-   </div>
-   <button class="btn" type="submit">${recuperacion?'Cambiar contraseña':'Activar cuenta'}</button>
-   <p class="note">El enlace se puede usar una vez y caduca ${horas===1?'una hora':horas+' horas'} después de su envío.</p>
-  </form>`;
- }
- return accesoMunicipal(titulo,descripcion,contenido);
 }
 
 /* ---------- modales ---------- */
@@ -2275,14 +2185,7 @@ function render(soloDatos=false){const r=route();
   *     <--
   *   Html
   * -------------------------------------------------------------- */
- acceso:()=>vAcceso(false),/* --------------------------------------------------------------
-  * # effects: lee el formulario de recuperación.
-  * -
-  *         recuperar() --x
-  *     <--
-  *   Html
-  * -------------------------------------------------------------- */
- recuperar:()=>vAcceso(true),panel:vFlota,'panel-sensores':vSensores,'panel-editar':vEditar,'panel-prestamos':vPrestamos,'panel-puntos':vPuntos,'panel-regalos':vRegalos,'panel-trabajadores':vTrabajadores,activar:vActivar};
+ acceso:()=>vAcceso(), panel:vFlota,'panel-sensores':vSensores,'panel-editar':vEditar,'panel-prestamos':vPrestamos,'panel-puntos':vPuntos,'panel-regalos':vRegalos,'panel-trabajadores':vTrabajadores};
  const ae=document.activeElement;const keep=ae&&ae.id&&ae.dataset&&ae.dataset.live?[ae.id,ae.selectionStart]:null;
  const mapaAbierto=r==='mapa'||r==='comunidad';
  const listaAnterior=$r.querySelector('.mapview .side');
@@ -2329,11 +2232,6 @@ function render(soloDatos=false){const r=route();
  * accion: Text, datos: Datos --> SRV() --> B
  * -------------------------------------------------------------- */
 const SRV=(k,d)=>{const D=window.RespiraDatos;if(!D||!D.conApi())return false;D.accion(k,d);return true};
-/* --------------------------------------------------------------
- * # effects: consulta el enlace de activación local o inicia su validación por red.
- * enlaceAct() --> Datos | Ausente | B
- * -------------------------------------------------------------- */
-const enlaceAct=()=>window.RespiraDatos&&RespiraDatos.conApi()?RespiraDatos.enlace(S.tok):STAFF.find(x=>x.r==='trabajador'&&x.token&&x.token===S.tok);
 /* --------------------------------------------------------------
  * # effects: lee el código introducido en el formulario.
  * codigoCanje() --> Text
@@ -2533,12 +2431,6 @@ const A={
   *         showPass() --x
   * -------------------------------------------------------------- */
  showPass:()=>{S.showPass=!S.showPass;render()}, /* --------------------------------------------------------------
-  * # effects: restablece el formulario de recuperación.
-  * -
-  *         recBack() --x
-  * -------------------------------------------------------------- */
- recBack:()=>{S.recOk=false},
- /* --------------------------------------------------------------
   * # effects: cierra la sesión y vuelve al acceso municipal.
   * -
   *         logout() --x
@@ -2557,12 +2449,6 @@ const A={
   *         reintentarPublico() --x
   * -------------------------------------------------------------- */
  reintentarPublico:nombre=>window.RespiraDatos?.reintentarPublico(nombre),
- /* --------------------------------------------------------------
-  * # effects: repite la validación del enlace de activación.
-  * -
-  *         reintentarEnlace() --x
-  * -------------------------------------------------------------- */
- reintentarEnlace:()=>window.RespiraDatos?.reintentarEnlace(S.tok),
  /* --------------------------------------------------------------
   * # effects: actualiza el filtro de tipos de sensor.
   * -   tipo: Text
@@ -2739,7 +2625,7 @@ document.addEventListener('keydown',e=>{
  * ruta: Text, valor: Valor --> setPath()
  * -------------------------------------------------------------- */
 function setPath(b,v){const p=b.split('.');let o=S;for(let i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=v}
-const ERRKEY={'f.mail':'mail','f.pass':'pass','f.rmail':'rmail','f.puser':'puser','f.pcode':'pcode','f.dcode':'dcode','f.ccode':'ccode','f.bconf':'bconf','f.gn':'gn','f.gc':'gc','f.gs':'gs','f.tn':'tn','f.te':'te','f.temp':'temp','f.ts':'ts','f.tp1':'tp1','f.tp2':'tp2','edit.code':'code','edit.asig':'asig','edit.motivo':'motivo','hist.desde':'desde','hist.hasta':'hasta'};
+const ERRKEY={'f.mail':'mail','f.pass':'pass','f.puser':'puser','f.pcode':'pcode','f.dcode':'dcode','f.ccode':'ccode','f.bconf':'bconf','f.gn':'gn','f.gc':'gc','f.gs':'gs','f.tn':'tn','f.te':'te','f.temp':'temp','f.ts':'ts','f.tp1':'tp1','f.tp2':'tp2','edit.code':'code','edit.asig':'asig','edit.motivo':'motivo','hist.desde':'desde','hist.hasta':'hasta'};
 $r.addEventListener('input',e=>{const el=e.target,b=el.dataset.bind;if(!b||el.tagName==='SELECT')return;setPath(b,el.value);
  if(b==='f.ccode'&&S.canje&&S.canje.code!==codigoCanje())limpiarCanje();
  if(el.dataset.live){if(b==='q'&&S.sel&&!zonaCoincide(byZ(S.sel)))S.sel=null;render();return}
@@ -2779,15 +2665,6 @@ const up=v=>(v||'').trim().toUpperCase();
   STAFF.push(t);
   S.altaOk={id:cid,nombre:n,email:m};
   S.f.tn='';S.f.te='';S.f.temp='';S.f.ts='';S.f.tp1='';S.f.tp2='';render();toast(`Trabajador ${cid} dado de alta`);return}
- if(id==='f-activar'){const t=enlaceAct();
-  if(!t||t.caduca<Date.now()){render();return}
-  const p1=S.f.ap1||'',p2=S.f.ap2||'';
-  const vec=t.rol==='vecino';if(!p1)er.ap1='Escribe una contraseña.';else if(vec&&p1.length<8)er.ap1=`Tiene que tener al menos 8 caracteres (has escrito ${p1.length}).`;else if(vec){}else if(p1.length<10)er.ap1=`Tiene que tener al menos 10 caracteres (has escrito ${p1.length}).`;else if(!/[a-z]/i.test(p1)||!/\d/.test(p1))er.ap1='Tiene que llevar letras y números.';else if(p1.toLowerCase().includes(t.e.split('@')[0]))er.ap1='No puede contener tu nombre de usuario.';
-  if(!er.ap1&&p2!==p1)er.ap2='Las dos contraseñas no coinciden.';
-  if(!ok()){S.f.ap1='';S.f.ap2='';render();return}
-  if(SRV('activar',{token:S.tok,clave:p1}))return;
-  t.p=p1;t.estado='activo';t.token=null;t.caduca=null;S.activOk=t.e;S.f.ap1='';S.f.ap2='';render();return}
- if(id==='f-rec'){const m=(S.f.rmail||'').trim();if(!m)er.rmail='Escribe tu correo.';else if(!vEmail(m))er.rmail='El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';if(!ok())return;if(SRV('recuperar',{email:m}))return;S.recOk=true;render();return}
  if(id==='f-rango'){
   const h=S.hist,{desde,hasta}=h;
   const fechaUTC=window.RespiraSeries.fechaUtc;

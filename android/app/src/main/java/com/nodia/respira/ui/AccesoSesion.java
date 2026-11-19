@@ -39,7 +39,6 @@ public final class AccesoSesion implements Application.ActivityLifecycleCallback
                 || pantalla instanceof OnboardingActivity
                 || pantalla instanceof LoginActivity
                 || pantalla instanceof RegistroActivity
-                || pantalla instanceof RecuperarActivity
                 || pantalla instanceof TextoActivity);
     }
 

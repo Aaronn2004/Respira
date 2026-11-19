@@ -124,7 +124,6 @@ public final class Repositorio {
 
     // ---------- copia de lo del servidor ----------
     private String token;
-    private String tokenTemporal;
     private Usuario usuario;
     private Cuenta cuenta;
     private String sensorPrestado;            // código del préstamo en curso (o null)
@@ -144,7 +143,6 @@ public final class Repositorio {
     private final Map<String, Alerta> alertas = new LinkedHashMap<>();
     private final Map<String, Long> alertaAvisada = new HashMap<>();
     private boolean onboardingVisto;
-    private long bloqueoHasta;
     private Recorrido recorrido;
     private AvisoDeAlerta avisoDeAlerta;
 
@@ -896,17 +894,6 @@ public final class Repositorio {
         return token;
     }
 
-    // --------------------------------------------------------------
-    // # effects: consulta el reloj.
-    // +
-    //     bloqueadoHasta() <--
-    //       <--
-    //   Z
-    // --------------------------------------------------------------
-    public synchronized long bloqueadoHasta() {
-        return bloqueoHasta > System.currentTimeMillis() ? bloqueoHasta : 0;
-    }
-
     // Pasa el resultado al hilo principal
     // --------------------------------------------------------------
     // # effects: notifica en el hilo principal.
@@ -962,12 +949,12 @@ public final class Repositorio {
     // --------------------------------------------------------------
     private static Usuario usuarioDeJSON(JSONObject u) throws JSONException {
         return new Usuario(u.getString("id"), u.getString("nombre"), u.getString("email"),
-                u.optString("rol", Usuario.VECINO), u.optBoolean("requiere_cambio_clave"));
+                u.optString("rol", Usuario.VECINO));
     }
 
     // Respuesta de POST /sesiones o /usuarios: {token, usuario}
     // --------------------------------------------------------------
-    // # Prepara la fusión de favoritos locales al abrir la sesión; una clave inicial exige renovarla.
+    // # Prepara la fusión de favoritos locales al abrir la sesión.
     // # effects: consulta o actualiza la API.
     // - cuerpo: Text
     //       -->
@@ -979,15 +966,9 @@ public final class Repositorio {
         JSONObject o = new JSONObject(cuerpo);
         Usuario u = usuarioDeJSON(o.getJSONObject("usuario"));
         synchronized (this) {
-            if (u.requiereCambioClave) {
-                tokenTemporal = o.getString("token");
-                return u;
-            }
-            tokenTemporal = null;
             token = o.getString("token");
             usuario = u;
             cuenta = new Cuenta();
-            bloqueoHasta = 0;
             recorrido = null;
             ultimoRefresco = 0;
             fusionarSeguimiento = true;
@@ -1037,94 +1018,8 @@ public final class Repositorio {
             // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
-                if (e.codigo == 423) {
-                    synchronized (Repositorio.this) {
-                        bloqueoHasta = e.hasta > 0 ? e.hasta : System.currentTimeMillis() + Reglas.BLOQUEO_LOGIN_MS;
-                    }
-                    guardar();
-                }
                 errorEnPrincipal(hecho, e);
             }
-        });
-    }
-
-    // --------------------------------------------------------------
-    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
-    // + clave: Text
-    //       -->
-    //     cambiarClaveInicial() -->
-    //       <--
-    //   Usuario | ErrorApi
-    // --------------------------------------------------------------
-    public void cambiarClaveInicial(String clave, Hecho<Usuario> hecho) {
-        final String t;
-        synchronized (this) { t = tokenTemporal; }
-        if (t == null) {
-            errorEnPrincipal(hecho, ApiRespira.error(401, "{\"error\":\"Vuelve a iniciar sesión.\"}"));
-            return;
-        }
-        JSONObject cuerpo = new JSONObject();
-        try {
-            cuerpo.put("clave", clave);
-        } catch (JSONException e) {
-            errorEnPrincipal(hecho, ApiRespira.error(400, ""));
-            return;
-        }
-        api.pedir("PUT", "/yo/clave", cuerpo, t, new ApiRespira.Respuesta() {
-            // --------------------------------------------------------------
-            // # effects: actualiza la caché persistente; notifica en el hilo principal.
-            // + respuesta: Text
-            //       -->
-            //     ok() -->
-            // --------------------------------------------------------------
-            @Override public void ok(String respuesta) {
-                try {
-                    synchronized (Repositorio.this) {
-                        if (!t.equals(tokenTemporal)) return;
-                        enPrincipal(hecho, abrirSesion(respuesta));
-                    }
-                    cambio();
-                } catch (JSONException e) {
-                    errorEnPrincipal(hecho, ApiRespira.error(500, ""));
-                }
-            }
-
-            // --------------------------------------------------------------
-            // # effects: notifica en el hilo principal.
-            // + e: ErrorApi
-            //       -->
-            //     error() -->
-            // --------------------------------------------------------------
-            @Override public void error(ApiRespira.Error e) {
-                errorEnPrincipal(hecho, e);
-            }
-        });
-    }
-
-    // --------------------------------------------------------------
-    // # effects: consulta o actualiza la API.
-    // +
-    //     cancelarClaveInicial() -->
-    // --------------------------------------------------------------
-    public void cancelarClaveInicial() {
-        final String t;
-        synchronized (this) {
-            t = tokenTemporal;
-            tokenTemporal = null;
-        }
-        if (t != null) api.pedir("DELETE", "/sesiones", null, t, new ApiRespira.Respuesta() {
-            // --------------------------------------------------------------
-            // + cuerpo: Text
-            //       -->
-            //     ok() -->
-            // --------------------------------------------------------------
-            // --------------------------------------------------------------
-            // + e: ErrorApi
-            //       -->
-            //     error() -->
-            // --------------------------------------------------------------
-            @Override public void ok(String cuerpo) { }
-            @Override public void error(ApiRespira.Error e) { }
         });
     }
 
@@ -1172,59 +1067,6 @@ public final class Repositorio {
                 errorEnPrincipal(hecho, e);
             }
         });
-    }
-
-    // Enlace para crear una contraseña nueva (llega por correo). La
-    // respuesta es la misma exista o no la cuenta.
-    // --------------------------------------------------------------
-    // # effects: consulta o actualiza la API.
-    // + email: Text
-    //       -->
-    //     recuperar() -->
-    //       <--
-    //   0 | ErrorApi
-    // --------------------------------------------------------------
-    public void recuperar(String email, Hecho<Void> hecho) {
-        JSONObject c = new JSONObject();
-        try {
-            c.put("email", email.trim());
-        } catch (JSONException ignorada) {
-            // no pasa
-        }
-        api.pedir("POST", "/recuperaciones", c, null, respuestaVacia(hecho));
-    }
-
-    // --------------------------------------------------------------
-    // # effects: notifica en el hilo principal.
-    // -
-    //     respuestaVacia() <--
-    //       <--
-    //   0 | ErrorApi
-    // --------------------------------------------------------------
-    private ApiRespira.Respuesta respuestaVacia(Hecho<Void> hecho) {
-        return new ApiRespira.Respuesta() {
-            // --------------------------------------------------------------
-            // # effects: notifica en el hilo principal.
-            // + cuerpo: Text
-            //       -->
-            //     ok() -->
-            // --------------------------------------------------------------
-            @Override
-            public void ok(String cuerpo) {
-                enPrincipal(hecho, null);
-            }
-
-            // --------------------------------------------------------------
-            // # effects: notifica en el hilo principal.
-            // + e: ErrorApi
-            //       -->
-            //     error() -->
-            // --------------------------------------------------------------
-            @Override
-            public void error(ApiRespira.Error e) {
-                errorEnPrincipal(hecho, e);
-            }
-        };
     }
 
     // --------------------------------------------------------------
@@ -2035,7 +1877,6 @@ public final class Repositorio {
             alertas.clear();
             alertaAvisada.clear();
             onboardingVisto = false;
-            bloqueoHasta = 0;
             percepciones.clear();
             regalos.clear();
         }
@@ -2112,7 +1953,6 @@ public final class Repositorio {
             o.put("alertaAvisada", av);
             o.put("avisosPendientes", new JSONArray(avisosPendientes));
             o.put("onboarding", onboardingVisto);
-            o.put("bloqueo", bloqueoHasta);
             o.put("segPendiente", seguimientoPendiente);
             o.put("segFusionar", fusionarSeguimiento);
             if (recorrido != null) {
@@ -2188,7 +2028,6 @@ public final class Repositorio {
         for (int i = 0; token != null && avisos != null && i < avisos.length(); i++) {
             avisosPendientes.add(avisos.getJSONObject(i));
         }
-        bloqueoHasta = o.optLong("bloqueo", 0);
         seguimientoPendiente = o.optBoolean("segPendiente", false);
         fusionarSeguimiento = o.optBoolean("segFusionar", false);
         if (o.has("recorrido")) {

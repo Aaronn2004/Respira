@@ -17,8 +17,6 @@ public final class Reglas {
 
     public static final int MAX_PUNTOS_DIA = 100;
     public static final int MIN_POR_PUNTO = 5;
-    public static final int MAX_INTENTOS_LOGIN = 5;
-    public static final long BLOQUEO_LOGIN_MS = 15 * 60 * 1000L;
 
     private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$");
     private static final Pattern USUARIO = Pattern.compile("^[A-Za-z0-9._]{3,20}$");

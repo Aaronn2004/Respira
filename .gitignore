@@ -25,3 +25,4 @@ desktop.ini
 
 # ---- Paquete para subir a Plesk (se genera; no va a git) ----
 _plesk/
+_to_delete/

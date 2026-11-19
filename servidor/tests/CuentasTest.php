@@ -64,22 +64,12 @@ prueba('login: correo en mayúsculas vale y devuelve token y perfil', function (
     igual(64, strlen($r['token']));
 });
 
-prueba('login: cinco fallos bloquean la cuenta 15 minutos, incluso con la contraseña correcta', function () {
-    global $T;
+prueba('login: los fallos no bloquean la cuenta', function () {
     [, $c] = nuevas();
-    for ($i = 1; $i <= 4; $i++) {
-        $e = lanza(NoAutorizadoException::class, function () use ($c) { $c->iniciarSesion('lucia@correo.es', 'mal', 'app'); });
-        igual(5 - $i, $e->quedan, "intento $i");
+    for ($i = 1; $i <= 6; $i++) {
+        lanza(NoAutorizadoException::class, function () use ($c) { $c->iniciarSesion('lucia@correo.es', 'mal', 'app'); });
     }
-    $e = lanza(BloqueadoException::class, function () use ($c) { $c->iniciarSesion('LUCIA@correo.es', 'mal', 'app'); });
-    igual(Cuentas::fechaISO($T + 900000), $e->hasta);
-    lanza(BloqueadoException::class, function () use ($c) { $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app'); });
-    $T += 900000;
-    try {
-        igual('U-48213', $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app')['usuario']['id']);
-    } finally {
-        $T -= 900000;
-    }
+    igual('U-48213', $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app')['usuario']['id']);
 });
 
 prueba('login: un correo que no existe no dice si existe', function () {
@@ -112,7 +102,7 @@ prueba('sesión: el token se guarda con hash, caduca y se puede cerrar', functio
     igual(null, $c->usuarioDeSesion('inventado'));
 });
 
-prueba('trabajador: la contraseña inicial debe cambiarse y el token anterior deja de valer', function () {
+prueba('trabajador: entra con la contraseña que pone administración', function () {
     [$bd, $c] = nuevas();
     $admin = $c->usuarioPorId('A-0001');
     $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) {
@@ -125,13 +115,8 @@ prueba('trabajador: la contraseña inicial debe cambiarse y el token anterior de
     igual(['T-0001', 'Pablo Sanz Gil', 'psanz@ayto.es'], [$r['trabajador']['id'], $r['trabajador']['nombre'], $r['trabajador']['email']]);
     igual(['104233', 'Limpieza viaria'], array_values($bd->query("SELECT num_empleado, servicio FROM empleado WHERE usuario_id = 'T-0001'")->fetch(PDO::FETCH_ASSOC)));
     $primero = $c->iniciarSesion('psanz@ayto.es', 'Trabajo2026!', 'app');
-    igual(['trabajador', true], [$primero['usuario']['rol'], $primero['usuario']['requiere_cambio_clave']]);
-    $u = $c->usuarioDeSesion($primero['token']);
-    lanza(DatosNoValidosException::class, function () use ($c, $u) { $c->cambiarClaveInicial($u, 'Trabajo2026!'); });
-    $nuevo = $c->cambiarClaveInicial($u, 'Personal4359!');
-    igual(false, $nuevo['usuario']['requiere_cambio_clave']);
-    igual(null, $c->usuarioDeSesion($primero['token']));
-    igual('T-0001', $c->usuarioDeSesion($nuevo['token'])['id']);
+    igual(['trabajador', false], [$primero['usuario']['rol'], isset($primero['usuario']['requiere_cambio_clave'])]);
+    igual('T-0001', $c->usuarioDeSesion($primero['token'])['id']);
     $r2 = $c->altaTrabajador($admin, 'Elena Mora Vidal', 'emora@ayto.es', '104587', 'Parques y jardines', 'Parques2026!');
     igual('T-0002', $r2['trabajador']['id']);
     $e = lanza(ErroresDeCamposException::class, function () use ($c, $admin) {
@@ -153,41 +138,6 @@ prueba('trabajador: validaciones y solo administración', function () {
     crearUsuario($bd, 'A-0002', 'tecnico', 'tecnico@ayto.es', 'Tecnico2026!');
     lanza(ProhibidoException::class, function () use ($c) { $c->altaTrabajador($c->usuarioPorId('A-0002'), 'A B', 'a@ayto.es', '111111', 'Movilidad', 'Movilidad2026'); });
     lanza(NoAutorizadoException::class, function () use ($c) { $c->trabajadores(null); });
-});
-
-prueba('trabajador: la contraseña inicial caduca a las 48 horas', function () {
-    global $T, $correos;
-    [, $c] = nuevas();
-    $c->altaTrabajador($c->usuarioPorId('A-0001'), 'Persona de Prueba', 'prueba@ayto.es', '104233',
-        'Limpieza viaria', 'Inicio1234!');
-    $T += 48 * Cuentas::HORA_MS;
-    try {
-        lanza(ProhibidoException::class, function () use ($c) {
-            $c->iniciarSesion('prueba@ayto.es', 'Inicio1234!', 'app');
-        });
-        $c->solicitarRecuperacion('prueba@ayto.es', 'https://x.es/');
-        preg_match('~#activar/([0-9a-f]{64})~', $correos[0][2], $m);
-        $c->usarEnlace($m[1], 'Personal4359!');
-        $sesion = $c->iniciarSesion('prueba@ayto.es', 'Personal4359!', 'app');
-        igual(false, $sesion['usuario']['requiere_cambio_clave']);
-    } finally {
-        $T -= 48 * Cuentas::HORA_MS;
-    }
-});
-
-prueba('recuperar: manda el enlace por correo, cambia la contraseña y cierra las sesiones', function () {
-    global $correos;
-    [$bd, $c] = nuevas();
-    $s = $c->iniciarSesion('lucia@correo.es', 'Respira2026', 'app');
-    $c->solicitarRecuperacion('lucia@correo.es', 'https://x.es/respira/web/');
-    igual(1, count($correos));
-    preg_match('/#activar\/([0-9a-f]{64})/', $correos[0][2], $m);
-    igual('recuperar', $c->verEnlace($m[1])['tipo']);
-    $c->usarEnlace($m[1], 'Nueva2026');
-    igual(null, $c->usuarioDeSesion($s['token']), 'sesión cerrada');
-    igual('U-48213', $c->iniciarSesion('lucia@correo.es', 'Nueva2026', 'app')['usuario']['id']);
-    $c->solicitarRecuperacion('nadie@correo.es', 'https://x.es/');
-    igual(1, count($correos), 'a un correo que no existe no se manda nada (y no se avisa)');
 });
 
 prueba('borrar cuenta: no con un sensor prestado; después borra sus datos', function () {

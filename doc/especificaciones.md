@@ -10,7 +10,7 @@ Este documento recoge **solo lo que cambia o se añade** en este sprint respecto
 | Historial: alertas y picos | Ficha de zona › «Alertas y picos» | Historial › tarjeta «Alertas y picos» | `GET /zonas/{id}/serie` › `eventos` |
 | Mediciones valoradas, historial de cada zona | Insignia Bajo/Medio/Alto en cada valor y en cada alerta o pico | Igual | Límites en `Logica::LIMITES` |
 | Separar «Iniciar sesión» y «Crear cuenta» | Pantallas separadas (Login y Registro) | Solo acceso de trabajadores | `POST /sesiones` · `POST /usuarios` |
-| Los trabajadores los registra administración | Cambia la contraseña inicial al entrar por primera vez | Panel › Trabajadores (administración entrega la contraseña inicial en persona) | `POST /panel/trabajadores` (solo admin) · `PUT /yo/clave` |
+| Los trabajadores los registra administración | Entra con la contraseña que le da administración (no puede cambiarla) | Panel › Trabajadores (administración entrega la contraseña en persona) | `POST /panel/trabajadores` (solo admin) |
 | Interpolar (aproximado) | Gráfica: línea de puntos | Gráfica: línea de puntos | `serie` › `aprox` |
 | Promedio de las mediciones en la info de cada zona | «Media de las últimas 24 h» | «Media de las últimas 24 h» | `GET /zonas` › `media_24h` |
 | Portada: parques de mejor a peor, mejor medida | — | Portada › «Los parques ahora» | `GET /zonas` › `mejor` |
@@ -44,7 +44,7 @@ Si todo está en Bajo, no se enseña nada (no hay nada de lo que avisar).
 
 **WEB-04.3.** Se quita el recuadro «Descarga la app». El criterio pasa a ser: la portada explica qué es Respira y lleva al mapa y a «Cómo funciona»; no enlaza a ninguna descarga mientras la app no esté publicada.
 
-**Inicio de sesión (app y panel).** Se aplica el criterio APP-01b de Trello. Los cuatro primeros fallos muestran «Correo o contraseña incorrectos». El quinto bloquea el acceso durante 15 minutos.
+**Inicio de sesión (app y panel).** Se aplica el criterio APP-01b de Trello. Cada fallo muestra «Correo o contraseña incorrectos». En este sprint no hay bloqueo por intentos, ni cambio ni recuperación de contraseña.
 
 **Baja de cuenta (APP-01c).** Antes de confirmar se comprueba si hay un préstamo abierto. Para cerrar la cuenta primero hay que devolver el sensor en un punto de reparto.
 

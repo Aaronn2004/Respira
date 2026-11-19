@@ -62,7 +62,6 @@
         <activity android:name=".ui.MisPercepcionesActivity" android:exported="false" />
         <activity android:name=".ui.LoginActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ui.RegistroActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".ui.RecuperarActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ui.CuentaActivity" android:exported="false" />
         <activity android:name=".ui.RegalosActivity" android:exported="false" />
         <activity android:name=".ui.CanjesActivity" android:exported="false" />

@@ -72,19 +72,6 @@ class ProhibidoException extends Exception { }            // 403: con sesión, p
 class NoEncontradoException extends Exception { }         // 404
 // DatosNoValidosException <--- ConflictoException
 class ConflictoException extends DatosNoValidosException { }  // 409: choca con el estado actual
-// Exception <--- BloqueadoException
-class BloqueadoException extends Exception {               // 423: cuenta bloqueada un rato
-    public string $hasta;
-    // --------------------------------------------------------------
-    // + mensaje: Text, hasta: DateTime
-    //     -->
-    //         __construct() -->
-    // --------------------------------------------------------------
-    public function __construct(string $mensaje, string $hasta) {
-        parent::__construct($mensaje);
-        $this->hasta = $hasta;
-    }
-}
 // Exception <--- DemasiadasException
 class DemasiadasException extends Exception { }           // 429: límite por hora
 // Exception <--- ErrorDeAlmacenamientoException

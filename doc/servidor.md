@@ -22,7 +22,6 @@ servidor/
 
 - `POST /sesiones` devuelve un **token** (64 caracteres). El cliente lo manda en cada petición en la cabecera `X-Respira-Token` (también vale `Authorization: Bearer …`).
 - En la BD solo se guarda el **hash** del token y de las contraseñas (bcrypt).
-- Cinco fallos para el mismo correo bloquean el acceso durante 15 minutos. La respuesta 423 incluye la fecha de desbloqueo en `hasta`.
 - Cada ruta comprueba el **rol** en el servidor: la web no puede saltárselo.
 - La app entra con cuentas `vecino`/`trabajador`; el panel, con `admin`/`tecnico`/`reparto`.
 - `POST /mediciones` sigue abierto (los sensores no tienen cuenta), pero **los puntos solo se dan** si la medición llega con la sesión de quien tiene ese sensor prestado.
@@ -49,15 +48,12 @@ Base: `https://ablabla.upv.edu.es/respira/api/index.php` (si en tu Plesk falla l
 | `POST /sesiones` `{email, clave, cliente: app\|web}` | Inicia sesión → `{token, usuario}`. 401 correo o contraseña mal, 403 cliente equivocado |
 | `DELETE /sesiones` | Cierra la sesión |
 | `POST /usuarios` `{nombre, email, clave, acepta}` | Registro de vecinos (app). 400 con `errores` por campo |
-| `POST /recuperaciones` `{email}` | Manda por correo un enlace para cambiar la contraseña. Siempre 202 |
-| `GET /enlaces/{token}` · `POST /enlaces/{token}` `{clave}` | Ver y usar un enlace (activar cuenta o contraseña nueva) |
 
 **Mi cuenta (app, con sesión)**
 
 | Método y ruta | Qué hace |
 |---|---|
 | `GET /yo` | Perfil, puntos, «hoy», historial, canjes, reglas, préstamo en curso (`desde`, `hasta` = fecha límite) y `seguimiento` (`favoritos`, `alertas`). «hoy» y cada día del historial llevan `recorrido`: `inicio`, `fin`, `duracion_min`, `distancia_m`, `lecturas` y `parques` |
-| `PUT /yo/clave` `{clave}` | Cambia la contraseña inicial del trabajador. Devuelve una sesión nueva e invalida la provisional. |
 | `PUT /yo/seguimiento` `{favoritos: [zona], alertas: [{zona, magnitud, condicion, valor}]}` | Guarda en la cuenta los parques que sigues y sus alertas por magnitud (sustituye la lista; máximo 50 parques). |
 | `POST /yo/alertas/emitidas` `{zona, magnitud, valor, momento, origen}` | Registra un aviso de una alerta configurada a partir de una lectura reciente. El historial publica el dato sin identificar a la cuenta. |
 | `DELETE /yo` | Borrar la cuenta (no con un sensor prestado) |
@@ -76,7 +72,7 @@ Base: `https://ablabla.upv.edu.es/respira/api/index.php` (si en tu Plesk falla l
 | `GET /panel/reglas` (admin) | Reglas de puntos (fijas en el código; solo se consultan) |
 | `POST` · `PUT` · `DELETE /panel/regalos[/{id}]` (admin) | Catálogo |
 | `GET /panel/canjes` (admin) · `GET /panel/canjes/{c}` · `POST /panel/canjes/{c}/entrega` (admin, reparto) | Canjes |
-| `GET` · `POST /panel/trabajadores` (admin) | Alta de trabajadores: `{nombre, email, num_empleado, servicio, clave, ayuntamiento?}`. La clave inicial caduca a las 48 h. El primer acceso devuelve `requiere_cambio_clave: true` en el perfil y una sesión provisional. |
+| `GET` · `POST /panel/trabajadores` (admin) | Alta de trabajadores: `{nombre, email, num_empleado, servicio, clave, ayuntamiento?}`. La contraseña la pone administración; el trabajador no puede cambiarla. |
 
 **Qué devuelven las rutas del mapa**
 

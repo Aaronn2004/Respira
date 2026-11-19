@@ -18,7 +18,6 @@ public class Usuario {
     public final String nombre;
     public final String email;
     public final String rol;
-    public final boolean requiereCambioClave;
 
     // --------------------------------------------------------------
     // + id: Text, nombre: Text, email: Text, rol: Text
@@ -26,16 +25,6 @@ public class Usuario {
     //     Usuario() -->
     // --------------------------------------------------------------
     public Usuario(String id, String nombre, String email, String rol) {
-        this(id, nombre, email, rol, false);
-    }
-
-    // --------------------------------------------------------------
-    // + id: Text, nombre: Text, email: Text, rol: Text, requiere_cambio_clave: B
-    //       -->
-    //     Usuario() -->
-    // --------------------------------------------------------------
-    public Usuario(String id, String nombre, String email, String rol, boolean requiereCambioClave) {
-        this.requiereCambioClave = requiereCambioClave;
         this.id = id;
         this.nombre = nombre;
         this.email = email;

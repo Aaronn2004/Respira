@@ -25,10 +25,6 @@ class Cuentas extends Base {
 
     const SESION_APP_MS = 90 * Base::DIA_MS;   // la app no pide la contraseña cada día
     const SESION_WEB_MS = 12 * Base::HORA_MS;  // el panel caduca en una jornada
-    const RECUPERAR_MS = 1 * Base::HORA_MS;
-    const CLAVE_INICIAL_MS = 48 * Base::HORA_MS;
-    const BLOQUEO_MS = 15 * 60000;
-    const MAX_FALLOS = 5;
     const ROLES_PANEL = ['admin', 'tecnico', 'reparto'];
     const ROLES_APP = ['vecino', 'trabajador'];
     const SERVICIOS = ['Limpieza viaria', 'Parques y jardines', 'Mantenimiento urbano', 'Policía local',
@@ -93,7 +89,7 @@ class Cuentas extends Base {
         $servicio = $u['rol'] === 'trabajador'
             ? $this->valor("SELECT servicio FROM {$this->p}empleado WHERE usuario_id = ?", [$u['id']]) : null;
         return ['id' => $u['id'], 'rol' => $u['rol'], 'nombre' => $u['nombre'], 'email' => $u['email'],
-            'servicio' => $servicio, 'punto' => null, 'requiere_cambio_clave' => (bool) $u['requiere_cambio_clave']];
+            'servicio' => $servicio, 'punto' => null];
     }
 
     // --------------------------------------------------------------
@@ -197,7 +193,7 @@ class Cuentas extends Base {
         } elseif (!self::esEmail($m)) {
             $e['email'] = 'El correo no tiene un formato válido. Ejemplo: nombre@correo.es';
         } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE email = ?", [$m])) {
-            $e['email'] = 'Ya hay una cuenta con este correo. Inicia sesión o recupera la contraseña.';
+            $e['email'] = 'Ya hay una cuenta con este correo. Inicia sesión.';
         }
         $ec = self::errorClave('vecino', $clave, $m);
         if ($ec) {
@@ -244,8 +240,7 @@ class Cuentas extends Base {
     private function abrirSesion(array $u, string $cliente): string {
         $token = self::tokenNuevo();
         $ahora = $this->ahora();
-        $dura = $u['requiere_cambio_clave'] ? min(self::HORA_MS, self::msDeFechaBD($u['alta']) + self::CLAVE_INICIAL_MS - $ahora)
-            : ($cliente === 'web' ? self::SESION_WEB_MS : self::SESION_APP_MS);
+        $dura = $cliente === 'web' ? self::SESION_WEB_MS : self::SESION_APP_MS;
         $this->ejecutar("INSERT INTO {$this->p}token (token_hash, usuario_id, tipo, caduca) VALUES (?, ?, ?, ?)",
             [self::hashToken($token), $u['id'], $cliente, self::fechaBD($ahora + $dura)]);
         // limpieza de sesiones caducadas (de paso). Los enlaces caducados se
@@ -270,42 +265,12 @@ class Cuentas extends Base {
         if (strlen($m) > 120 || !self::esEmail($m)) {
             throw new NoAutorizadoException($mensaje);
         }
-        $ahora = $this->ahora();
-        $caduca = self::fechaBD($ahora + self::BLOQUEO_MS);
-        $hashCorreo = hash('sha256', $m);
-        $sqlite = $this->bd->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
-        $this->ejecutar("DELETE FROM {$this->p}acceso_intento WHERE vence <= ?", [self::fechaBD($ahora)]);
-        $resultado = $this->transaccion(function () use ($m, $clave, $cliente, $hashCorreo, $caduca, $sqlite) {
-            $ignorar = $sqlite ? 'OR IGNORE' : 'IGNORE';
-            $bloqueo = $sqlite ? '' : ' FOR UPDATE';
-            $this->ejecutar("INSERT $ignorar INTO {$this->p}acceso_intento (correo_hash, fallos, vence) VALUES (?, 0, ?)",
-                [$hashCorreo, $caduca]);
-            $estado = $this->fila("SELECT fallos, vence FROM {$this->p}acceso_intento WHERE correo_hash = ?$bloqueo", [$hashCorreo]);
-            if ((int) $estado['fallos'] >= self::MAX_FALLOS) {
-                return ['bloqueado' => $estado['vence']];
-            }
-            $u = $this->fila("SELECT * FROM {$this->p}usuario WHERE email = ?", [$m]);
-            if (!$u || !password_verify($clave, $u['clave_hash'])) {
-                $fallos = (int) $estado['fallos'] + 1;
-                $this->ejecutar("UPDATE {$this->p}acceso_intento SET fallos = ?, vence = ? WHERE correo_hash = ?",
-                    [$fallos, $caduca, $hashCorreo]);
-                return ['quedan' => self::MAX_FALLOS - $fallos];
-            }
-            $this->ejecutar("DELETE FROM {$this->p}acceso_intento WHERE correo_hash = ?", [$hashCorreo]);
-            $this->validarCliente($u, $cliente);
-            if ($u['requiere_cambio_clave'] && self::msDeFechaBD($u['alta']) + self::CLAVE_INICIAL_MS <= $this->ahora()) {
-                throw new ProhibidoException('La contraseña inicial ha caducado. Crea una nueva con «He olvidado mi contraseña».');
-            }
-            return ['token' => $this->abrirSesion($u, $cliente), 'usuario' => $this->perfil($u)];
-        });
-        if (isset($resultado['bloqueado']) || ($resultado['quedan'] ?? null) === 0) {
-            throw new BloqueadoException('Demasiados intentos. El acceso queda bloqueado durante 15 minutos.',
-                self::isoDeBD($resultado['bloqueado'] ?? $caduca));
+        $u = $this->fila("SELECT * FROM {$this->p}usuario WHERE email = ?", [$m]);
+        if (!$u || !password_verify($clave, $u['clave_hash'])) {
+            throw new NoAutorizadoException($mensaje);
         }
-        if (isset($resultado['quedan'])) {
-            throw new NoAutorizadoException($mensaje, $resultado['quedan']);
-        }
-        return $resultado;
+        $this->validarCliente($u, $cliente);
+        return ['token' => $this->abrirSesion($u, $cliente), 'usuario' => $this->perfil($u)];
     }
 
     // --------------------------------------------------------------
@@ -355,36 +320,6 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // # effects: consulta y modifica la base de datos.
-    // + u: Registro, clave: Text
-    //     -->
-    //         cambiarClaveInicial() -->
-    //     <--
-    //     Registro | Error
-    // --------------------------------------------------------------
-    public function cambiarClaveInicial(array $u, string $clave): array {
-        self::exigirRol($u, ['trabajador']);
-        if (!$u['requiere_cambio_clave']) {
-            throw new ConflictoException('La cuenta ya tiene una contraseña personal.');
-        }
-        $e = self::errorClave($u['rol'], $clave, $u['email']);
-        if ($e || password_verify($clave, $u['clave_hash'])) {
-            throw new DatosNoValidosException($e ?? 'Elige una contraseña distinta de la inicial.', 'clave');
-        }
-        $hash = password_hash($clave, PASSWORD_DEFAULT);
-        return $this->transaccion(function () use ($u, $hash) {
-            $st = $this->ejecutar("UPDATE {$this->p}usuario SET clave_hash = ?, requiere_cambio_clave = 0
-                WHERE id = ? AND requiere_cambio_clave = 1 AND clave_hash = ?", [$hash, $u['id'], $u['clave_hash']]);
-            if (!$st->rowCount()) {
-                throw new ConflictoException('La cuenta ya tiene una contraseña personal.');
-            }
-            $this->ejecutar("DELETE FROM {$this->p}token WHERE usuario_id = ?", [$u['id']]);
-            $actual = $this->usuarioPorId($u['id']);
-            return ['token' => $this->abrirSesion($actual, 'app'), 'usuario' => $this->perfil($actual)];
-        });
-    }
-
-    // --------------------------------------------------------------
     // # Borrar la cuenta (vecinos, desde la app). Se borran sus percepciones
     // # y sus puntos; sus mediciones se quedan, pero sin portador.
     // # effects: consulta y modifica la base de datos.
@@ -405,7 +340,6 @@ class Cuentas extends Base {
             foreach (['alerta_emitida', 'alerta', 'favorito', 'token', 'percepcion_envio', 'percepcion', 'puntos_dia'] as $t) {
                 $this->ejecutar("DELETE FROM {$this->p}$t WHERE usuario_id = ?", [$u['id']]);
             }
-            $this->ejecutar("DELETE FROM {$this->p}acceso_intento WHERE correo_hash = ?", [hash('sha256', $u['email'])]);
             $this->ejecutar("UPDATE {$this->p}medicion SET portador_id = NULL WHERE portador_id = ?", [$u['id']]);
             $this->ejecutar("UPDATE {$this->p}prestamo SET usuario_id = NULL WHERE usuario_id = ?", [$u['id']]);
             $this->ejecutar("UPDATE {$this->p}canje SET usuario_id = NULL WHERE usuario_id = ?", [$u['id']]);
@@ -574,106 +508,6 @@ class Cuentas extends Base {
     }
 
     // ==============================================================
-    // Enlaces de un solo uso
-    //   recuperar  fila en «token» (1 h): crear una contraseña nueva
-    // ==============================================================
-
-    // --------------------------------------------------------------
-    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
-    // - usuarioId: Text
-    //     -->
-    //         crearEnlaceRecuperar() -->
-    //     <--
-    //     Text | Error
-    // --------------------------------------------------------------
-    private function crearEnlaceRecuperar(string $usuarioId): string {
-        $token = self::tokenNuevo();
-        // un enlace nuevo invalida el anterior
-        $this->ejecutar("DELETE FROM {$this->p}token WHERE usuario_id = ? AND tipo = 'recuperar'", [$usuarioId]);
-        $this->ejecutar("INSERT INTO {$this->p}token (token_hash, usuario_id, tipo, caduca) VALUES (?, ?, 'recuperar', ?)",
-            [self::hashToken($token), $usuarioId, self::fechaBD($this->ahora() + self::RECUPERAR_MS)]);
-        return $token;
-    }
-
-    // --------------------------------------------------------------
-    // # Siempre responde igual (no revela qué correos existen). Si la cuenta
-    // # existe, envía un correo con el enlace (válido 1 h).
-    // # effects: consulta y modifica la base de datos; envía correo.
-    // + email: Text, urlWeb: Text
-    //     -->
-    //         solicitarRecuperacion() -->
-    //     <--
-    //     0 | Error
-    // --------------------------------------------------------------
-    public function solicitarRecuperacion(string $email, string $urlWeb): void {
-        $m = strtolower(trim($email));
-        if (!self::esEmail($m)) {
-            throw new DatosNoValidosException('El correo no tiene un formato válido.', 'email');
-        }
-        $u = $this->fila("SELECT * FROM {$this->p}usuario WHERE email = ?", [$m]);
-        if (!$u) {
-            return;
-        }
-        $token = $this->crearEnlaceRecuperar($u['id']);
-        $enlace = rtrim($urlWeb, '/') . '/#activar/' . $token;
-        call_user_func($this->correo, $m, 'Respira: crea una contraseña nueva',
-            "Hola, {$u['nombre']}:\n\nPara crear una contraseña nueva, abre este enlace (caduca en 1 hora y solo sirve una vez):\n\n$enlace\n\n"
-            . "Si no lo has pedido tú, no hagas nada: tu contraseña no cambia.\n\nRespira · Nodia");
-    }
-
-    // --------------------------------------------------------------
-    // # Un enlace usado ya no existe: se borra al usarlo.
-    // # effects: consulta la base de datos; consulta el reloj inyectado.
-    // + token: Text
-    //     -->
-    //         verEnlace() <--
-    //     <--
-    //     Registro | Error
-    // --------------------------------------------------------------
-    public function verEnlace(string $token): array {
-        $h = self::hashToken($token);
-        $f = $this->fila("SELECT 'recuperar' AS tipo, t.caduca, u.id, u.nombre, u.email, u.rol
-            FROM {$this->p}token t JOIN {$this->p}usuario u ON u.id = t.usuario_id
-            WHERE t.token_hash = ? AND t.tipo = 'recuperar'", [$h]);
-        if (!$f) {
-            return ['estado' => 'no_valido'];
-        }
-        $estado = self::msDeFechaBD($f['caduca']) < $this->ahora() ? 'caducado' : 'valido';
-        return ['estado' => $estado, 'tipo' => $f['tipo'], 'id' => $f['id'], 'nombre' => $f['nombre'],
-            'email' => $f['email'], 'rol' => $f['rol'], 'horas' => 1];
-    }
-
-    // --------------------------------------------------------------
-    // # Cambia la contraseña y cierra las sesiones abiertas.
-    // # effects: consulta y modifica la base de datos.
-    // + token: Text, clave: Text
-    //     -->
-    //         usarEnlace() -->
-    //     <--
-    //     Text | Error
-    // --------------------------------------------------------------
-    public function usarEnlace(string $token, string $clave): string {
-        $v = $this->verEnlace($token);
-        if ($v['estado'] === 'no_valido') {
-            throw new NoEncontradoException('Este enlace no es válido. Puede que ya se haya usado o que se haya enviado uno nuevo.');
-        }
-        if ($v['estado'] === 'caducado') {
-            throw new ConflictoException('El enlace ha caducado. Pide uno nuevo.');
-        }
-        $e = self::errorClave($v['rol'], $clave, $v['email']);
-        if ($e) {
-            throw new DatosNoValidosException($e, 'clave');
-        }
-        $hash = password_hash($clave, PASSWORD_DEFAULT);
-        $this->transaccion(function () use ($v, $hash) {
-            $this->ejecutar("UPDATE {$this->p}usuario SET clave_hash = ?, requiere_cambio_clave = 0 WHERE id = ?", [$hash, $v['id']]);
-            // el enlace ya no sirve y las sesiones abiertas se cierran
-            $this->ejecutar("DELETE FROM {$this->p}token WHERE usuario_id = ?", [$v['id']]);
-        });
-        return $v['email'];
-    }
-
-    // ==============================================================
     // Trabajadores municipales (solo administración)
     // ==============================================================
 
@@ -757,8 +591,8 @@ class Cuentas extends Base {
                 throw new ConflictoException('No quedan identificadores de trabajador disponibles.');
             }
             $id = 'T-' . str_pad((string) $num, 4, '0', STR_PAD_LEFT);
-            $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, alta, requiere_cambio_clave)
-                VALUES (?, 'trabajador', ?, ?, ?, ?, 1)",
+            $this->ejecutar("INSERT INTO {$this->p}usuario (id, rol, nombre, email, clave_hash, alta)
+                VALUES (?, 'trabajador', ?, ?, ?, ?)",
                 [$id, $n, $m, $hash, self::fechaBD($this->ahora())]);
             $this->ejecutar("INSERT INTO {$this->p}empleado (usuario_id, ayuntamiento_id, num_empleado, servicio) VALUES (?, ?, ?, ?)",
                 [$id, $ayto, $emp, $servicio]);

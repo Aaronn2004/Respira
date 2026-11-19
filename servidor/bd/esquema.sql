@@ -134,21 +134,12 @@ CREATE TABLE usuario (
   email       VARCHAR(120) NOT NULL,
   clave_hash  VARCHAR(255) NOT NULL COMMENT 'bcrypt (password_hash)',
   alta        DATETIME(3)  NOT NULL,
-  requiere_cambio_clave TINYINT(1) NOT NULL DEFAULT 0,
   nombre_vecino VARCHAR(20) GENERATED ALWAYS AS (CASE WHEN rol = 'vecino' THEN LOWER(nombre) ELSE NULL END) STORED,
   PRIMARY KEY (id),
   UNIQUE KEY usuario_email (email),
   UNIQUE KEY usuario_nombre_vecino (nombre_vecino),
   KEY usuario_nombre (nombre),
   CONSTRAINT usuario_id_valido CHECK (id REGEXP '^(U-[0-9]{5}|T-[0-9]{4}|A-[0-9]{4})$')
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE acceso_intento (
-  correo_hash CHAR(64) NOT NULL,
-  fallos TINYINT UNSIGNED NOT NULL,
-  vence DATETIME(3) NOT NULL,
-  PRIMARY KEY (correo_hash),
-  KEY acceso_intento_vence (vence)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Datos de empleado de los trabajadores municipales (una fila por trabajador)
