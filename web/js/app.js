@@ -1566,7 +1566,7 @@ function vComo(){
     </li>`).join('')}</ul>`:(!URL_API||window.RespiraDatos?.repartoVerificado()?'<p class="note">No hay puntos de reparto disponibles.</p>':'')}
    </div>
    <p class="contenido-personal">La descarga estará disponible cuando se publique la app.</p>
-   <p class="contenido-personal">Administración da de alta a los trabajadores municipales. Cada trabajador cambia su contraseña inicial al entrar por primera vez en la app. <a href="#acceso">Acceso ayuntamiento</a></p>
+   <p class="contenido-personal">Administración da de alta a los trabajadores municipales y les entrega su contraseña en persona. <a href="#acceso">Acceso ayuntamiento</a></p>
   </section>
 
   <section class="contenido-seccion contenido-faq" aria-labelledby="contenido-preguntas">
@@ -2052,7 +2052,7 @@ function vTrabajadores(){
   ${panelTitulo('Trabajadores municipales','Gestiona las cuentas del personal que lleva sensores.')}
   ${ok?`<div class="alert ok panel-alta" role="status">${I.check}<div>
    <b>${esc(ok.nombre)} · ${panelDato(ok.id)}</b>
-   <p>${URL_API?`Entrega la contraseña inicial en persona. Al entrar en la app con <b>${esc(ok.email)}</b>, el trabajador tendrá que elegir una nueva.`:'Alta de demostración.'}</p>
+   <p>${URL_API?`Entrega la contraseña en persona. El trabajador ya puede entrar en la app con <b>${esc(ok.email)}</b>.`:'Alta de demostración.'}</p>
   </div></div>`:''}
   <form class="panel-formulario panel-edicion" id="f-trab" novalidate>
    <h2>Dar de alta un trabajador</h2>
