@@ -183,7 +183,7 @@ class Cuentas extends Base {
             $e['nombre'] = 'Elige un nombre de usuario.';
         } elseif (!preg_match('/^[A-Za-z0-9._]{3,20}$/', $n)) {
             $e['nombre'] = 'Usa de 3 a 20 letras, números, puntos o guiones bajos, sin espacios.';
-        } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE nombre_vecino = ?", [strtolower($n)])) {
+        } elseif ($this->fila("SELECT id FROM {$this->p}usuario WHERE rol = 'vecino' AND LOWER(nombre) = ?", [strtolower($n)])) {
             $e['nombre'] = 'Ese nombre de usuario ya existe. Prueba con otro.';
         }
         if ($m === '') {
@@ -219,7 +219,7 @@ class Cuentas extends Base {
             return ['token' => $this->abrirSesion($u, 'app'), 'usuario' => $this->perfil($u)];
         }, function () use ($n, $m) {
             $e = [];
-            if ($this->fila("SELECT id FROM {$this->p}usuario WHERE nombre_vecino = ?", [strtolower($n)])) {
+            if ($this->fila("SELECT id FROM {$this->p}usuario WHERE rol = 'vecino' AND LOWER(nombre) = ?", [strtolower($n)])) {
                 $e['nombre'] = 'Ese nombre de usuario ya existe.';
             }
             if ($this->fila("SELECT id FROM {$this->p}usuario WHERE email = ?", [$m])) {

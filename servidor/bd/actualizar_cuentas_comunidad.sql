@@ -2,12 +2,6 @@
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 
-ALTER TABLE usuario ADD COLUMN IF NOT EXISTS nombre_vecino VARCHAR(20)
-  GENERATED ALWAYS AS (CASE WHEN rol = 'vecino' THEN LOWER(nombre) ELSE NULL END) STORED;
--- Si falla por nombres duplicados existentes, resolver las cuentas afectadas
--- con sus titulares antes de repetir. La migración no renombra cuentas.
-ALTER TABLE usuario ADD UNIQUE KEY IF NOT EXISTS usuario_nombre_vecino (nombre_vecino);
-
 CREATE TABLE IF NOT EXISTS percepcion_envio (
   percepcion_id BIGINT UNSIGNED NOT NULL,
   usuario_id VARCHAR(8) NOT NULL,
