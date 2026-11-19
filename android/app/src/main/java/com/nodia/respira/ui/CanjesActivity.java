@@ -10,8 +10,21 @@ import com.nodia.respira.datos.Nivel;
 import com.nodia.respira.datos.Repositorio;
 
 // Mis canjes: códigos de recogida y su estado.
+// --------------------------------------------------------------
+// class CanjesActivity
+// # Historial de canjes de la cuenta.
+// # AppCompatActivity <--- CanjesActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class CanjesActivity extends AppCompatActivity {
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

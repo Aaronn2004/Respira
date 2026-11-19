@@ -21,11 +21,24 @@ import java.util.Map;
 // Regalos del ayuntamiento. Al canjear se descuentan los puntos y
 // se da un código CJ-XXXX para recogerlo en 7 días.
 // ==============================================================
+// --------------------------------------------------------------
+// class RegalosActivity
+// # Catálogo de regalos y confirmación de canjes.
+// # AppCompatActivity <--- RegalosActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class RegalosActivity extends AppCompatActivity {
 
     private Repositorio repo;
     private LinearLayout c;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -38,12 +51,22 @@ public class RegalosActivity extends AppCompatActivity {
 
     private final Runnable alCambiar = this::pintar;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la suscripción al repositorio
+    // +
+    //   onDestroy() -->
+    // --------------------------------------------------------------
     @Override
     protected void onDestroy() {
         repo.dejarDeObservar(alCambiar);
         super.onDestroy();
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   pintar() -->
+    // --------------------------------------------------------------
     private void pintar() {
         c.removeAllViews();
         Repositorio.Cuenta cuenta = repo.cuenta();
@@ -67,16 +90,34 @@ public class RegalosActivity extends AppCompatActivity {
         Ui.nota(c, "Al canjear recibes un código para recoger el regalo en un punto de reparto en 7 días. Si no lo recoges, te devolvemos los puntos.");
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz y registra la acción del usuario
+    // - g: Regalo, puntos: N
+    //       -->
+    //           confirmar() -->
+    // --------------------------------------------------------------
     private void confirmar(Regalo g, int puntos) {
         Ui.confirmar(this, "¿Canjear " + g.nombre + "?",
                 "Se descontarán " + g.coste + " puntos (te quedarán " + (puntos - g.coste)
                         + "). Tendrás 7 días para recogerlo en un punto de reparto.", "Canjear", () -> {
                     repo.canjear(g.id, new Repositorio.Hecho<Canje>() {
+                        // --------------------------------------------------------------
+                        // # effects: actualiza la interfaz Android
+                        // + k: Canje
+                        //       -->
+                        //           ok() -->
+                        // --------------------------------------------------------------
                         @Override
                         public void ok(Canje k) {
                             mostrarCodigo(k);
                         }
 
+                        // --------------------------------------------------------------
+                        // # effects: actualiza la interfaz Android
+                        // + mensaje: Text, campos: Map[Text, Text]
+                        //       -->
+                        //           error() -->
+                        // --------------------------------------------------------------
                         @Override
                         public void error(String mensaje, Map<String, String> campos) {
                             Ui.confirmar(RegalosActivity.this, "No se ha podido canjear", mensaje, "Entendido", () -> { });
@@ -85,6 +126,12 @@ public class RegalosActivity extends AppCompatActivity {
                 });
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - k: Canje
+    //       -->
+    //           mostrarCodigo() -->
+    // --------------------------------------------------------------
     private void mostrarCodigo(Canje k) {
         TextView codigo = new TextView(this);
         codigo.setText(k.codigo);

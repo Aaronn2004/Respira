@@ -14,9 +14,11 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/Base.php';
 
+// Base <--- Flota
 class Flota extends Base {
 
     const TIPOS = ['voluntariado' => 'Voluntariado', 'trabajador' => 'Trabajador público', 'bici' => 'Bici o moto compartida', 'autobus' => 'Autobús'];
@@ -29,6 +31,12 @@ class Flota extends Base {
 
     // ---------- público ----------
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // +       ayuntamientos() <--
+    //     <--
+    //     [Registro] | Error
+    // --------------------------------------------------------------
     public function ayuntamientos(): array {
         return array_map(function ($a) {
             return ['id' => $a['id'], 'nombre' => $a['nombre'], 'comarca' => $a['comarca'], 'desde' => $a['desde'],
@@ -36,6 +44,12 @@ class Flota extends Base {
         }, $this->filas("SELECT * FROM {$this->p}ayuntamiento ORDER BY nombre"));
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // +       puntosReparto() <--
+    //     <--
+    //     [Registro] | Error
+    // --------------------------------------------------------------
     public function puntosReparto(): array {
         return array_map(function ($p) {
             return ['id' => (int) $p['id'], 'ayuntamiento' => $p['ayuntamiento_id'], 'nombre' => $p['nombre'],
@@ -46,8 +60,12 @@ class Flota extends Base {
     // ---------- panel: flota ----------
 
     // --------------------------------------------------------------
-    // nodosPanel() --> [{codigo, tipo, magnitudes, estado, asignado_a,
-    //   ultima_min, motivo_mant, prestamo: {usuario, desde} | null}]
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // + quien: Registro | Ausente
+    //     -->
+    //         nodosPanel() <--
+    //     <--
+    //     [Registro] | Error
     // --------------------------------------------------------------
     public function nodosPanel(?array $quien): array {
         self::exigirRol($quien, self::ROLES_PANEL);
@@ -66,6 +84,14 @@ class Flota extends Base {
         return $out;
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // - codigo: Text
+    //     -->
+    //         nodoPanel() <--
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     private function nodoPanel(string $codigo): array {
         foreach ($this->nodosPanel(['rol' => 'admin']) as $n) {
             if ($n['codigo'] === $codigo) {
@@ -76,7 +102,13 @@ class Flota extends Base {
     }
 
     // --------------------------------------------------------------
-    // Alta y edición. d: {codigo, tipo, magnitudes: [..], asignado_a, mantenimiento: B, motivo}
+    // # Alta y edición. d: {codigo, tipo, magnitudes: [..], asignado_a, mantenimiento: B, motivo}
+    // # effects: consulta la base de datos.
+    // - d: Registro, actual: Registro | Ausente
+    //     -->
+    //         validarNodo() <--
+    //     <--
+    //     (codigo: Text, tipo: Text, magnitudes: Text, asignado_a: Text, mantenimiento: B, motivo: Text) | Error
     // --------------------------------------------------------------
     private function validarNodo(array $d, ?array $actual): array {
         $e = [];
@@ -118,6 +150,14 @@ class Flota extends Base {
             $mant ? $motivo : self::SIN_INCIDENCIAS];
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, d: Registro
+    //     -->
+    //         altaNodo() -->
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     public function altaNodo(?array $quien, array $d): array {
         self::exigirRol($quien, ['admin', 'tecnico']);
         [$codigo, $tipo, $mags, $asig, $mant, $motivo] = $this->validarNodo($d, null);
@@ -129,6 +169,14 @@ class Flota extends Base {
         return $this->nodoPanel($codigo);
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, codigo: Text, d: Registro
+    //     -->
+    //         editarNodo() -->
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     public function editarNodo(?array $quien, string $codigo, array $d): array {
         self::exigirRol($quien, ['admin', 'tecnico']);
         $c = strtoupper($codigo);
@@ -153,6 +201,14 @@ class Flota extends Base {
     }
 
     // Baja (solo administración). Las mediciones se conservan.
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, codigo: Text, motivo: Text
+    //     -->
+    //         bajaNodo() -->
+    //     <--
+    //     0 | Error
+    // --------------------------------------------------------------
     public function bajaNodo(?array $quien, string $codigo, string $motivo): void {
         self::exigirRol($quien, ['admin']);
         $c = strtoupper($codigo);
@@ -173,9 +229,13 @@ class Flota extends Base {
     // ---------- panel: préstamos ----------
 
     // --------------------------------------------------------------
-    // prestamos() --> {abiertos: [..], cerrados: [..]}
-    //   {id, nodo, usuario, punto, inicio, fecha_limite, estado_devolucion, fuera_de_plazo}
-    //   abiertos = «No devuelto»; fuera_de_plazo = ya pasó la fecha límite
+    // # abiertos = «No devuelto»; fuera_de_plazo = ya pasó la fecha límite
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // + quien: Registro | Ausente
+    //     -->
+    //         prestamos() <--
+    //     <--
+    //     [Registro] | Error
     // --------------------------------------------------------------
     public function prestamos(?array $quien): array {
         self::exigirRol($quien, self::ROLES_PANEL);
@@ -193,8 +253,13 @@ class Flota extends Base {
     }
 
     // --------------------------------------------------------------
-    // usuarioId (U-XXXXX), codigo, punto (id del punto de reparto) --> prestar() --> préstamo
-    // La fecha límite es la hora exacta de la recogida + 10 días.
+    // # La fecha límite es la hora exacta de la recogida + 10 días.
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + quien: Registro | Ausente, usuarioId: Text, codigo: Text, punto: Valor
+    //     -->
+    //         prestar() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function prestar(?array $quien, string $usuarioId, string $codigo, $punto = null): array {
         self::exigirRol($quien, self::ROLES_PANEL);
@@ -242,8 +307,13 @@ class Flota extends Base {
     }
 
     // --------------------------------------------------------------
-    // codigo, estado ('Correcto' | 'Defectuoso') --> devolver()
-    // Se puede devolver en cualquier punto de reparto, también fuera de plazo.
+    // # Se puede devolver en cualquier punto de reparto, también fuera de plazo.
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, codigo: Text, estado: Text
+    //     -->
+    //         devolver() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function devolver(?array $quien, string $codigo, string $estado): array {
         self::exigirRol($quien, self::ROLES_PANEL);
@@ -277,6 +347,14 @@ class Flota extends Base {
 
     // ---------- app: el sensor que voy a llevar ----------
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // + usuario: Text, codigo: Text
+    //     -->
+    //         sensorDeSuServicio() <--
+    //     <--
+    //     B | Error
+    // --------------------------------------------------------------
     public function sensorDeSuServicio(string $usuario, string $codigo): bool {
         return $this->valor("SELECT n.codigo FROM {$this->p}nodo n
             JOIN {$this->p}empleado e ON e.ayuntamiento_id = n.ayuntamiento_id AND e.servicio = n.asignado_a
@@ -284,8 +362,13 @@ class Flota extends Base {
     }
 
     // --------------------------------------------------------------
-    // quien, codigo --> sensorParaLaApp() --> {codigo, magnitudes, desde}
-    // Los mensajes son los que enseña la app debajo del campo del código.
+    // # Los mensajes son los que enseña la app debajo del campo del código.
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // + quien: Registro | Ausente, codigo: Text
+    //     -->
+    //         sensorParaLaApp() <--
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function sensorParaLaApp(?array $quien, string $codigo): array {
         self::exigirRol($quien, ['vecino', 'trabajador']);
@@ -326,8 +409,15 @@ class Flota extends Base {
         throw new ConflictoException("El sensor $c no está prestado a nadie. Pide en el punto de reparto que lo registren con tu ID {$quien['id']}.", 'codigo');
     }
 
-    // préstamo en curso de un vecino (para «Mi sensor») --> {codigo, desde, hasta} | null
-    // hasta = fecha límite para devolverlo (10 días desde la recogida)
+    // --------------------------------------------------------------
+    // # hasta = fecha límite para devolverlo (10 días desde la recogida)
+    // # effects: consulta la base de datos.
+    // + usuarioId: Text
+    //     -->
+    //         prestamoDe() <--
+    //     <--
+    //     Registro | Ausente | Error
+    // --------------------------------------------------------------
     public function prestamoDe(string $usuarioId): ?array {
         $p = $this->fila("SELECT nodo, inicio, fecha_limite FROM {$this->p}prestamo WHERE usuario_id = ? AND estado_devolucion = 'No devuelto'", [$usuarioId]);
         return $p ? ['codigo' => $p['nodo'], 'desde' => self::isoDeBD($p['inicio']), 'hasta' => self::isoDeBD($p['fecha_limite'])] : null;

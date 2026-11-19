@@ -27,17 +27,40 @@ import com.nodia.respira.datos.Salud;
 // de niveles, escalones de gravedad, etiquetas y el interruptor
 // de «Modo oscuro».
 // ==============================================================
+// --------------------------------------------------------------
+// class Bloques
+// # Componentes compartidos para niveles, efectos y preferencias.
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Entorno = { densidad: R, tema: Text }
+// Vista = { contenido: Text, visible: B, habilitada: B }
+// --------------------------------------------------------------
 public final class Bloques {
 
+    // --------------------------------------------------------------
+    // -
+    //   Bloques() --x
+    // --------------------------------------------------------------
     private Bloques() { }
 
     // --------------------------------------------------------------
-    // magnitud --> icono() --> drawable   y   colores de su degradado
+    // + m: Magnitud
+    //       -->
+    //           icono() --x
+    //       <--
+    //   resultado: Z
     // --------------------------------------------------------------
     public static int icono(Magnitud m) {
         return m == Magnitud.O3 ? R.drawable.ic_ozono : m == Magnitud.TEMP ? R.drawable.ic_temperatura : R.drawable.ic_ruido;
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee la densidad o los colores de los recursos Android
+    // - c: Entorno, m: Magnitud
+    //       -->
+    //           degradado() --x
+    //       <--
+    //   resultado: [ Z ]_2
+    // --------------------------------------------------------------
     private static int[] degradado(Context c, Magnitud m) {
         if (m == Magnitud.O3) return new int[]{Ui.color(c, R.color.grad_o3_ini), Ui.color(c, R.color.grad_o3_fin)};
         if (m == Magnitud.TEMP) return new int[]{Ui.color(c, R.color.grad_temp_ini), Ui.color(c, R.color.grad_temp_fin)};
@@ -45,6 +68,14 @@ public final class Bloques {
     }
 
     // Icono blanco sobre un cuadrado redondeado con degradado
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + c: Entorno, m: Magnitud, ladoDp: N
+    //       -->
+    //           iconoDegradado() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static View iconoDegradado(Context c, Magnitud m, int ladoDp) {
         FrameLayout caja = new FrameLayout(c);
         GradientDrawable fondo = new GradientDrawable(GradientDrawable.Orientation.TL_BR, degradado(c, m));
@@ -60,6 +91,14 @@ public final class Bloques {
     }
 
     // Tarjeta con su cabecera: icono + título + subtítulo. Devuelve el cuerpo.
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, m: Magnitud, titulo: Text, sub: Text, subMono: B
+    //       -->
+    //           tarjetaConCabecera() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static LinearLayout tarjetaConCabecera(ViewGroup padre, Magnitud m, String titulo, String sub, boolean subMono) {
         Context c = padre.getContext();
         LinearLayout card = Ui.tarjeta(padre);
@@ -93,6 +132,12 @@ public final class Bloques {
     }
 
     // Barra verde / ámbar / roja
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista
+    //       -->
+    //           barraNiveles() --x
+    // --------------------------------------------------------------
     public static void barraNiveles(ViewGroup padre) {
         Context c = padre.getContext();
         LinearLayout barra = new LinearLayout(c);
@@ -115,6 +160,12 @@ public final class Bloques {
     }
 
     // Línea fina de separación
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista
+    //       -->
+    //           separador() --x
+    // --------------------------------------------------------------
     public static void separador(ViewGroup padre) {
         Context c = padre.getContext();
         View v = new View(c);
@@ -123,6 +174,12 @@ public final class Bloques {
     }
 
     // Fila de un nivel: [insignia]  rango (negrita, mono)  /  frase
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, n: Nivel, rango: Text, frase: Text
+    //       -->
+    //           filaNivel() --x
+    // --------------------------------------------------------------
     public static void filaNivel(ViewGroup padre, com.nodia.respira.datos.Nivel n, String rango, String frase) {
         Context c = padre.getContext();
         LinearLayout f = new LinearLayout(c);
@@ -153,6 +210,14 @@ public final class Bloques {
     }
 
     // Texto pequeño gris (fuente de una tarjeta)
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, s: Text, margenArribaDp: N
+    //       -->
+    //           pequeno() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static TextView pequeno(ViewGroup padre, String s, int margenArribaDp) {
         TextView t = Ui.texto(padre, s, 11.5f, false, R.color.tinta_3);
         ((LinearLayout.LayoutParams) t.getLayoutParams()).topMargin = Ui.dp(padre.getContext(), margenArribaDp);
@@ -160,6 +225,12 @@ public final class Bloques {
     }
 
     // Muestra de color del estado del dato (como la leyenda del mapa)
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, fondoRes: N, trama: B, titulo: Text, texto: Text
+    //       -->
+    //           filaEstado() --x
+    // --------------------------------------------------------------
     public static void filaEstado(ViewGroup padre, int fondoRes, boolean trama, String titulo, String texto) {
         Context c = padre.getContext();
         LinearLayout f = new LinearLayout(c);
@@ -199,6 +270,12 @@ public final class Bloques {
     // --------------------------------------------------------------
     // Escalón de «Efectos en la salud»: banda de color a la izquierda,
     // valor (+ detalle) y el efecto con su gravedad encima.
+    // --------------------------------------------------------------
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, paso: Salud.Paso
+    //       -->
+    //           escalon() --x
     // --------------------------------------------------------------
     public static void escalon(ViewGroup padre, Salud.Paso paso) {
         Context c = padre.getContext();
@@ -264,6 +341,14 @@ public final class Bloques {
     }
 
     // Icono pequeño + contenido (personas → etiquetas; ✓ → consejo)
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, icono: N, tinte: Z
+    //       -->
+    //           filaIcono() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static LinearLayout filaIcono(ViewGroup padre, int icono, int tinte) {
         Context c = padre.getContext();
         LinearLayout f = new LinearLayout(c);
@@ -281,6 +366,12 @@ public final class Bloques {
         return f;
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + fila: Vista, textos: [ Text ]
+    //       -->
+    //           etiquetas() --x
+    // --------------------------------------------------------------
     public static void etiquetas(ViewGroup fila, String[] textos) {
         Context c = fila.getContext();
         ChipGroup grupo = new ChipGroup(c);
@@ -301,6 +392,12 @@ public final class Bloques {
         fila.addView(grupo, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + fila: Vista, s: Text
+    //       -->
+    //           consejo() --x
+    // --------------------------------------------------------------
     public static void consejo(ViewGroup fila, String s) {
         Context c = fila.getContext();
         TextView t = new TextView(c);
@@ -315,9 +412,21 @@ public final class Bloques {
     // Fila con interruptor (Más › Modo oscuro). Toda la fila es pulsable.
     // --------------------------------------------------------------
     public interface AlCambiar {
+        // --------------------------------------------------------------
+        // # effects: comunica el estado elegido al tratamiento del cambio
+        // + activado: B
+        //       -->
+        //           cambiar() -->
+        // --------------------------------------------------------------
         void cambiar(boolean activado);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz y registra la acción del usuario
+    // + padre: Vista, icono: N, titulo: Text, sub: Text, activado: B
+    //       -->
+    //           interruptor() --x
+    // --------------------------------------------------------------
     public static void interruptor(ViewGroup padre, int icono, String titulo, String sub, boolean activado, AlCambiar al) {
         Context c = padre.getContext();
         LinearLayout f = new LinearLayout(c);

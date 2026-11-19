@@ -12,10 +12,23 @@ import com.nodia.respira.datos.Repositorio;
 import java.util.List;
 
 // Mis percepciones: las que ha publicado este usuario, con Editar y Borrar.
+// --------------------------------------------------------------
+// class MisPercepcionesActivity
+// # Consulta y edición de las percepciones propias.
+// # AppCompatActivity <--- MisPercepcionesActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class MisPercepcionesActivity extends AppCompatActivity {
 
     private LinearLayout c;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -24,6 +37,11 @@ public class MisPercepcionesActivity extends AppCompatActivity {
 
     private final Runnable alCambiar = this::pintar;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la suscripción al repositorio; solicita datos al servidor; actualiza la interfaz
+    // +
+    //   onResume() -->
+    // --------------------------------------------------------------
     @Override
     protected void onResume() {
         super.onResume();
@@ -32,12 +50,22 @@ public class MisPercepcionesActivity extends AppCompatActivity {
         Repositorio.obtener(this).refrescar(true);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la suscripción al repositorio
+    // +
+    //   onPause() -->
+    // --------------------------------------------------------------
     @Override
     protected void onPause() {
         Repositorio.obtener(this).dejarDeObservar(alCambiar);
         super.onPause();
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   pintar() -->
+    // --------------------------------------------------------------
     private void pintar() {
         c.removeAllViews();
         Repositorio repo = Repositorio.obtener(this);

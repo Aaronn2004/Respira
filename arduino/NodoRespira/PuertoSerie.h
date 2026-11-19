@@ -13,20 +13,36 @@
 #include <Arduino.h>
 #include <Adafruit_TinyUSB.h> // Serial por USB en el nRF52840
 
+// # Centraliza la salida de diagnóstico por USB.
 class PuertoSerie {
 public:
-  // baudios: N --> PuertoSerie()
+  // --------------------------------------------------------------
+  // # effects: abre el puerto serie USB.
+  // + baudios: N
+  //     -->
+  //         PuertoSerie() --x
+  // --------------------------------------------------------------
   PuertoSerie( unsigned long baudios ) {
     Serial.begin( baudios );
   }
 
-  // mensaje: Text | Z --> escribir() -->
+  // --------------------------------------------------------------
+  // # effects: escribe en el puerto serie.
+  // + mensaje: Text | Z | R
+  //     -->
+  //         escribir() --x
+  // --------------------------------------------------------------
   template <typename T>
   void escribir( T mensaje ) {
     Serial.print( mensaje );
   }
 
-  // valor: R, decimales: N --> escribir() -->
+  // --------------------------------------------------------------
+  // # effects: escribe en el puerto serie con precisión fija.
+  // + valor: R, decimales: N
+  //     -->
+  //         escribir() --x
+  // --------------------------------------------------------------
   void escribir( float valor, int decimales ) {
     Serial.print( valor, decimales );
   }

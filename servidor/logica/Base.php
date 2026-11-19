@@ -12,11 +12,26 @@
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
 
+// Notación lógica compartida (notation_guide.md):
+// Ausente representa null; Error = { clase: Text, mensaje: Text } representa una excepción.
+// Valor = Text | Z | R | B | Ausente | [Valor] | Map[Text, Valor]
+// Registro = Map[Text, Valor]; Fila = Registro; Instante = Z (milisegundos UTC).
+// Conexion = { tablas: Map[Text, [Fila]] }; Consulta = { filas: [Fila], afectadas: N }.
+// Operacion = { descripcion: Text }; Reloj = { instante: Instante }.
+// Correo = { destinatario: Text, asunto: Text, texto: Text }.
+// Las operaciones y el reloj se describen por su cometido, sin callbacks ni referencias.
+
 // ---- Errores del dominio (la API los traduce a HTTP) ----
 
 // 400: un dato no vale. campo = qué campo del formulario (para marcarlo)
+// Exception <--- DatosNoValidosException
 class DatosNoValidosException extends Exception {
     public $campo;
+    // --------------------------------------------------------------
+    // + mensaje: Text, campo: Text | Ausente
+    //     -->
+    //         __construct() -->
+    // --------------------------------------------------------------
     public function __construct(string $mensaje, ?string $campo = null) {
         parent::__construct($mensaje);
         $this->campo = $campo;
@@ -24,32 +39,55 @@ class DatosNoValidosException extends Exception {
 }
 
 // 400 con varios campos a la vez: {campo: mensaje}
+// Exception <--- ErroresDeCamposException
 class ErroresDeCamposException extends Exception {
     public $errores;
+    // --------------------------------------------------------------
+    // + errores: Map[Text, Text]
+    //     -->
+    //         __construct() -->
+    // --------------------------------------------------------------
     public function __construct(array $errores) {
         parent::__construct('Revisa los campos marcados');
         $this->errores = $errores;
     }
 }
 
+// Exception <--- NoAutorizadoException
 class NoAutorizadoException extends Exception {        // 401: sin sesión o credenciales malas
     public $quedan;
+    // --------------------------------------------------------------
+    // + mensaje: Text, quedan: Z | Ausente
+    //     -->
+    //         __construct() -->
+    // --------------------------------------------------------------
     public function __construct(string $mensaje, ?int $quedan = null) {
         parent::__construct($mensaje);
         $this->quedan = $quedan;
     }
 }
+// Exception <--- ProhibidoException
 class ProhibidoException extends Exception { }            // 403: con sesión, pero sin permiso
+// Exception <--- NoEncontradoException
 class NoEncontradoException extends Exception { }         // 404
+// DatosNoValidosException <--- ConflictoException
 class ConflictoException extends DatosNoValidosException { }  // 409: choca con el estado actual
+// Exception <--- BloqueadoException
 class BloqueadoException extends Exception {               // 423: cuenta bloqueada un rato
     public string $hasta;
+    // --------------------------------------------------------------
+    // + mensaje: Text, hasta: DateTime
+    //     -->
+    //         __construct() -->
+    // --------------------------------------------------------------
     public function __construct(string $mensaje, string $hasta) {
         parent::__construct($mensaje);
         $this->hasta = $hasta;
     }
 }
+// Exception <--- DemasiadasException
 class DemasiadasException extends Exception { }           // 429: límite por hora
+// Exception <--- ErrorDeAlmacenamientoException
 class ErrorDeAlmacenamientoException extends Exception { } // 500
 
 abstract class Base {
@@ -68,7 +106,10 @@ abstract class Base {
     protected $reloj; // () --> ms. Se cambia en los tests
 
     // --------------------------------------------------------------
-    // bd: PDO, prefijo: Text, reloj: (() --> N) | null --> Base()
+    // # effects: inicializa el estado y la conexión.
+    // + bd: Conexion, prefijo: Text, reloj: Reloj | Ausente
+    //     -->
+    //         __construct() -->
     // --------------------------------------------------------------
     public function __construct(PDO $bd, string $prefijo = '', ?callable $reloj = null) {
         $this->bd = $bd;
@@ -77,48 +118,99 @@ abstract class Base {
         $this->reloj = $reloj ?? function () { return (int) round(microtime(true) * 1000); };
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta el reloj inyectado.
+    // -       ahora() <--
+    //     <--
+    //     Instante
+    // --------------------------------------------------------------
     protected function ahora(): int {
         return (int) call_user_func($this->reloj);
     }
 
     // ---------- fechas ----------
 
-    // ms --> 'YYYY-MM-DD HH:MM:SS.mmm' (UTC)
+    // --------------------------------------------------------------
+    // # Representación SQL UTC con milisegundos.
+    // + ms: Instante
+    //     -->
+    //         fechaBD() --x
+    //     <--
+    //     Text
+    // --------------------------------------------------------------
     public static function fechaBD(int $ms): string {
         return gmdate('Y-m-d H:i:s', intdiv($ms, 1000)) . sprintf('.%03d', $ms % 1000);
     }
 
-    // 'YYYY-MM-DD HH:MM:SS[.mmm]' (UTC) --> ms
+    // --------------------------------------------------------------
+    // + f: Text
+    //     -->
+    //         msDeFechaBD() --x
+    //     <--
+    //     Instante
+    // --------------------------------------------------------------
     public static function msDeFechaBD(string $f): int {
         $seg = strtotime(substr($f, 0, 19) . ' UTC');
         $ms = strlen($f) > 20 ? (int) str_pad(substr($f, 20, 3), 3, '0') : 0;
         return $seg * 1000 + $ms;
     }
 
-    // ms --> '2026-11-06T10:15:00.000Z'
+    // --------------------------------------------------------------
+    // + ms: Instante
+    //     -->
+    //         fechaISO() --x
+    //     <--
+    //     DateTime
+    // --------------------------------------------------------------
     public static function fechaISO(int $ms): string {
         return gmdate('Y-m-d\TH:i:s', intdiv($ms, 1000)) . sprintf('.%03dZ', $ms % 1000);
     }
 
-    // 'YYYY-MM-DD HH:MM:SS' (UTC, de la BD) | null --> ISO | null
+    // --------------------------------------------------------------
+    // + f: Text | Ausente
+    //     -->
+    //         isoDeBD() --x
+    //     <--
+    //     DateTime | Ausente
+    // --------------------------------------------------------------
     public static function isoDeBD(?string $f): ?string {
         return $f === null ? null : self::fechaISO(self::msDeFechaBD($f));
     }
 
-    // ms --> 'YYYY-MM-DD' del día en España
+    // --------------------------------------------------------------
+    // + ms: Instante
+    //     -->
+    //         diaLocal() --x
+    //     <--
+    //     Date
+    // --------------------------------------------------------------
     public static function diaLocal(int $ms): string {
         $d = new DateTime('@' . intdiv($ms, 1000));
         $d->setTimezone(new DateTimeZone(self::ZONA_HORARIA));
         return $d->format('Y-m-d');
     }
 
-    // 'YYYY-MM-DD' (España) --> ms UTC de las 00:00 de ese día
+    // --------------------------------------------------------------
+    // # Las 00:00 de Europe/Madrid se convierten a milisegundos UTC.
+    // + dia: Date
+    //     -->
+    //         inicioDia() --x
+    //     <--
+    //     Instante
+    // --------------------------------------------------------------
     public static function inicioDia(string $dia): int {
         $d = new DateTime($dia . ' 00:00:00', new DateTimeZone(self::ZONA_HORARIA));
         return $d->getTimestamp() * 1000;
     }
 
-    // 'YYYY-MM-DD' + n días --> 'YYYY-MM-DD'
+    // --------------------------------------------------------------
+    // # Suma días de calendario local, conservando el día incluso al cambiar la hora.
+    // + dia: Date, n: Z
+    //     -->
+    //         sumarDias() --x
+    //     <--
+    //     Date
+    // --------------------------------------------------------------
     public static function sumarDias(string $dia, int $n): string {
         $d = new DateTime($dia . ' 12:00:00', new DateTimeZone(self::ZONA_HORARIA));
         $d->modify(($n >= 0 ? '+' : '') . $n . ' day');
@@ -128,36 +220,79 @@ abstract class Base {
     // ---------- SQL ----------
 
     // nombre de tabla con el prefijo
+    // --------------------------------------------------------------
+    // - tabla: Text
+    //     -->
+    //         t() <--
+    //     <--
+    //     Text
+    // --------------------------------------------------------------
     protected function t(string $tabla): string {
         return $this->p . $tabla;
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // - sql: Text, params: [Valor]
+    //     -->
+    //         ejecutar() -->
+    //     <--
+    //     Consulta | Error
+    // --------------------------------------------------------------
     protected function ejecutar(string $sql, array $params = []): PDOStatement {
         $st = $this->bd->prepare($sql);
         $st->execute($params);
         return $st;
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // - sql: Text, params: [Valor]
+    //     -->
+    //         fila() <--
+    //     <--
+    //     Fila | Ausente | Error
+    // --------------------------------------------------------------
     protected function fila(string $sql, array $params = []): ?array {
         $f = $this->ejecutar($sql, $params)->fetch(PDO::FETCH_ASSOC);
         return $f === false ? null : $f;
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // - sql: Text, params: [Valor]
+    //     -->
+    //         filas() <--
+    //     <--
+    //     [Fila] | Error
+    // --------------------------------------------------------------
     protected function filas(string $sql, array $params = []): array {
         return $this->ejecutar($sql, $params)->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // - sql: Text, params: [Valor]
+    //     -->
+    //         valor() <--
+    //     <--
+    //     Valor | Error
+    // --------------------------------------------------------------
     protected function valor(string $sql, array $params = []) {
         $v = $this->ejecutar($sql, $params)->fetchColumn();
         return $v === false ? null : $v;
     }
 
     // --------------------------------------------------------------
-    // pedido: id | null --> ayuntamientoDe() --> id del ayuntamiento
-    // Para lo que se da de alta (sensores, trabajadores). Si no se dice y
-    // solo hay un ayuntamiento activo, es ese; si hay varios, hay que elegirlo.
-    // ponytail: el panel aún no tiene selector (hoy solo hay Gandia); con un
-    // segundo ayuntamiento, el formulario tendrá que mandar «ayuntamiento».
+    // # Para lo que se da de alta (sensores, trabajadores). Si no se dice y
+    // # solo hay un ayuntamiento activo, es ese; si hay varios, hay que elegirlo.
+    // # segundo ayuntamiento, el formulario tendrá que mandar «ayuntamiento».
+    // # effects: consulta la base de datos.
+    // - pedido: Text | Ausente
+    //     -->
+    //         ayuntamientoDe() <--
+    //     <--
+    //     Text | Error
     // --------------------------------------------------------------
     protected function ayuntamientoDe(?string $pedido): string {
         $ids = array_column($this->filas("SELECT id FROM {$this->p}ayuntamiento WHERE activo = 1 ORDER BY id"), 'id');
@@ -174,6 +309,15 @@ abstract class Base {
     }
 
     // Ejecuta fn() en una transacción (si ya hay una abierta, se une a ella)
+    // --------------------------------------------------------------
+    // # Si ya existe una transacción, participa en ella sin confirmarla ni revertirla por separado.
+    // # effects: consulta y modifica la base de datos.
+    // - fn: Operacion
+    //     -->
+    //         transaccion() -->
+    //     <--
+    //     Valor | Error
+    // --------------------------------------------------------------
     protected function transaccion(callable $fn) {
         if ($this->bd->inTransaction()) {
             return $fn();
@@ -190,6 +334,14 @@ abstract class Base {
     }
 
     // Código aleatorio legible: prefijo + n caracteres sin 0/O ni 1/I
+    // --------------------------------------------------------------
+    // # effects: obtiene aleatoriedad del sistema.
+    // - prefijo: Text, n: Z
+    //     -->
+    //         codigoAleatorio() --x
+    //     <--
+    //     Text
+    // --------------------------------------------------------------
     protected static function codigoAleatorio(string $prefijo, int $n = 4): string {
         $abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         $s = $prefijo;
@@ -199,11 +351,16 @@ abstract class Base {
         return $s;
     }
 
-    // Comprueba el rol de quien hace la petición (sesión ya validada)
     // --------------------------------------------------------------
-    // codigo --> ultimaMin() --> minutos desde el último dato del sensor | null
-    // (no se guarda en nodo: sale de medicion; con el índice
-    //  (nodo, magnitud, medida_en) son tres lecturas directas)
+    // # Comprueba el rol de quien hace la petición (sesión ya validada)
+    // # (no se guarda en nodo: sale de medicion; con el índice
+    // # (nodo, magnitud, medida_en) son tres lecturas directas)
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // - codigo: Text
+    //     -->
+    //         ultimaMin() <--
+    //     <--
+    //     Z | Ausente | Error
     // --------------------------------------------------------------
     protected function ultimaMin(string $codigo): ?int {
         $ultima = null;
@@ -216,6 +373,13 @@ abstract class Base {
         return $ultima === null ? null : max(0, intdiv($this->ahora() - $ultima, 60000));
     }
 
+    // --------------------------------------------------------------
+    // - usuario: Registro | Ausente, roles: [Text]
+    //     -->
+    //         exigirRol() --x
+    //     <--
+    //     0 | Error
+    // --------------------------------------------------------------
     protected static function exigirRol(?array $usuario, array $roles): void {
         if ($usuario === null) {
             throw new NoAutorizadoException('Inicia sesión para continuar.');

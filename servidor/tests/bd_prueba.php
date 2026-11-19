@@ -11,9 +11,10 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 // --------------------------------------------------------------
-// sql: Text (CREATE TABLE de MariaDB) --> aSQLite() --> Text
+// sql: Text --> aSQLite() --> Text
 // --------------------------------------------------------------
 function aSQLite(string $sql): string {
     $lineas = [];
@@ -49,7 +50,8 @@ function aSQLite(string $sql): string {
 }
 
 // --------------------------------------------------------------
-// dsn: Text --> crearBDPrueba() --> PDO
+// # effects: prepara o modifica los datos de prueba.
+// dsn: Text --> crearBDPrueba() --> Conexion | Error
 // --------------------------------------------------------------
 function crearBDPrueba(string $dsn = 'sqlite::memory:'): PDO {
     $bd = new PDO($dsn);
@@ -74,8 +76,13 @@ function crearBDPrueba(string $dsn = 'sqlite::memory:'): PDO {
 }
 
 // --------------------------------------------------------------
-// Ayuda para los tests: crea una cuenta (clave null = pendiente de activar)
-// bd, id, rol, email, clave, extra: {columna: valor} --> crearUsuario()
+// # Ayuda para los tests: crea una cuenta (clave null = pendiente de activar)
+// # effects: prepara o modifica los datos de prueba.
+// bd: Conexion, id: Text, rol: Text, email: Text, clave: Text | Ausente, extra: Registro
+//     -->
+//         crearUsuario()
+//     <--
+//     0 | Error
 // --------------------------------------------------------------
 function crearUsuario(PDO $bd, string $id, string $rol, string $email, ?string $clave, array $extra = []): void {
     $c = array_merge(['id' => $id, 'rol' => $rol, 'nombre' => explode('@', $email)[0], 'email' => $email,

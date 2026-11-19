@@ -1,3 +1,15 @@
+/* --------------------------------------------------------------
+ * # Notación lógica: las firmas conservan los nombres del código existente.
+ * # Ausente representa null o undefined; los instantes R se expresan en milisegundos.
+ * # Html = Text; Color = Text; Magnitud = { o3 | temp | ruido | gen }.
+ * # Nivel = { bajo | medio | alto | none }.
+ * # Valor = R | Text | B | Ausente | [Valor] | Map[Text, Valor].
+ * # Datos = Map[Text, Valor]; Zona = Datos; Serie = Datos; Estadisticas = Datos.
+ * # Consulta = { estado: Text, datos: Serie | Ausente, mensaje: Text | Ausente }.
+ * # Elemento, Contexto, Evento y MapaWeb son recursos del navegador.
+ * # Escena ofrece las operaciones actualizarPausa() y parar().
+ * -------------------------------------------------------------- */
+
 /* =============================================================
    Respira Web (portada + web pública + panel municipal). JS vanilla.
    Generado desde el prototipo web v35 que se ve en Claude (diseño de la versión B).
@@ -11,16 +23,35 @@
    ============================================================= */
 (function(){
 "use strict";
+/* --------------------------------------------------------------
+ * # effects: consulta la integración de mapas del navegador.
+ * GMAP() --> MapaWeb | Ausente
+ * -------------------------------------------------------------- */
 const GMAP=()=>window.RespiraMapa;
 const urlConfigurada=String(window.RESPIRA_CONFIG?.API_URL||'').trim().replace(/\/+$/,'');
 const URL_API=/TU_DOMINIO|pon_aqui/i.test(urlConfigurada)?'':urlConfigurada;
 /* ---------- marca: Respira (producto) y Nodia (empresa) ---------- */
 const RW=`<g transform="translate(55 1.9) scale(0.457)"><g transform="translate(-6.60 74.40) scale(0.10000)"><path d="M66 0V-254V-525H185L186 -346H205Q213 -413 232.5 -455.0Q252 -497 287.0 -517.0Q322 -537 374 -537Q383 -537 393.5 -536.5Q404 -536 418 -533L412 -380Q397 -387 379.0 -390.0Q361 -393 347 -393Q308 -393 280.0 -375.0Q252 -357 234.5 -323.5Q217 -290 211 -242V0Z M734.0 14Q669.0 14 618.5 -4.0Q568.0 -22 533.0 -56.0Q498.0 -90 479.5 -140.0Q461.0 -190 461.0 -253Q461.0 -315 478.5 -367.5Q496.0 -420 530.0 -458.5Q564.0 -497 613.0 -518.0Q662.0 -539 724.0 -539Q784.0 -539 831.0 -519.5Q878.0 -500 909.5 -461.0Q941.0 -422 955.5 -365.5Q970.0 -309 966.0 -236L554.0 -232V-311L883.0 -314L832.0 -274Q839.0 -327 825.0 -361.0Q811.0 -395 784.5 -411.0Q758.0 -427 726.0 -427Q688.0 -427 659.0 -407.0Q630.0 -387 614.0 -348.5Q598.0 -310 598.0 -256Q598.0 -171 635.5 -131.0Q673.0 -91 734.0 -91Q762.0 -91 781.5 -98.5Q801.0 -106 813.5 -118.0Q826.0 -130 833.5 -145.0Q841.0 -160 846.0 -175L971.0 -148Q962.0 -111 944.5 -81.5Q927.0 -52 898.0 -30.5Q869.0 -9 828.5 2.5Q788.0 14 734.0 14Z M1271.0 14Q1218.0 14 1175.0 4.0Q1132.0 -6 1101.0 -25.0Q1070.0 -44 1051.0 -70.5Q1032.0 -97 1026.0 -130L1136.0 -175Q1140.0 -153 1158.0 -134.0Q1176.0 -115 1206.5 -103.5Q1237.0 -92 1280.0 -92Q1326.0 -92 1351.0 -105.5Q1376.0 -119 1376.0 -144Q1376.0 -163 1362.0 -174.0Q1348.0 -185 1321.0 -193.0Q1294.0 -201 1256.0 -208Q1219.0 -217 1180.5 -227.0Q1142.0 -237 1109.5 -255.0Q1077.0 -273 1056.5 -302.5Q1036.0 -332 1036.0 -378Q1036.0 -426 1062.0 -462.0Q1088.0 -498 1138.0 -518.5Q1188.0 -539 1260.0 -539Q1325.0 -539 1374.0 -521.5Q1423.0 -504 1454.5 -471.5Q1486.0 -439 1497.0 -394L1380.0 -355Q1376.0 -379 1360.5 -397.0Q1345.0 -415 1319.5 -424.0Q1294.0 -433 1260.0 -433Q1217.0 -433 1193.5 -419.0Q1170.0 -405 1170.0 -382Q1170.0 -363 1185.5 -351.0Q1201.0 -339 1229.0 -331.5Q1257.0 -324 1295.0 -316Q1335.0 -308 1373.0 -297.5Q1411.0 -287 1441.5 -270.0Q1472.0 -253 1490.0 -225.0Q1508.0 -197 1508.0 -153Q1508.0 -101 1480.0 -63.5Q1452.0 -26 1399.0 -6.0Q1346.0 14 1271.0 14Z M1595.0 168V-258V-525H1714.0L1715.0 -379L1733.0 -378Q1742.0 -431 1764.5 -467.0Q1787.0 -503 1823.0 -521.0Q1859.0 -539 1906.0 -539Q1976.0 -539 2026.0 -504.5Q2076.0 -470 2102.5 -407.5Q2129.0 -345 2129.0 -260Q2129.0 -181 2105.0 -119.5Q2081.0 -58 2033.5 -22.0Q1986.0 14 1915.0 14Q1865.0 14 1830.5 -5.0Q1796.0 -24 1773.5 -58.5Q1751.0 -93 1736.0 -141H1717.0Q1723.0 -114 1728.0 -86.0Q1733.0 -58 1736.0 -31.5Q1739.0 -5 1739.0 20V168ZM1865.0 -101Q1901.0 -101 1926.0 -121.0Q1951.0 -141 1964.5 -177.0Q1978.0 -213 1978.0 -259Q1978.0 -309 1964.0 -344.5Q1950.0 -380 1924.0 -400.0Q1898.0 -420 1862.0 -420Q1830.0 -420 1807.0 -406.0Q1784.0 -392 1768.5 -369.0Q1753.0 -346 1746.0 -319.5Q1739.0 -293 1739.0 -269V-250Q1739.0 -231 1744.0 -210.5Q1749.0 -190 1760.0 -170.5Q1771.0 -151 1786.0 -135.5Q1801.0 -120 1821.0 -110.5Q1841.0 -101 1865.0 -101Z M2223.0 0V-525H2367.0V0ZM2296.0 -604Q2254.0 -604 2231.5 -621.5Q2209.0 -639 2209.0 -673Q2209.0 -708 2231.5 -726.0Q2254.0 -744 2296.0 -744Q2339.0 -744 2361.5 -726.0Q2384.0 -708 2384.0 -673Q2384.0 -640 2361.5 -622.0Q2339.0 -604 2296.0 -604Z M2490.0 0V-254V-525H2609.0L2610.0 -346H2629.0Q2637.0 -413 2656.5 -455.0Q2676.0 -497 2711.0 -517.0Q2746.0 -537 2798.0 -537Q2807.0 -537 2817.5 -536.5Q2828.0 -536 2842.0 -533L2836.0 -380Q2821.0 -387 2803.0 -390.0Q2785.0 -393 2771.0 -393Q2732.0 -393 2704.0 -375.0Q2676.0 -357 2658.5 -323.5Q2641.0 -290 2635.0 -242V0Z M3037.0 14Q2993.0 14 2959.0 -3.5Q2925.0 -21 2906.0 -54.0Q2887.0 -87 2887.0 -136Q2887.0 -179 2903.5 -208.0Q2920.0 -237 2952.0 -255.0Q2984.0 -273 3031.0 -285.0Q3078.0 -297 3138.0 -306Q3170.0 -311 3190.5 -315.5Q3211.0 -320 3221.0 -330.5Q3231.0 -341 3231.0 -361Q3231.0 -389 3211.0 -409.0Q3191.0 -429 3148.0 -429Q3119.0 -429 3094.5 -419.0Q3070.0 -409 3052.5 -389.0Q3035.0 -369 3027.0 -338L2900.0 -377Q2912.0 -418 2934.5 -448.0Q2957.0 -478 2989.0 -498.5Q3021.0 -519 3062.0 -529.0Q3103.0 -539 3151.0 -539Q3228.0 -539 3276.5 -514.5Q3325.0 -490 3349.0 -438.5Q3373.0 -387 3373.0 -306V-216Q3373.0 -181 3374.5 -145.0Q3376.0 -109 3378.5 -72.5Q3381.0 -36 3384.0 0H3257.0Q3253.0 -25 3249.5 -57.5Q3246.0 -90 3244.0 -123H3226.0Q3212.0 -85 3186.0 -54.0Q3160.0 -23 3122.5 -4.5Q3085.0 14 3037.0 14ZM3098.0 -90Q3117.0 -90 3136.5 -97.0Q3156.0 -104 3174.5 -116.5Q3193.0 -129 3208.5 -148.0Q3224.0 -167 3234.0 -191L3232.0 -275L3255.0 -270Q3237.0 -257 3213.0 -249.5Q3189.0 -242 3163.5 -238.0Q3138.0 -234 3113.0 -229.0Q3088.0 -224 3068.5 -216.0Q3049.0 -208 3037.5 -194.5Q3026.0 -181 3026.0 -157Q3026.0 -126 3046.0 -108.0Q3066.0 -90 3098.0 -90Z"/></g></g>`;
+/* --------------------------------------------------------------
+ * principal: Color, acento: Color --> SYM() --> Html
+ * -------------------------------------------------------------- */
 const SYM=(p='#0A6C74',a='#5FC4C0')=>`<path d="M20.35 3.32A21 21 0 1 0 44.68 27.65" fill="none" stroke="${a}" stroke-width="4.4" stroke-linecap="round"/><path d="M26.26 11.20A13 13 0 1 0 36.80 21.74" fill="none" stroke="${p}" stroke-width="4.4" stroke-linecap="round"/><circle cx="24" cy="24" r="6" fill="${p}"/>`;
+/* --------------------------------------------------------------
+ * alto: N, texto: Color, principal: Color, acento: Color --> LOGO() --> Html
+ * -------------------------------------------------------------- */
 const LOGO=(h=30,word='var(--ink)',p,a)=>`<svg role="img" aria-label="Respira" viewBox="0 0 207 48" height="${h}" width="${Math.round(h*207/48)}" style="flex-shrink:0;display:block">${SYM(p,a)}<g fill="${word}">${RW}</g></svg>`;
+/* --------------------------------------------------------------
+ * alto: N --> ICON() --> Html
+ * -------------------------------------------------------------- */
 const ICON=h=>`<svg role="img" aria-label="Icono de Respira" viewBox="0 0 48 48" width="${h}" height="${h}" style="flex-shrink:0;display:block"><rect width="48" height="48" rx="11" fill="#0A6C74"/><g transform="translate(7.1 7.1) scale(0.703)">${SYM('#FFFFFF','#5FC4C0')}</g></svg>`;
+/* --------------------------------------------------------------
+ * alto: N, color: Color --> NODIA() --> Html
+ * -------------------------------------------------------------- */
 const NODIA=(h=16,c='currentColor')=>`<svg aria-hidden="true" viewBox="0 0 48 48" width="${h}" height="${h}" style="color:${c};flex-shrink:0;display:inline-block;vertical-align:middle"><path d="M10 40V14L36 40V16" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="40" r="5.5" fill="currentColor"/><circle cx="10" cy="14" r="5.5" fill="currentColor"/><circle cx="36" cy="40" r="5.5" fill="currentColor"/><circle cx="36" cy="14" r="10" fill="none" stroke="#7FD3B2" stroke-width="2.2" opacity=".75"/><circle cx="36" cy="14" r="6" fill="#7FD3B2"/></svg>`;
 
+/* --------------------------------------------------------------
+ * trazado: Text, lado: N, grosor: R --> sv() --> Html
+ * -------------------------------------------------------------- */
 const sv=(p,s=20,w=2)=>`<svg aria-hidden="true" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 const I={x:sv('<path d="M6 6l12 12M18 6L6 18"/>'),menu:sv('<path d="M4 6h16M4 12h16M4 18h16"/>',22),search:sv('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',18),
  dl:sv('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',18),alert:sv('<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/>'),info:sv('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v.01"/>'),
@@ -70,6 +101,9 @@ const EF_B=[
   fuente:'OMS Europa, guías de ruido ambiental de 2018',url:'https://www.who.int/publications/i/item/9789289053563'}];
 const EF_NV={medio:'Exposición',alto:'Referencia sanitaria',grave:'Salud pública'};
 const EF_ICO_B={hacer:'<path d="M20 6L9 17l-5-5"/>',peor:'<circle cx="9" cy="7" r="3"/><path d="M3 21v-1a6 6 0 0 1 12 0v1"/><path d="M16 3.5a3 3 0 0 1 0 6"/><path d="M21 21v-1a6 6 0 0 0-4-5.6"/>'};
+/* --------------------------------------------------------------
+ * efectosB() --> Html
+ * -------------------------------------------------------------- */
 const efectosB=()=>`<div class="efb-grid">${EF_B.map(e=>`<article class="efb">
  <header class="efb-top"><span class="efb-ico efb-${e.k}">${sv(EF_ICO[e.k],24,1.9)}</span><div><h3>${e.n}</h3><p>${e.lema}</p></div></header>
  <ol class="efb-pasos">${e.pasos.map(([nv,v,t,txt])=>`<li class="efb-p efb-${nv}"><span class="efb-v"><b>${v}</b>${t?`<small>${t}</small>`:''}</span><span class="efb-txt"><em>${EF_NV[nv]}</em>${txt}</span></li>`).join('')}</ol>
@@ -78,7 +112,13 @@ const efectosB=()=>`<div class="efb-grid">${EF_B.map(e=>`<article class="efb">
  <a class="efb-fuente" href="${e.url}">${e.fuente}</a></article>`).join('')}</div>`;
 
 /* guía de valores (equivale a «Qué significan los valores» de la app) */
+/* --------------------------------------------------------------
+ * magnitud: Magnitud, indice: N --> guiaRango() --> Text
+ * -------------------------------------------------------------- */
 const guiaRango=(k,i)=>{const l=LIM[k];return i===0?'&lt; '+fmt(l[0],k):i===1?fmt(l[0],k)+' a menos de '+fmt(l[1],k):'≥ '+fmt(l[1],k)};
+/* --------------------------------------------------------------
+ * guiaHTML() --> Html
+ * -------------------------------------------------------------- */
 const guiaHTML=()=>`<div class="gv-grid">${Object.keys(MAG).map(k=>`<article class="gv" data-k="${k}">
  <header class="gv-top"><span class="efb-ico efb-${k}">${sv(EF_ICO[k],22,1.9)}</span><div><h3>${MAG[k].n}</h3><span class="gv-u">${k==='o3'?MAG[k].ab+' · ':''}${MAG[k].u}</span></div></header>
  <div class="gv-barra" aria-hidden="true"><i class="lv-b"></i><i class="lv-m"></i><i class="lv-a"></i></div>
@@ -95,16 +135,44 @@ const efectosHTML=efectosB;
 
 const NIV={bajo:'Bajo',medio:'Medio',alto:'Alto'};
 const PERC={ruido:{n:'Ruido',lv:['Bajo','Medio','Alto']},temp:{n:'Temperatura',lv:['Agradable','Calor','Mucho calor']},aire:{n:'Aire',lv:['Limpio','Regular','Malo']}};
+/* --------------------------------------------------------------
+ * # La antigüedad se expresa en minutos y nunca es negativa.
+ * # effects: consulta el reloj.
+ * aviso: Datos --> antiguedadAviso() --> N
+ * -------------------------------------------------------------- */
 const antiguedadAviso=a=>Math.max(0,Math.floor((Date.now()-a.momento)/60000));
+/* --------------------------------------------------------------
+ * # effects: consulta el reloj y los filtros de comunidad.
+ * aviso: Datos --> avOk() --> B
+ * -------------------------------------------------------------- */
 const avOk=a=>antiguedadAviso(a)<1440&&(!S.avf||a.niv===S.avf)&&(S.avt==='todos'||a.tipo===S.avt);
+/* --------------------------------------------------------------
+ * magnitud: Magnitud, valor: R | Ausente --> nivel() --> Nivel
+ * -------------------------------------------------------------- */
 const nivel=(m,v)=>v==null?'none':v<LIM[m][0]?'bajo':v<LIM[m][1]?'medio':'alto';
 // Estado general de una zona: media de los niveles de sus tres medidas (Bajo 0, Medio 1, Alto 2), redondeada.
 // Si ninguna medida está en Bajo, la zona no puede salir en verde.
+/* --------------------------------------------------------------
+ * zona: Zona --> nivelGeneral() --> Nivel
+ * -------------------------------------------------------------- */
 const nivelGeneral=z=>{const c={bajo:0,medio:1,alto:2};const ls=['o3','temp','ruido'].map(k=>nivel(k,z[k])).filter(l=>l in c);if(!ls.length)return 'none';return ['bajo','medio','alto'][Math.round(ls.reduce((a,l)=>a+c[l],0)/ls.length)]};
+/* --------------------------------------------------------------
+ * valor: R | Ausente, magnitud: Magnitud --> fmt() --> Text
+ * -------------------------------------------------------------- */
 const fmt=(v,m)=>v==null?'—':m==='o3'?(+v).toFixed(3):m==='temp'?(+v).toFixed(1):String(Math.round(v));
 const FORMATO_RUIDO=new Intl.NumberFormat('es-ES',{maximumFractionDigits:1});
+/* --------------------------------------------------------------
+ * valor: R | Ausente, magnitud: Magnitud --> fmtSerie() --> Text
+ * -------------------------------------------------------------- */
 const fmtSerie=(v,m)=>m==='ruido'&&v!=null?FORMATO_RUIDO.format(v):fmt(v,m);
+/* --------------------------------------------------------------
+ * minutos: N | Ausente --> hace() --> Text
+ * -------------------------------------------------------------- */
 const hace=m=>m==null?'sin datos':m<60?`hace ${m} min`:m<1440?`hace ${Math.round(m/60)} h`:`hace ${Math.round(m/1440)} d`;
+/* --------------------------------------------------------------
+ * # Escapa los caracteres que pueden interpretarse como marcado HTML.
+ * valor: Valor --> esc() --> Text
+ * -------------------------------------------------------------- */
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Escenario local de demostración, indexado por los identificadores del GeoJSON.
 const MEDICIONES_COSTA={
@@ -115,6 +183,10 @@ const MEDICIONES_COSTA={
 };
 const ESTADO_DATO={reciente:'Reciente',antiguo:'Antiguo',estimado:'Estimado',sin_datos:'Sin datos'};
 const SIN_DATO={valor:null,estado:'sin_datos',momento:null,origen:null};
+/* --------------------------------------------------------------
+ * # effects: consulta el reloj.
+ * valor: R | Ausente, minutos: N --> detalleDemo() --> Datos
+ * -------------------------------------------------------------- */
 const detalleDemo=(valor,minutos)=>valor==null?SIN_DATO:{
  valor,estado:minutos>60?'antiguo':'reciente',momento:new Date(Date.now()-minutos*60000).toISOString(),origen:'simulado',
 };
@@ -126,9 +198,23 @@ const ZONAS=window.RespiraGrauPlatja.features.map(({id,properties,geometry})=>{
   mejor:hace!=null&&hace<=60?valores:{},disponible:!URL_API};
 });
 const TIPOS_ZONA={parque:['Parque','Parques y plazas'],playa:['Playa','Playas']};
+/* --------------------------------------------------------------
+ * # effects: lee las zonas cargadas.
+ * id: Text --> byZ() --> Zona | Ausente
+ * -------------------------------------------------------------- */
 const byZ=id=>ZONAS.find(z=>z.id===id);
+/* --------------------------------------------------------------
+ * zona: Zona, magnitud: Magnitud --> lectura() --> Datos
+ * -------------------------------------------------------------- */
 const lectura=(z,k)=>z.detalle[k]||SIN_DATO;
+/* --------------------------------------------------------------
+ * zona: Zona --> lecturas() --> [Datos]
+ * -------------------------------------------------------------- */
 const lecturas=z=>Object.keys(MAG).map(k=>lectura(z,k)).filter(d=>d.estado!=='sin_datos');
+/* --------------------------------------------------------------
+ * # effects: lee la magnitud seleccionada.
+ * zona: Zona --> zonaMapa() --> Datos
+ * -------------------------------------------------------------- */
 function zonaMapa(z){
  if(S.mag==='gen'){
   const datos=lecturas(z),l=nivelGeneral(z);
@@ -153,6 +239,10 @@ const AVISOS=URL_API?[]:[
 ].map(a=>({...a,simulado:true,momento:Date.now()-a.min*60000,dir:byZ(a.zona).n,ancla:byZ(a.zona).ancla}));
 const PUNTOS_REPARTO=URL_API?[]:[['Biblioteca Central','Pl. Mayor, 2','L–V 9:00–20:00'],['Centro Cívico Norte','Av. Norte, 15','L–S 10:00–14:00'],['Oficina de Turismo','Pl. de la Estación, 1','Todos los días 9:00–19:00']];
 
+/* --------------------------------------------------------------
+ * # effects: actualiza las zonas compartidas y programa su caducidad.
+ * zonas: [Datos] --> actualizarZonas()
+ * -------------------------------------------------------------- */
 function actualizarZonas(datos){
  const porId=new Map(datos.map(z=>[z.id,z]));
  if(!ZONAS.some(z=>porId.get(z.id)?.detalle))throw new Error('La API no devolvió las zonas del Grau i Platja.');
@@ -176,6 +266,10 @@ function actualizarZonas(datos){
 }
 
 let relojPercepciones;
+/* --------------------------------------------------------------
+ * # effects: consulta el reloj y programa la renovación del estado de los datos.
+ * programarCaducidad()
+ * -------------------------------------------------------------- */
 function programarCaducidad() {
  clearTimeout(relojPercepciones);
  const ahora=Date.now();
@@ -186,6 +280,10 @@ function programarCaducidad() {
   programarCaducidad();
  },caducidad-ahora+1);
 }
+/* --------------------------------------------------------------
+ * # effects: actualiza los avisos compartidos.
+ * percepciones: [Datos] --> actualizarPercepciones()
+ * -------------------------------------------------------------- */
 function actualizarPercepciones(datos){
  const nuevas=datos.filter(a=>Object.hasOwn(PERC,a.tipo)&&[1,2,3].includes(a.nivel)
   &&Number.isFinite(a.lat)&&Number.isFinite(a.lng)&&a.lat>=38.981&&a.lat<=39.026&&a.lng>=-.187&&a.lng<=-.139
@@ -212,6 +310,10 @@ let SENS=[
  {code:'RSP-V08E',tipo:'bici',asig:'Bici compartida · Estación 8',mags:['o3','temp'],est:'activo',ult:30,bat:41}
 ];
 const SENSORES_DEMO_ACTIVOS=SENS.filter(s=>s.est==='activo'||s.est==='prestado').length;
+/* --------------------------------------------------------------
+ * # effects: lee el inventario cargado.
+ * codigo: Text --> byCode() --> Datos | Ausente
+ * -------------------------------------------------------------- */
 const byCode=c=>SENS.find(s=>s.code===c);
 let LOANS=[{code:'RSP-4F7K',user:'U-48213',ini:'2 nov 09:12',fin:null,punto:'Biblioteca Central'},{code:'RSP-2B9Q',user:'U-11902',ini:'1 nov 10:05',fin:null,punto:'Centro Cívico Norte'},{code:'RSP-7H3M',user:'U-48213',ini:'31 oct 17:40',fin:'1 nov 09:02',punto:'Biblioteca Central',estDev:'Correcto'}];
 const REGLAS_DEMO={min:5,mult:2,max:100};
@@ -233,6 +335,10 @@ STAFF.push(
  {n:'Pablo Sanz Gil',e:'psanz@ayto.es',p:'Trabajo2026!',r:'trabajador',id:'T-0001',emp:'104233',serv:'Limpieza viaria',estado:'activo',alta:'28 oct',por:'admin@ayto.es'},
  {n:'Elena Mora Vidal',e:'emora@ayto.es',p:'Parques2026!',r:'trabajador',id:'T-0002',emp:'104587',serv:'Parques y jardines',estado:'activo',alta:'3 nov',por:'admin@ayto.es'});
 const SERVICIOS=['Limpieza viaria','Parques y jardines','Mantenimiento urbano','Policía local','Movilidad','Otro servicio municipal'];
+/* --------------------------------------------------------------
+ * # effects: lee las cuentas municipales.
+ * TRAB() --> [Datos]
+ * -------------------------------------------------------------- */
 const TRAB=()=>STAFF.filter(x=>x.r==='trabajador');
 const ACTIV_H=48;
 const ROL={admin:'Administración',tecnico:'Técnico',reparto:'Punto de reparto',trabajador:'Trabajador municipal'};
@@ -244,12 +350,28 @@ const PUB=['inicio','mapa','comunidad','historial','comparar','como-funciona','p
 const PAN=['panel','panel-sensores','panel-editar','panel-prestamos','panel-puntos','panel-regalos','panel-trabajadores'];
 const ACCESS={admin:PAN,tecnico:['panel','panel-sensores','panel-editar','panel-prestamos'],reparto:['panel-prestamos','panel-regalos'],trabajador:[]};
 const HOME={admin:'panel',tecnico:'panel',reparto:'panel-prestamos'};
+/* --------------------------------------------------------------
+ * # effects: lee la URL y conserva el token de activación.
+ * route() --> Text
+ * -------------------------------------------------------------- */
 function route(){const h=location.hash.slice(1);if(h==='valores'||h==='voluntariado')return 'como-funciona';if(h.startsWith('activar/')){S.tok=h.slice(8);return 'activar'}return [...PUB,...PAN,'acceso','recuperar'].includes(h)?h:'inicio'}
+/* --------------------------------------------------------------
+ * # effects: cambia la URL, el estado de navegación y el desplazamiento.
+ * ruta: Text --> nav()
+ * -------------------------------------------------------------- */
 function nav(r){S.e={};S.modal=null;if(location.hash.slice(1)===r)render();else location.hash=r;window.scrollTo({top:0,behavior:'instant'})}
+/* --------------------------------------------------------------
+ * # effects: consulta la URL y el documento.
+ * seccionPortada() --> Elemento | Ausente
+ * -------------------------------------------------------------- */
 function seccionPortada(){
  const destino=document.getElementById(location.hash.slice(1));
  return destino?.matches('.tv > section, .tv#inicio, .tv > section h2[id]')?destino:null;
 }
+/* --------------------------------------------------------------
+ * # effects: consulta la URL y desplaza la página.
+ * desplazarASeccion() --> Elemento | Ausente
+ * -------------------------------------------------------------- */
 function desplazarASeccion(){
  const destino=seccionPortada()||document.getElementById(location.hash.slice(1));
  if(destino?.matches('.tv#inicio, .tv > section, main section[id], .tv section h2[id]')){
@@ -258,6 +380,10 @@ function desplazarASeccion(){
  }
  return null;
 }
+/* --------------------------------------------------------------
+ * # effects: actualiza la vista respetando la preferencia de movimiento reducido.
+ * transicionVista()
+ * -------------------------------------------------------------- */
 function transicionVista(actualizar){
  if(document.startViewTransition&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
   document.startViewTransition(actualizar);
@@ -279,19 +405,48 @@ addEventListener('hashchange',()=>{
   }
  });
 });
-let tT;function toast(m){const t=document.getElementById('toast');t.innerHTML=`<div class="t">${esc(m)}</div>`;clearTimeout(tT);tT=setTimeout(()=>t.innerHTML='',3800)}
+let tT;/* --------------------------------------------------------------
+ * # effects: muestra un aviso temporal en el documento.
+ * mensaje: Text --> toast()
+ * -------------------------------------------------------------- */
+function toast(m){const t=document.getElementById('toast');t.innerHTML=`<div class="t">${esc(m)}</div>`;clearTimeout(tT);tT=setTimeout(()=>t.innerHTML='',3800)}
+/* --------------------------------------------------------------
+ * # effects: lee los errores del formulario.
+ * campo: Text --> err() --> Html
+ * -------------------------------------------------------------- */
 const err=k=>S.e[k]?`<span class="err" id="e-${k}">${I.err}${S.e[k]}</span>`:'';
+/* --------------------------------------------------------------
+ * # effects: lee los errores del formulario.
+ * campo: Text --> inv() --> Text
+ * -------------------------------------------------------------- */
 const inv=k=>S.e[k]?'aria-invalid="true" aria-describedby="e-'+k+'"':'';
+/* --------------------------------------------------------------
+ * magnitud: Magnitud, valor: R | Ausente --> badge() --> Html
+ * -------------------------------------------------------------- */
 const badge=(m,v)=>{const l=nivel(m,v);return l==='none'?'<span class="badge b-none">Sin datos</span>':`<span class="badge b-${l}">${NIV[l]}</span>`};
+/* --------------------------------------------------------------
+ * dia: Text --> fecha() --> Text
+ * -------------------------------------------------------------- */
 const fecha=d=>d.split('-').reverse().slice(0,2).join('/');
 
+/* --------------------------------------------------------------
+ * nivel: N, lado: N --> barsIco() --> Html
+ * -------------------------------------------------------------- */
 const barsIco=(n,s=18)=>{const c=['','var(--lv-bajo)','var(--lv-medio)','var(--lv-alto)'][n];return `<span style="display:inline-flex;align-items:flex-end;gap:2px;height:${s}px">${[7,12,18].map((h,i)=>`<i style="width:4px;border-radius:2px;height:${h*s/18}px;background:${i<n?c:'var(--surface-3)'}"></i>`).join('')}</span>`};
 
 /* ---------- gráfica ---------- */
 /* ---------- web pública ---------- */
+/* --------------------------------------------------------------
+ * # effects: lee el tema, la sesión y la capa activa.
+ * ruta: Text --> header() --> Html
+ * -------------------------------------------------------------- */
 function header(cur){
  /* Misma barra que la portada: marca, píldora de enlaces, botones y menú móvil */
  const com=S.layer==='comunidad';
+ /* --------------------------------------------------------------
+  * # effects: lee la ruta y la capa activa.
+  * ruta: Text --> activo() --> B
+  * -------------------------------------------------------------- */
  const activo=h=>h==='comunidad'?cur==='mapa'&&com:h==='mapa'?(cur==='mapa'&&!com)||['historial','comparar'].includes(cur):cur===h;
  const links=TV_LINKS.map(([h,n])=>`<a class="tv-link" href="#${h}"${activo(h)?' aria-current="page"':''}>${n}</a>`).join('');
  const accesoActual=['acceso','recuperar','activar'].includes(cur)?' aria-current="page"':'';
@@ -302,16 +457,34 @@ function header(cur){
   <button type="button" class="tv-burger" data-tv-mobile aria-controls="tvh-menu" aria-expanded="false" aria-label="Abrir menú">${TV_BURGER(false)}</button>
   <div class="tv-auth" data-tv-desktop>${botonTema(false)}<a class="btn sm sec" href="#acceso"${accesoActual}>Acceso ayuntamiento</a></div>
  </nav><div id="tvh-menu" class="tv-panel" data-tv-mobile inert>${links}<div class="tv-panel-pie"><a class="btn sm sec" href="#acceso"${accesoActual}>Ayuntamiento</a></div></div></header>`}
+/* --------------------------------------------------------------
+ * footer() --> Html
+ * -------------------------------------------------------------- */
 const footer=()=>`<footer class="wrap"><div class="inner"><span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap">${LOGO(20)}<span>· un servicio de</span>${NODIA(15,'var(--ink)')}<b style="letter-spacing:.08em;color:var(--ink)">NODIA</b></span><span>Proyecto de Biometría · GTI · UPV · <a href="#privacidad">Privacidad</a></span></div></footer>`;
+/* --------------------------------------------------------------
+ * # effects: lee las zonas cargadas.
+ * seleccion: Text --> zonaOpts() --> Html
+ * -------------------------------------------------------------- */
 const zonaOpts=sel=>Object.entries(TIPOS_ZONA).map(([t,[,plural]])=>{
  const opciones=ZONAS.filter(z=>z.tipo===t&&z.disponible)
   .map(z=>`<option value="${z.id}" ${z.id===sel?'selected':''}>${esc(z.n)}</option>`).join('');
  return `<optgroup label="${plural}">${opciones}</optgroup>`;
 }).join('');
 
+/* --------------------------------------------------------------
+ * texto: Text --> normalizarZona() --> Text
+ * -------------------------------------------------------------- */
 const normalizarZona=texto=>texto.toLowerCase().normalize('NFD').replace(/\p{Diacritic}|[’']/gu,'').trim();
+/* --------------------------------------------------------------
+ * # effects: lee el filtro de búsqueda.
+ * zona: Zona --> zonaCoincide() --> B
+ * -------------------------------------------------------------- */
 const zonaCoincide=z=>normalizarZona(z.n).includes(normalizarZona(S.q));
 
+/* --------------------------------------------------------------
+ * # effects: actualiza la selección, repinta y ajusta el foco en móvil.
+ * id: Text | Ausente --> seleccionarZona()
+ * -------------------------------------------------------------- */
 function seleccionarZona(id){
  const anterior=S.sel;
  S.sel=byZ(id)?.id||null;
@@ -320,6 +493,10 @@ function seleccionarZona(id){
  else if(anterior)document.getElementById('zona-'+anterior)?.focus({preventScroll:true});
 }
 
+/* --------------------------------------------------------------
+ * # effects: consulta el estado de carga de la API.
+ * nombre: Text, mensaje: Text --> estadoPublico() --> Html
+ * -------------------------------------------------------------- */
 function estadoPublico(nombre,mensaje){
  if(!URL_API)return '';
  const estado=window.RespiraDatos?.estadoPublico(nombre);
@@ -331,6 +508,9 @@ function estadoPublico(nombre,mensaje){
  return '';
 }
 
+/* --------------------------------------------------------------
+ * dato: Datos --> notaMedicion() --> Text
+ * -------------------------------------------------------------- */
 function notaMedicion(d){
  if(d.estado==='sin_datos')return 'Sin datos';
  if(d.estado==='estimado')return 'Estimado';
@@ -339,6 +519,10 @@ function notaMedicion(d){
  return ESTADO_DATO[d.estado]+(d.origen==='simulado'?' · Simulado':'')+hora;
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee los filtros y el dato seleccionado.
+ * zona: Zona --> detalleZona() --> Html
+ * -------------------------------------------------------------- */
 function detalleZona(z){
  if(!z)return '';
  const medias24=Object.entries(MAG).map(([k,m])=>[
@@ -369,8 +553,16 @@ function detalleZona(z){
  </section>`;
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee las zonas, la búsqueda y la selección.
+ * listaZonas() --> Html
+ * -------------------------------------------------------------- */
 function listaZonas(){
  const lista=ZONAS.filter(zonaCoincide);
+ /* --------------------------------------------------------------
+  * # effects: lee la magnitud y la selección.
+  * zona: Zona --> fila() --> Html
+  * -------------------------------------------------------------- */
  const fila=z=>{
   const zm=zonaMapa(z);
   const clase=zm.estado==='estimado'?' gm-estimada':zm.estado==='antiguo'?' gm-old':'';
@@ -392,6 +584,10 @@ function listaZonas(){
   }).join(''):`<p class="note" role="status">No hay zonas para «${esc(S.q.trim())}».</p>`}`;
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee los filtros, las zonas y los avisos.
+ * vMapa() --> Html
+ * -------------------------------------------------------------- */
 function vMapa(){
  const sensores=S.layer==='zonas';
  const magnitudes=[['gen','General'],...Object.entries(MAG).map(([k,m])=>[k,m.n])];
@@ -399,6 +595,9 @@ function vMapa(){
  const nivelesComunidad=S.avt==='todos'?['Bajo','Medio','Alto']:PERC[S.avt].lv;
  const aviso=AVISOS.filter(avOk);
  const simulada=sensores?ZONAS.some(z=>lecturas(z).some(d=>d.origen==='simulado')):aviso.some(a=>a.simulado);
+ /* --------------------------------------------------------------
+  * lista: [[Text]_2], accion: Text, actual: Text, grupo: Text --> opciones() --> Html
+  * -------------------------------------------------------------- */
  const opciones=(lista,accion,actual,grupo)=>`<div class="chips mapa-chips" role="group" aria-label="${grupo}">
   ${lista.map(([k,n])=>`<button type="button" class="chip" aria-pressed="${actual===k}" data-act="${accion}" data-arg="${k}">${n}</button>`).join('')}
  </div>`;
@@ -445,8 +644,19 @@ function vMapa(){
 }
 
 const PERIODOS_SERIE=[['24h','24 h'],['7d','7 días'],['30d','30 días']];
+/* --------------------------------------------------------------
+ * serie: Serie --> resumenSerie() --> Estadisticas
+ * -------------------------------------------------------------- */
 const resumenSerie=serie=>window.RespiraSeries.resumen(serie);
+/* --------------------------------------------------------------
+ * series: [Serie] --> haySimulacion() --> B
+ * -------------------------------------------------------------- */
 const haySimulacion=series=>series.some(s=>s.origen.includes('simulado'));
+/* --------------------------------------------------------------
+ * # Una misma consulta reutiliza la referencia para que sus series sean comparables.
+ * # effects: consulta el reloj y fija la referencia temporal de la consulta.
+ * vista: Datos, clave: Text --> periodoConsulta() --> Datos
+ * -------------------------------------------------------------- */
 function periodoConsulta(vista,clave){
  if(vista.claveConsulta!==clave){
   vista.claveConsulta=clave;
@@ -454,11 +664,18 @@ function periodoConsulta(vista,clave){
  }
  return {ahora:vista.referencia,referencia:new Date(vista.referencia).toISOString()};
 }
+/* --------------------------------------------------------------
+ * # effects: consulta la caché o inicia la carga del historial por red.
+ * zona: Zona, magnitud: Magnitud, periodo: Text, rango: Datos --> consultaSerie() --> Consulta | Ausente
+ * -------------------------------------------------------------- */
 function consultaSerie(zona,mag,per,rango){
  if(!zona?.disponible)return null;
  if(!URL_API)return {estado:'listo',datos:window.RespiraSeries.serie(zona,mag,per,rango)};
  return window.RespiraDatos?.serie(zona.id,mag,per,rango)??{estado:'cargando',datos:null};
 }
+/* --------------------------------------------------------------
+ * series: [Consulta] --> avisoConsulta() --> Html
+ * -------------------------------------------------------------- */
 function avisoConsulta(series){
  if(series.some(s=>s?.estado==='error')){
   const mensaje=series.find(s=>s?.estado==='error')?.mensaje||'Inténtalo de nuevo.';
@@ -473,9 +690,19 @@ const FECHA_SERIE=new Intl.DateTimeFormat('es-ES',{day:'numeric',month:'short'})
 const FECHA_SERIE_UTC=new Intl.DateTimeFormat('es-ES',{day:'numeric',month:'short',timeZone:'UTC'});
 const MOMENTO_SERIE=new Intl.DateTimeFormat('es-ES',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 const MOMENTO_SERIE_UTC=new Intl.DateTimeFormat('es-ES',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
+/* --------------------------------------------------------------
+ * instante_ms: R, periodo: Text --> momentoSerie() --> Text
+ * -------------------------------------------------------------- */
 const momentoSerie=(ms,per)=>(per==='custom'?MOMENTO_SERIE_UTC:MOMENTO_SERIE).format(ms);
+/* --------------------------------------------------------------
+ * horas: R --> horasSerie() --> Text
+ * -------------------------------------------------------------- */
 const horasSerie=valor=>new Intl.NumberFormat('es-ES',{maximumFractionDigits:2}).format(valor)+' h';
 
+/* --------------------------------------------------------------
+ * # Agrupa índices contiguos que cumplen el criterio de la serie, con ambos extremos incluidos.
+ * valores: [R | Ausente] --> tramos() --> [[N]_2]
+ * -------------------------------------------------------------- */
 function tramos(valores,incluir){
  const grupos=[];
  let inicio=null;
@@ -486,6 +713,9 @@ function tramos(valores,incluir){
  return grupos;
 }
 
+/* --------------------------------------------------------------
+ * series: [Serie], magnitud: Magnitud, periodo: Text --> graficaSeries() --> Html
+ * -------------------------------------------------------------- */
 function graficaSeries(series,mag,per){
  const [medio,alto]=LIM[mag],unidad=MAG[mag].u;
  const datos=series.flatMap(({observados,estimados})=>[...observados,...estimados]).filter(v=>v!=null);
@@ -498,8 +728,20 @@ function graficaSeries(series,mag,per){
   const mismoDia=FECHA_SERIE_UTC.format(fuente.inicio)===FECHA_SERIE_UTC.format(fuente.fin);
   formatoEje=mismoDia?HORA_SERIE_UTC:FECHA_SERIE_UTC;
  }
+ /* --------------------------------------------------------------
+  * # effects: lee el tamaño de la serie.
+  * indice: N --> x() --> R
+  * -------------------------------------------------------------- */
  const x=i=>(i+.5)/n*1000;
+ /* --------------------------------------------------------------
+  * # effects: lee el rango vertical de la gráfica.
+  * valor: R --> y() --> R
+  * -------------------------------------------------------------- */
  const y=v=>(max-v)/(max-min)*300;
+ /* --------------------------------------------------------------
+  * # effects: lee las escalas de la gráfica.
+  * puntos: [[R]_2] --> linea() --> Text
+  * -------------------------------------------------------------- */
  const linea=puntos=>puntos.map(([i,v],j)=>(j?'L':'M')+x(i).toFixed(2)+' '+y(v).toFixed(2)).join(' ');
  const bandas=[[min,medio,'bajo'],[medio,alto,'medio'],[alto,max,'alto']];
  const seriesSvg=series.map((s,j)=>{
@@ -531,7 +773,14 @@ function graficaSeries(series,mag,per){
  </div>`;
 }
 
+/* --------------------------------------------------------------
+ * series: [Serie], nombres: [Text], magnitud: Magnitud, periodo: Text --> tablaSerie() --> Html
+ * -------------------------------------------------------------- */
 function tablaSerie(series,nombres,mag,per){
+ /* --------------------------------------------------------------
+  * # effects: lee la cantidad de series.
+  * indice: N --> letra() --> Text
+  * -------------------------------------------------------------- */
  const letra=i=>series.length===1?'':' · '+(i===0?'A':'B');
  const s=series[0];
  return `<details class="serie-tabla">
@@ -545,6 +794,9 @@ function tablaSerie(series,nombres,mag,per){
  </details>`;
 }
 
+/* --------------------------------------------------------------
+ * series: [Serie], nombres: [Text], magnitud: Magnitud, periodo: Text --> panelSerie() --> Html
+ * -------------------------------------------------------------- */
 function panelSerie(series,nombres,mag,per){
  const comparar=series.length===2;
  const hayDatos=series.some(s=>s.observados.some(v=>v!=null));
@@ -567,10 +819,21 @@ function panelSerie(series,nombres,mag,per){
  </section>`;
 }
 
+/* --------------------------------------------------------------
+ * serie: Serie, magnitud: Magnitud, periodo: Text --> alertasSerie() --> Html
+ * -------------------------------------------------------------- */
 function alertasSerie(serie,mag,per){
  const {alertas,picos,avisos}=serie;
  const m=MAG[mag];
+ /* --------------------------------------------------------------
+  * # effects: lee la configuración de conexión.
+  * evento: Datos --> etiquetaOrigen() --> Text
+  * -------------------------------------------------------------- */
  const etiquetaOrigen=e=>e.origen==='simulado'||!URL_API?' · Simulado':e.origen==='estimado'?' · Estimado':e.origen==='mixto'?' · Incluye simulación':'';
+ /* --------------------------------------------------------------
+  * # effects: lee la magnitud y el periodo de la vista.
+  * evento: Datos --> evento() --> Html
+  * -------------------------------------------------------------- */
  const evento=e=>`<li><b>${m.n} · ${fmtSerie(e.valor,mag)} ${m.u}</b>${badge(mag,e.valor)}
   <span>${momentoSerie(e.momento,per)}${etiquetaOrigen(e)}</span></li>`;
  return `<section class="serie-panel serie-eventos" aria-labelledby="serie-eventos">
@@ -586,15 +849,28 @@ function alertasSerie(serie,mag,per){
  </section>`;
 }
 
+/* --------------------------------------------------------------
+ * id: Text, titulo: Text, clave: Text, opciones: Html, atributos: Text --> selectorSerie() --> Html
+ * -------------------------------------------------------------- */
 function selectorSerie(id,titulo,clave,opciones,attrs=''){
  return `<div class="field"><label class="mapa-label" for="${id}">${titulo}</label><select class="input" id="${id}" data-bind="${clave}" data-rr="1" ${attrs}>${opciones}</select></div>`;
 }
+/* --------------------------------------------------------------
+ * lista: [[Text]_2], valor: Text --> opcionesSerie() --> Html
+ * -------------------------------------------------------------- */
 const opcionesSerie=(lista,valor)=>lista.map(([k,n])=>`<option value="${k}" ${valor===k?'selected':''}>${n}</option>`).join('');
+/* --------------------------------------------------------------
+ * lista: [[Text]_2], activo: Text, accion: Text, etiqueta: Text --> filtrosSerie() --> Html
+ * -------------------------------------------------------------- */
 const filtrosSerie=(lista,activo,accion,label)=>`<div class="field">
  <span class="mapa-label">${label}</span>
  <div class="chips mapa-chips" role="group" aria-label="${label}">${lista.map(([k,n])=>`<button type="button" class="chip" aria-pressed="${activo===k}" data-act="${accion}" data-arg="${k}">${n}</button>`).join('')}</div>
 </div>`;
 
+/* --------------------------------------------------------------
+ * # effects: actualiza la selección y su referencia; puede solicitar series por red.
+ * vHist() --> Html
+ * -------------------------------------------------------------- */
 function vHist(){
  const h=S.hist,z=byZ(h.id);
  const personalizado=h.per==='custom';
@@ -633,6 +909,10 @@ function vHist(){
  </div></main>`+footer();
 }
 
+/* --------------------------------------------------------------
+ * # effects: actualiza las zonas y su referencia; puede solicitar series por red.
+ * vCmp() --> Html
+ * -------------------------------------------------------------- */
 function vCmp(){
  const c=S.cmp,A=byZ(c.a),B=byZ(c.b),iguales=c.a===c.b;
  let resultado='',simulado=false;
@@ -679,19 +959,32 @@ function vCmp(){
 const AYTOS=URL_API?[]:[{id:'gandia',n:'Gandia',zona:'La Safor · Comunitat Valenciana',desde:'junio 2026',activo:true}];
 const TV_LINKS=[['mapa','Mapa'],['comunidad','Comunidad'],['como-funciona','Cómo funciona'],['privacidad','Privacidad']];
 const ORDEN_NIVEL={bajo:0,medio:1,alto:2};
+/* --------------------------------------------------------------
+ * # effects: lee las mediciones de las zonas.
+ * magnitud: Magnitud --> mediaCosta() --> R | Ausente
+ * -------------------------------------------------------------- */
 function mediaCosta(m){
  const valores=ZONAS.map(z=>lectura(z,m)).filter(d=>d.estado==='reciente').map(d=>d.valor);
  return valores.length?valores.reduce((a,b)=>a+b,0)/valores.length:null;
 }
+/* --------------------------------------------------------------
+ * magnitud: Magnitud, valor: R --> escalaPos() --> R
+ * -------------------------------------------------------------- */
 function escalaPos(k,v){
  const [bajo,alto]=LIM[k];
  const tramo=v<bajo?v/bajo:v<alto?1+(v-bajo)/(alto-bajo):2+Math.min(1,(v-alto)/(alto-bajo));
  return Math.max(1,Math.min(99,tramo/3*100));
 }
+/* --------------------------------------------------------------
+ * zona: Zona --> puntuacionParque() --> R
+ * -------------------------------------------------------------- */
 function puntuacionParque(z){
  const magnitudes=Object.keys(MAG).filter(k=>z[k]!=null);
  return magnitudes.reduce((suma,k)=>suma+z[k]/LIM[k][0],0)/magnitudes.length;
 }
+/* --------------------------------------------------------------
+ * zona: Zona --> siluetaZona() --> Text
+ * -------------------------------------------------------------- */
 function siluetaZona(z){
  const anillos=(z.geometry.type==='Polygon'?[z.geometry.coordinates]:z.geometry.coordinates).flat();
  const cosLat=Math.cos(z.ancla[1]*Math.PI/180);
@@ -701,9 +994,22 @@ function siluetaZona(z){
  const escala=Math.min(860/ancho,460/alto),x=(1000-ancho*escala)/2,y=(560-alto*escala)/2;
  return puntos.map(r=>'M'+r.map(([lng,lat])=>((lng-minX)*escala+x).toFixed(1)+' '+((lat-minY)*escala+y).toFixed(1)).join('L')+'Z').join(' ');
 }
+/* --------------------------------------------------------------
+ * abierto: B --> TV_BURGER() --> Html
+ * -------------------------------------------------------------- */
 const TV_BURGER=open=>`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="${open?'M18 6 6 18M6 6l12 12':'M3 6h18M3 12h18M3 18h18'}" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"/></svg>`;
+/* --------------------------------------------------------------
+ * pausada: B --> iconoParque() --> Html
+ * -------------------------------------------------------------- */
 const iconoParque=pausa=>sv(pausa?'<path d="m8 5 12 7-12 7z"/>':'<path d="M9 6v12m6-12v12"/>',18);
+/* --------------------------------------------------------------
+ * pausada: B --> etiquetaParque() --> Text
+ * -------------------------------------------------------------- */
 const etiquetaParque=pausa=>pausa?'Reanudar animación del parque':'Pausar animación del parque';
+/* --------------------------------------------------------------
+ * # effects: lee las zonas, el tema y el estado de la portada.
+ * vInicio() --> Html
+ * -------------------------------------------------------------- */
 function vInicio(){
  const simuladas=ZONAS.some(z=>lecturas(z).some(d=>d.estado==='reciente'&&d.origen==='simulado'));
  const origen=simuladas?'Incluye datos simulados del Grau i Platja':'Datos del Grau i Platja';
@@ -832,29 +1138,60 @@ function vInicio(){
 let TEMA='claro';try{const g=localStorage.getItem('respira-tema');if(g==='claro'||g==='oscuro')TEMA=g}catch(_){}
 const IC_LUNA='<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
 const IC_SOL='<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>';
+/* --------------------------------------------------------------
+ * # effects: lee el tema activo.
+ * movil: B --> botonTema() --> Html
+ * -------------------------------------------------------------- */
 const botonTema=movil=>`<button type="button" class="tv-tema${movil?' movil':''}" ${movil?'data-tv-mobile':''} data-act="tema" aria-pressed="${TEMA==='oscuro'}" aria-label="${TEMA==='oscuro'?'Cambiar a fondo blanco':'Cambiar a modo oscuro'}" title="${TEMA==='oscuro'?'Fondo blanco':'Modo oscuro'}">${TEMA==='oscuro'?IC_SOL:IC_LUNA}</button>`;
+/* --------------------------------------------------------------
+ * # effects: actualiza el tema del documento.
+ * aplicarTema()
+ * -------------------------------------------------------------- */
 function aplicarTema(){document.documentElement.setAttribute('data-tema',TEMA)}
 const TV={inicioEscena:null,pausaEn:null,raf:null,target:{x:0,y:0},cur:{x:0,y:0},globo:null,limpiar:null};
+/* --------------------------------------------------------------
+ * # effects: ajusta el encuadre de los dibujos SVG.
+ * centrarSiluetas()
+ * -------------------------------------------------------------- */
 function centrarSiluetas(){
  document.querySelectorAll('.pq-sil path').forEach(p=>{
   const b=p.getBBox(),m=Math.max(b.width,b.height)*.08;
   if(m>0)p.parentNode.setAttribute('viewBox',`${(b.x-m).toFixed(1)} ${(b.y-m).toFixed(1)} ${(b.width+2*m).toFixed(1)} ${(b.height+2*m).toFixed(1)}`);
  });
 }
+/* --------------------------------------------------------------
+ * # effects: registra eventos, inicia la escena y prepara la limpieza de la portada.
+ * montarInicio()
+ * -------------------------------------------------------------- */
 function montarInicio(){
  if(TV.limpiar)TV.limpiar();
  const root=document.getElementById('tv-root'),par=document.getElementById('tv-parallax');
  if(!root)return;
- const off=[];const on=(el,ev,fn,o)=>{el.addEventListener(ev,fn,o);off.push(()=>el.removeEventListener(ev,fn,o))};
+ const off=[];/* --------------------------------------------------------------
+  * # effects: registra un evento y su posterior retirada.
+  * elemento: Elemento, evento: Text, opciones: Datos --> on()
+  * -------------------------------------------------------------- */
+ const on=(el,ev,fn,o)=>{el.addEventListener(ev,fn,o);off.push(()=>el.removeEventListener(ev,fn,o))};
  const barra=root.querySelector('.tv-nav');
+ /* --------------------------------------------------------------
+  * # effects: actualiza el fondo del encabezado según el desplazamiento.
+  * actualizarFondo()
+  * -------------------------------------------------------------- */
  const actualizarFondo=()=>barra.classList.toggle('con-fondo',window.scrollY>0);
  on(window,'scroll',actualizarFondo,{passive:true});
  actualizarFondo();
  // paralaje con el puntero (se para solo)
  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+  /* --------------------------------------------------------------
+   * # effects: anima el paralaje y programa otro fotograma mientras sea necesario.
+   * tick()
+   * -------------------------------------------------------------- */
   const tick=()=>{const c=TV.cur,t=TV.target;c.x+=(t.x-c.x)*0.08;c.y+=(t.y-c.y)*0.08;par.style.transform='translate3d('+c.x.toFixed(2)+'px,'+c.y.toFixed(2)+'px,0)';
    TV.raf=(Math.abs(t.x-c.x)>0.05||Math.abs(t.y-c.y)>0.05)?requestAnimationFrame(tick):null};
-  on(window,'pointermove',e=>{if(TV.pausaEn!==null)return;const lim=(v,m)=>Math.max(-m,Math.min(m,v));TV.target.x=lim((e.clientX/innerWidth-0.5)*28,14);TV.target.y=lim((e.clientY/innerHeight-0.5)*18,9);if(!TV.raf)TV.raf=requestAnimationFrame(tick)},{passive:true});
+  on(window,'pointermove',e=>{if(TV.pausaEn!==null)return;/* --------------------------------------------------------------
+   * valor: R, maximo: R --> lim() --> R
+   * -------------------------------------------------------------- */
+  const lim=(v,m)=>Math.max(-m,Math.min(m,v));TV.target.x=lim((e.clientX/innerWidth-0.5)*28,14);TV.target.y=lim((e.clientY/innerHeight-0.5)*18,9);if(!TV.raf)TV.raf=requestAnimationFrame(tick)},{passive:true});
  }
  // parque animado (canvas)
  TV.inicioEscena??=performance.now();
@@ -865,6 +1202,10 @@ function montarInicio(){
  const tvr=root.parentNode;let io=null;
  if(S.iniVisto||!window.IntersectionObserver)tvr.classList.add('quieto');
  else{S.iniVisto=true;io=new IntersectionObserver(es=>es.forEach(x=>{if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}}),{threshold:.12});tvr.querySelectorAll('.rv').forEach(el=>io.observe(el))}
+ /* --------------------------------------------------------------
+  * # effects: retira eventos y observadores y detiene la escena anterior.
+  * TV.limpiar()
+  * -------------------------------------------------------------- */
  TV.limpiar=()=>{off.forEach(f=>f());io&&io.disconnect();if(TV.raf)cancelAnimationFrame(TV.raf);TV.raf=null;TV.globo&&TV.globo.parar();TV.globo=null;TV.limpiar=null;document.body.style.backgroundColor=''};
 }
 
@@ -881,17 +1222,57 @@ const PARQUE_PAL={
  dia:{cielo:['#2f7fc4','#5aa3dc','#93c8ea','#cfe7f2','#eef6f1'],sol:[.82,-.55],solCol:'255,250,228',solDisco:false,nubes:['#ffffff','#c9d9e6'],monte:'#8aa2b6',monte2:'#9fb4c4',ciudad:'#a8bccb',ventanas:false,
   lejos:['#7fa48a','#93b49b'],hoja:['#3e7a37','#4b8a40','#5a9a49','#6ca853','#80b85e'],brillo:'#d9ef9a',sombraHoja:'#244a22',tronco:'#5a4432',cesped:['#9ccc6e','#6fa850','#4f8a3c'],hierba:['#6aa84a','#86bf5c','#4f8f3a','#9fd06f'],
   camino:['#efe5d3','#ddcfb8','#c3b297'],agua:['#cfe9f3','#9fd3ea','#4aa3c8','#2f7ea6'],aguaClara:'120,225,215',orilla:'#e3d3b2',flores:['#ffd34d','#ff6f9c','#ffffff','#9b7bff','#ff8f4d'],farola:false,persona:'#283844',bruma:'238,246,241',polen:'255,255,255'}};
+/* --------------------------------------------------------------
+ * # effects: crea recursos gráficos y registra observadores de visibilidad y tamaño.
+ * lienzo: Elemento, dia: B --> parqueEscena() --> Escena
+ * -------------------------------------------------------------- */
 function parqueEscena(cv,dia){
  const P=dia?PARQUE_PAL.dia:PARQUE_PAL.tarde;
- const ctx=cv.getContext('2d');if(!ctx)return {parar(){}};
+ const ctx=cv.getContext('2d');if(!ctx)return {/* --------------------------------------------------------------
+  * # effects: detiene la animación y desconecta sus observadores.
+  * +
+  *         parar() --x
+  * -------------------------------------------------------------- */
+ parar(){}};
  const quieto=matchMedia('(prefers-reduced-motion: reduce)').matches;
- let sem=7;const rnd=()=>{sem=(sem*16807)%2147483647;return (sem-1)/2147483646};const entre=(a,b)=>a+rnd()*(b-a);const elige=a=>a[Math.floor(rnd()*a.length)];
+ let sem=7;/* --------------------------------------------------------------
+  * # La semilla fija conserva la distribución del paisaje entre temas.
+  * # effects: avanza la semilla local de la escena.
+  * rnd() --> R
+  * -------------------------------------------------------------- */
+ const rnd=()=>{sem=(sem*16807)%2147483647;return (sem-1)/2147483646};/* --------------------------------------------------------------
+  * # effects: avanza la semilla local de la escena.
+  * minimo: R, maximo: R --> entre() --> R
+  * -------------------------------------------------------------- */
+ const entre=(a,b)=>a+rnd()*(b-a);/* --------------------------------------------------------------
+  * # effects: avanza la semilla local de la escena.
+  * valores: [Valor] --> elige() --> Valor
+  * -------------------------------------------------------------- */
+ const elige=a=>a[Math.floor(rnd()*a.length)];
  let w=0,h=0,dpr=1,E=null,id=null,vivo=true,visible=true;
+ /* --------------------------------------------------------------
+  * # effects: lee la visibilidad, la pausa y la preferencia de movimiento.
+  * animar() --> B
+  * -------------------------------------------------------------- */
  const animar=()=>vivo&&!quieto&&visible&&TV.pausaEn===null;
+ /* --------------------------------------------------------------
+  * # effects: crea un lienzo auxiliar y adapta su resolución a la pantalla.
+  * ancho: R, alto: R --> lienzo() --> lienzo: Elemento, contexto: Contexto
+  * -------------------------------------------------------------- */
  const lienzo=(cw,ch)=>{const c=document.createElement('canvas');c.width=Math.max(1,Math.ceil(cw*dpr));c.height=Math.max(1,Math.ceil(ch*dpr));const x=c.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);return [c,x]};
- const mezcla=(a,b,k)=>{const p=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));const A=p(a),B=p(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*k)).join(',')+')'};
+ /* --------------------------------------------------------------
+  * inicio: Color, fin: Color, proporcion: R --> mezcla() --> Color
+  * -------------------------------------------------------------- */
+ const mezcla=(a,b,k)=>{/* --------------------------------------------------------------
+  * color: Color --> p() --> [N]_3
+  * -------------------------------------------------------------- */
+ const p=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));const A=p(a),B=p(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*k)).join(',')+')'};
 
  // ---------- árboles (sprites) ----------
+ /* --------------------------------------------------------------
+  * # effects: dibuja un árbol en un lienzo auxiliar.
+  * alto: R, bruma: R --> arbolRedondo() --> Datos
+  * -------------------------------------------------------------- */
  function arbolRedondo(alto,bruma){
   const R=alto*.34,cw=R*2.6,ch=alto*1.05;const [c,x]=lienzo(cw,ch);const bx=cw/2,by=ch-2,cy=by-alto+R*1.05;
   const tr=bruma?mezcla(P.tronco,P.lejos[0],bruma):P.tronco;
@@ -905,6 +1286,10 @@ function parqueEscena(cv,dia){
   if(!bruma){for(let i=0;i<Math.round(alto*2);i++){const a=rnd()*Math.PI*2,d=Math.sqrt(rnd());const px=Math.cos(a)*d,py=Math.sin(a)*d*.86;if(px*lx+py*ly<.2)continue;x.fillStyle='rgba(255,240,190,'+entre(.15,.4)+')';x.fillRect(bx+px*R*.95,cy+py*R*.95,1.4,1.4)}}
   return {c,cw,ch,ox:bx,oy:by};
  }
+ /* --------------------------------------------------------------
+  * # effects: dibuja un ciprés en un lienzo auxiliar.
+  * alto: R, bruma: R --> arbolCipres() --> Datos
+  * -------------------------------------------------------------- */
  function arbolCipres(alto,bruma){
   const W=alto*.2,cw=W*1.6,ch=alto*1.04;const [c,x]=lienzo(cw,ch);const bx=cw/2,by=ch-2;
   x.fillStyle=P.tronco;x.fillRect(bx-alto*.012,by-alto*.08,alto*.024,alto*.08);
@@ -913,6 +1298,10 @@ function parqueEscena(cv,dia){
    x.fillStyle=col;x.beginPath();x.ellipse(xx,y,W*.16,W*.24,0,0,7);x.fill()}
   return {c,cw,ch,ox:bx,oy:by};
  }
+ /* --------------------------------------------------------------
+  * # effects: dibuja una palmera en un lienzo auxiliar.
+  * alto: R, bruma: R --> palmera() --> Datos
+  * -------------------------------------------------------------- */
  function palmera(alto,bruma){
   const cw=alto*1.05,ch=alto*1.06;const [c,x]=lienzo(cw,ch);const bx=cw*.5,by=ch-2;const curva=entre(-.12,.12)*alto;const tx=bx+curva,ty=by-alto*.86;
   x.lineCap='round';
@@ -925,9 +1314,17 @@ function parqueEscena(cv,dia){
   x.fillStyle='#6b4e2e';x.beginPath();x.arc(tx,ty+alto*.02,alto*.03,0,7);x.fill();
   return {c,cw,ch,ox:bx,oy:by};
  }
+ /* --------------------------------------------------------------
+  * # effects: crea el dibujo auxiliar de un árbol.
+  * tipo: Text, alto: R, bruma: R --> nuevoArbol() --> Datos
+  * -------------------------------------------------------------- */
  const nuevoArbol=(tipo,alto,bruma)=>tipo==='palmera'?palmera(alto,bruma):tipo==='cipres'?arbolCipres(alto,bruma):arbolRedondo(alto,bruma);
 
  // ---------- preparar la escena (en cada cambio de tamaño) ----------
+ /* --------------------------------------------------------------
+  * # effects: reconstruye el paisaje cuando cambia el tamaño del lienzo.
+  * preparar()
+  * -------------------------------------------------------------- */
  function preparar(){
   dpr=Math.min(2,devicePixelRatio||1);w=cv.clientWidth;h=cv.clientHeight;if(!w||!h)return false;cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);sem=11;
   const hz=h*.6,ancho=w<700;
@@ -935,12 +1332,20 @@ function parqueEscena(cv,dia){
   const L={cx:w*(ancho?.75:.7),cy:hz+h*(ancho?.17:.14),rx:w*(ancho?.18:.17),ry:h*(ancho?.06:.062)};L.top=L.cy-L.ry;
   const lagoPath=new Path2D();for(let i=0;i<=48;i++){const a=i/48*Math.PI*2;const r=1+.08*Math.sin(a*3+1)+.05*Math.cos(a*5);const px=L.cx+Math.cos(a)*L.rx*r,py=L.cy+Math.sin(a)*L.ry*r*(Math.sin(a)<0?.85:1);i?lagoPath.lineTo(px,py):lagoPath.moveTo(px,py)}lagoPath.closePath();
   // camino: de abajo a la izquierda hacia el horizonte, rodeando el lago
+  /* --------------------------------------------------------------
+   * # effects: lee las dimensiones del paisaje.
+   * avance: R --> camino() --> Datos
+   * -------------------------------------------------------------- */
   const camino=u=>{const x0=w*(ancho?.18:.3),x1=w*(ancho?.34:.5),y0=h+12,y1=hz+h*.012;const x=x0+(x1-x0)*(1-Math.pow(1-u,1.7))-Math.sin(u*Math.PI)*w*.04;return {x,y:y0+(y1-y0)*u,ancho:(1-u)*w*(ancho?.2:.12)+w*.005}};
   // ---- cielo, sol, nubes lejanas, monte (Mondúver), ciudad y bruma ----
   const [cielo,cx]=lienzo(w,hz+4);
   const g=cx.createLinearGradient(0,0,0,hz);[0,.4,.72,.9,1].forEach((k,i)=>g.addColorStop(k,P.cielo[i]));cx.fillStyle=g;cx.fillRect(0,0,w,hz+4);
   const sx=w*P.sol[0],sy=hz+h*P.sol[1];const sg=cx.createRadialGradient(sx,sy,0,sx,sy,Math.max(w,h)*.55);sg.addColorStop(0,`rgba(${P.solCol},.75)`);sg.addColorStop(.12,`rgba(${P.solCol},.35)`);sg.addColorStop(1,`rgba(${P.solCol},0)`);cx.fillStyle=sg;cx.fillRect(0,0,w,hz+4);
   if(P.solDisco){cx.fillStyle='rgba(255,236,190,.95)';cx.beginPath();cx.arc(sx,sy,h*.032,0,7);cx.fill()}
+  /* --------------------------------------------------------------
+   * # effects: dibuja una silueta sobre el lienzo de fondo.
+   * base: R, amplitud: R, color: Color, fase: R --> monte()
+   * -------------------------------------------------------------- */
   const monte=(base,amp,col,fase)=>{cx.fillStyle=col;cx.beginPath();cx.moveTo(0,hz);for(let x=0;x<=w;x+=8){const k=x/w;const y=base-amp*(Math.exp(-Math.pow((k-.22-fase)/.16,2))*1+.35*Math.exp(-Math.pow((k-.5)/.25,2))+.25*Math.sin(k*9+fase*20)*.3);cx.lineTo(x,y)}cx.lineTo(w,hz);cx.closePath();cx.fill()};
   monte(hz-h*.01,h*.12,P.monte2,0);monte(hz,h*.07,P.monte,.15);
   cx.fillStyle=P.ciudad;
@@ -1012,13 +1417,25 @@ function parqueEscena(cv,dia){
   return true;
  }
 
+ /* --------------------------------------------------------------
+  * # effects: dibuja un árbol con balanceo y profundidad.
+  * arbol: Datos, tiempo: R, paralaje: R --> sprite()
+  * -------------------------------------------------------------- */
  function sprite(t,tt,px){const s=t.s;const sw=quieto?0:Math.sin(tt*.7+t.f)*t.amp+Math.sin(tt*1.9+t.f*2)*t.amp*.3;ctx.save();ctx.translate(t.x+px*t.prof,t.y);ctx.transform(1,0,sw,1,0,0);ctx.drawImage(s.c,-s.ox,-s.oy,s.cw,s.ch);ctx.restore()}
+ /* --------------------------------------------------------------
+  * # effects: dibuja una persona sobre el lienzo.
+  * x: R, y: R, alto: R, tiempo: R, corre: B, sensor: B --> persona()
+  * -------------------------------------------------------------- */
  function persona(x,y,alto,tt,corre,sensor){const p=quieto?0:Math.sin(tt*(corre?9:5));ctx.fillStyle=P.persona;ctx.strokeStyle=P.persona;ctx.lineCap='round';
   ctx.beginPath();ctx.arc(x,y-alto*.9,alto*.11,0,7);ctx.fill();ctx.lineWidth=alto*.2;ctx.beginPath();ctx.moveTo(x,y-alto*.75);ctx.lineTo(x+(corre?alto*.06:0),y-alto*.42);ctx.stroke();
   ctx.lineWidth=alto*.09;ctx.beginPath();ctx.moveTo(x,y-alto*.42);ctx.lineTo(x+p*alto*(corre?.22:.12),y);ctx.moveTo(x,y-alto*.42);ctx.lineTo(x-p*alto*(corre?.22:.12),y);ctx.stroke();
   ctx.lineWidth=alto*.07;ctx.beginPath();ctx.moveTo(x,y-alto*.7);ctx.lineTo(x-p*alto*.14,y-alto*.48);ctx.moveTo(x,y-alto*.7);ctx.lineTo(x+p*alto*.14,y-alto*.48);ctx.stroke();
   if(sensor){const pul=quieto?.6:.5+.5*Math.sin(tt*3);const ex=x+alto*.13,ey=y-alto*.6;const ha=ctx.createRadialGradient(ex,ey,0,ex,ey,alto*.6);ha.addColorStop(0,`rgba(95,196,192,${.6*pul})`);ha.addColorStop(1,'rgba(95,196,192,0)');ctx.fillStyle=ha;ctx.fillRect(ex-alto*.6,ey-alto*.6,alto*1.2,alto*1.2);ctx.fillStyle='#8af0e6';ctx.beginPath();ctx.arc(ex,ey,Math.max(1.6,alto*.05),0,7);ctx.fill()}}
 
+ /* --------------------------------------------------------------
+  * # effects: consulta el reloj, actualiza la escena y programa el siguiente fotograma.
+  * dibujar()
+  * -------------------------------------------------------------- */
  function dibujar(){
   if(!E&&!preparar()){id=animar()?requestAnimationFrame(dibujar):null;return}
   const tt=((TV.pausaEn??performance.now())-TV.inicioEscena)/1000,px=TV.cur.x*.5,{hz,L}=E;
@@ -1063,14 +1480,28 @@ function parqueEscena(cv,dia){
  E=null;dibujar();
  const ro=window.ResizeObserver?new ResizeObserver(()=>{E=null;if(quieto||TV.pausaEn!==null)dibujar()}):null;ro&&ro.observe(cv);
  return {
+  /* --------------------------------------------------------------
+   * # effects: cancela o reanuda la programación de fotogramas.
+   * +
+   *         actualizarPausa() --x
+   * -------------------------------------------------------------- */
   actualizarPausa(){
    if(id)cancelAnimationFrame(id);
    id=animar()?requestAnimationFrame(dibujar):null;
   },
+  /* --------------------------------------------------------------
+   * # effects: detiene la animación y desconecta sus observadores.
+   * +
+   *         parar() --x
+   * -------------------------------------------------------------- */
   parar(){vivo=false;id&&cancelAnimationFrame(id);ro&&ro.disconnect();vis&&vis.disconnect()}
  };
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee los datos públicos y el tema.
+ * vComo() --> Html
+ * -------------------------------------------------------------- */
 function vComo(){
  const pasos=[
   [I.walk,'Un portador lleva el sensor','Voluntarios, personal de limpieza y jardines, bicis y motos compartidas y autobuses.'],
@@ -1149,6 +1580,9 @@ function vComo(){
  </main>`+footer();
 }
 
+/* --------------------------------------------------------------
+ * vPriv() --> Html
+ * -------------------------------------------------------------- */
 function vPriv(){
  const apartados=[
   ['Contacto','Si tienes preguntas sobre los datos del prototipo, contacta con el equipo del proyecto Respira.'],
@@ -1171,6 +1605,9 @@ function vPriv(){
 }
 
 /* ---------- acceso (WEB-05) ---------- */
+/* --------------------------------------------------------------
+ * titulo: Text, descripcion: Text, contenido: Html --> accesoMunicipal() --> Html
+ * -------------------------------------------------------------- */
 function accesoMunicipal(titulo,descripcion,contenido){
  return header('acceso')+`<main class="contenido-pagina acceso-pagina wrap">
   <header class="contenido-cabecera acceso-cabecera">
@@ -1182,6 +1619,10 @@ function accesoMunicipal(titulo,descripcion,contenido){
  </main>`+footer();
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee el formulario y los resultados de acceso o recuperación.
+ * recuperacion: B --> vAcceso() --> Html
+ * -------------------------------------------------------------- */
 function vAcceso(rec){
  const apiConfigurada=window.RespiraDatos?.conApi() ?? Boolean(window.RESPIRA_CONFIG?.API_URL);
  if(rec){
@@ -1246,9 +1687,20 @@ function vAcceso(rec){
  </main>`;
 }
 /* ---------- panel municipal ---------- */
+/* --------------------------------------------------------------
+ * # effects: consulta el reloj y los préstamos pendientes.
+ * pendDev() --> [Datos]
+ * -------------------------------------------------------------- */
 const pendDev=()=>LOANS.filter(l=>!l.fin&&l.ini!==undefined&&(l.limMs!=null?Date.now()>l.limMs:/^1 nov|^31 oct/.test(l.ini)));
+/* --------------------------------------------------------------
+ * sensor: Datos --> sinDatos() --> B
+ * -------------------------------------------------------------- */
 const sinDatos=s=>['activo','prestado'].includes(s.est)&&(s.ult==null||s.ult>1440);
 
+/* --------------------------------------------------------------
+ * # effects: lee la sesión municipal y el tema.
+ * ruta: Text, contenido: Html --> pshell() --> Html
+ * -------------------------------------------------------------- */
 function pshell(cur,inner){
  const usuario=S.user;
  const secciones=[
@@ -1266,6 +1718,10 @@ function pshell(cur,inner){
  const rol=ROL[usuario.r]+(usuario.punto?' · '+esc(usuario.punto):'');
  const marca=`<a class="logo panel-marca" href="#${HOME[usuario.r]}" aria-label="Respira, panel municipal">
   ${LOGO(26,'#FFFFFF','#FFFFFF','#5FC4C0')}<span>Panel municipal</span></a>`;
+ /* --------------------------------------------------------------
+  * # effects: lee la cuenta y el rol actuales.
+  * movil: B --> cuenta() --> Html
+  * -------------------------------------------------------------- */
  const cuenta=movil=>`<div class="panel-cuenta"><b>${esc(usuario.n)}</b><span>${rol}</span>
   <div class="panel-cuenta-enlaces"><a href="#mapa">Ver web pública</a>${movil?'':botonTema(false)}</div>
   <button type="button" class="link" data-act="logout">Cerrar sesión</button></div>`;
@@ -1297,14 +1753,32 @@ function pshell(cur,inner){
  </div>`;
 }
 
+/* --------------------------------------------------------------
+ * titulo: Text, descripcion: Text, accion: Html --> panelTitulo() --> Html
+ * -------------------------------------------------------------- */
 const panelTitulo=(titulo,descripcion='',accion='')=>`<div class="panel-titulo">
  <div><h1>${titulo}</h1>${descripcion?`<p>${descripcion}</p>`:''}</div>${accion}
 </div>`;
+/* --------------------------------------------------------------
+ * valor: Valor --> panelDato() --> Text
+ * -------------------------------------------------------------- */
 const panelDato=valor=>`<span class="panel-dato">${esc(valor)}</span>`;
+/* --------------------------------------------------------------
+ * texto: Text, accion: Text, id: Text, nombre: Text, peligro: B, deshabilitado: B --> panelAccion() --> Html
+ * -------------------------------------------------------------- */
 const panelAccion=(texto,accion,id,nombre='',peligro=false,deshabilitado=false)=>`<button type="button" class="panel-accion${peligro?' panel-accion-peligro':''}" data-act="${accion}" data-arg="${esc(id)}"${nombre?` aria-label="${esc(texto+' '+nombre)}"`:''}${deshabilitado?' disabled':''}>${texto}</button>`;
+/* --------------------------------------------------------------
+ * acciones: [Html] --> panelAcciones() --> Html
+ * -------------------------------------------------------------- */
 const panelAcciones=(...acciones)=>`<div class="panel-acciones">${acciones.join('')}</div>`;
 
+/* --------------------------------------------------------------
+ * titulo: Text, columnas: [Text], filas: [[Valor]], vacio: Text --> panelTabla() --> Html
+ * -------------------------------------------------------------- */
 function panelTabla(titulo,columnas,filas,vacio){
+ /* --------------------------------------------------------------
+  * valor: Valor, columna: Text --> celda() --> Html
+  * -------------------------------------------------------------- */
  const celda=(valor,columna)=>`<td role="cell"><span class="panel-celda-etiqueta" aria-hidden="true">${columna}</span><div>${valor}</div></td>`;
  return `<section class="panel-registros">
   <h2>${titulo}</h2>
@@ -1315,21 +1789,56 @@ function panelTabla(titulo,columnas,filas,vacio){
  </section>`;
 }
 
+/* --------------------------------------------------------------
+ * sensor: Datos --> stCell() --> Html
+ * -------------------------------------------------------------- */
 const stCell=s=>{
  const [color,nombre]={activo:['var(--lv-bajo)','Activo'],prestado:['var(--primary)','Prestado'],disponible:['var(--ink-3)','Disponible'],mant:['var(--mant)','Mantenimiento']}[s.est]||['var(--ink-3)','Sin estado'];
  return `<span class="st"><i aria-hidden="true" style="background:${color}"></i>${nombre}</span>`;
 };
+/* --------------------------------------------------------------
+ * sensor: Datos --> portador() --> Text
+ * -------------------------------------------------------------- */
 const portador=s=>s.tipo==='vol'?(s.est==='prestado'?`Prestado a <b>${esc(s.user)}</b>`:'<span class="hint">En el punto de reparto</span>'):esc(s.asig);
 
+/* --------------------------------------------------------------
+ * # effects: lee el inventario y los préstamos municipales.
+ * vFlota() --> Html
+ * -------------------------------------------------------------- */
 function vFlota(){
  const consulta=S.fQ.trim().toLowerCase();
  const pendientes=new Set(pendDev().map(l=>l.code));
  const retrasados=SENS.filter(sinDatos);
  const enServicio=SENS.filter(s=>s.est!=='mant').length;
  const activos=SENS.filter(s=>['activo','prestado'].includes(s.est)&&!sinDatos(s)).length;
- const estados={todos:()=>true,sindatos:sinDatos,pend:s=>pendientes.has(s.code),mant:s=>s.est==='mant'};
+ const estados={/* --------------------------------------------------------------
+  * # effects: lee el inventario municipal.
+  * -
+  *         todos() --x
+  *     <--
+  *   [Datos]
+  * -------------------------------------------------------------- */
+ todos:()=>true,sindatos:sinDatos,/* --------------------------------------------------------------
+  * # effects: lee los préstamos y la fecha de referencia.
+  * -   sensor: Datos
+  *     -->
+  *         pend() --x
+  *     <--
+  *   B
+  * -------------------------------------------------------------- */
+ pend:s=>pendientes.has(s.code),/* --------------------------------------------------------------
+  * -   sensor: Datos
+  *     -->
+  *         mant() --x
+  *     <--
+  *   B
+  * -------------------------------------------------------------- */
+ mant:s=>s.est==='mant'};
  const visibles=SENS.filter(s=>(S.fT==='todos'||s.tipo===S.fT)&&estados[S.fE](s)&&
   (!consulta||[s.code,s.asig,s.user].join(' ').toLowerCase().includes(consulta)));
+ /* --------------------------------------------------------------
+  * rotulo: Text, accion: Text, valor: Text, opciones: [[Text]_2] --> filtros() --> Html
+  * -------------------------------------------------------------- */
  const filtros=(rotulo,act,valor,opciones)=>`<div class="panel-filtro">
   <span>${rotulo}</span><div class="chips" role="group" aria-label="${rotulo}">
   ${opciones.map(([id,nombre])=>`<button type="button" class="chip" data-act="${act}" data-arg="${id}" aria-pressed="${id===valor}">${nombre}</button>`).join('')}
@@ -1362,6 +1871,10 @@ function vFlota(){
   ${panelTabla(visibles.length===1?'1 sensor':visibles.length+' sensores',['Código','Portador','Asignación','Último dato','Estado'],filas,'Ningún sensor cumple estos filtros.')}`);
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee el inventario y sus filtros.
+ * vSensores() --> Html
+ * -------------------------------------------------------------- */
 function vSensores(){
  const admin=S.user.r==='admin';
  const filas=SENS.map(s=>[
@@ -1377,6 +1890,10 @@ function vSensores(){
   <p class="panel-nota">${admin?'Para dar de baja un sensor prestado, registra antes su devolución.':'Dar de baja un sensor solo puede hacerlo Administración.'}</p>`);
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee el sensor editado, el formulario y sus errores.
+ * vEditar() --> Html
+ * -------------------------------------------------------------- */
 function vEditar(){
  const e=S.edit;
  if(!e){location.hash='panel-sensores';return ''}
@@ -1437,6 +1954,10 @@ function vEditar(){
   </form>`);
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee los préstamos y los puntos de reparto.
+ * vPrestamos() --> Html
+ * -------------------------------------------------------------- */
 function vPrestamos(){
  const f=S.f;
  const abiertos=LOANS.filter(l=>!l.fin);
@@ -1484,9 +2005,16 @@ function vPrestamos(){
   ${panelTabla('Devoluciones recientes',['Sensor','Usuario','Prestado','Fecha límite','Cómo llegó'],devoluciones,'Todavía no hay devoluciones registradas.')}`);
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee las reglas de puntos y los errores del formulario.
+ * vPuntos() --> Html
+ * -------------------------------------------------------------- */
 function vPuntos(){
  const r=RULES;
  const ejemplo=Math.min(r.max,Math.floor(120/r.min)+Math.floor(40/r.min)*(r.mult-1));
+ /* --------------------------------------------------------------
+  * nombre: Text, valor: N, ayuda: Text --> regla() --> Html
+  * -------------------------------------------------------------- */
  const regla=(nombre,valor,ayuda)=>`<div><dt>${nombre}<span class="hint">${ayuda}</span></dt><dd>${valor}</dd></div>`;
  return pshell('panel-puntos',`
   ${panelTitulo('Puntos del voluntariado','Los puntos de cada día se calculan y se guardan cuando acaba el día.')}
@@ -1508,6 +2036,10 @@ function vPuntos(){
   </div>`);
 }
 
+/* --------------------------------------------------------------
+ * # effects: lee el catálogo, los canjes y el estado del formulario.
+ * vRegalos() --> Html
+ * -------------------------------------------------------------- */
 function vRegalos(){
  const admin=S.user.r==='admin';
  const canje=S.canje;
@@ -1541,6 +2073,10 @@ function vRegalos(){
 }
 
 
+/* --------------------------------------------------------------
+ * # effects: lee los trabajadores y el estado del alta.
+ * vTrabajadores() --> Html
+ * -------------------------------------------------------------- */
 function vTrabajadores(){
  if(!S.user||S.user.r!=='admin')return '';
  const f=S.f;
@@ -1582,6 +2118,10 @@ function vTrabajadores(){
   ${panelTabla('Cuentas de trabajadores',['Trabajador','ID de cuenta','Nº empleado','Servicio','Alta'],filas,'Todavía no hay trabajadores registrados.')}`);
 }
 
+/* --------------------------------------------------------------
+ * # effects: consulta el reloj y el formulario; puede validar el enlace por red.
+ * vActivar() --> Html
+ * -------------------------------------------------------------- */
 function vActivar(){
  const enlace=enlaceAct();
  const recuperacion=enlace?.tipo==='recuperar'||S.activTipo==='recuperar';
@@ -1631,6 +2171,10 @@ function vActivar(){
 }
 
 /* ---------- modales ---------- */
+/* --------------------------------------------------------------
+ * # effects: lee el diálogo y los errores activos.
+ * modal() --> Html
+ * -------------------------------------------------------------- */
 function modal(){const m=S.modal;if(!m)return '';let b='';
  if(m.k==='baja'){b=`<h2>¿Dar de baja ${m.id}?</h2><p class="muted" style="margin:0">Dejará de aparecer en la flota y no se podrá prestar. Sus mediciones anteriores se conservan.</p><form id="f-baja" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="b-mot">Motivo</label><select class="input" id="b-mot" data-bind="f.bmot" ${inv('bmot')}><option value="">Elige un motivo…</option>${['Perdido o no devuelto','Avería sin reparación','Sustituido por otro sensor','Otro'].map(o=>`<option ${S.f.bmot===o?'selected':''}>${o}</option>`).join('')}</select>${err('bmot')}</div><div class="field"><label for="b-conf">Para confirmar, escribe <b class="mono">${m.id}</b></label><input class="input mono" id="b-conf" data-bind="f.bconf" value="${esc(S.f.bconf||'')}" autocomplete="off" ${inv('bconf')}>${err('bconf')}</div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn danger" type="submit">Dar de baja</button></div></form>`}
  if(m.k==='regalo'){b=`<h2>${m.id?'Editar regalo':'Nuevo regalo'}</h2><form id="f-regalo" style="display:flex;flex-direction:column;gap:12px" novalidate><div class="field"><label for="g-n">Nombre</label><input class="input" id="g-n" data-bind="f.gn" value="${esc(S.f.gn||'')}" ${inv('gn')}>${err('gn')}</div><div class="formgrid"><div class="field"><label for="g-c">Coste en puntos</label><input class="input mono" id="g-c" data-bind="f.gc" value="${esc(S.f.gc||'')}" inputmode="numeric" ${inv('gc')}>${err('gc')}</div><div class="field"><label for="g-s">Existencias</label><input class="input mono" id="g-s" data-bind="f.gs" value="${esc(S.f.gs||'')}" inputmode="numeric" ${inv('gs')}>${err('gs')}</div></div><div class="acts"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn" type="submit">Guardar</button></div></form>`}
@@ -1641,6 +2185,10 @@ function modal(){const m=S.modal;if(!m)return '';let b='';
 /* ---------- render ---------- */
 const $r=document.getElementById('root');
 let origenDialogo;
+/* --------------------------------------------------------------
+ * # effects: consulta el documento.
+ * elemento: Elemento | Ausente --> localizarFoco() --> Text | Ausente
+ * -------------------------------------------------------------- */
 function localizarFoco(elemento){
  if(!elemento||!$r.contains(elemento))return null;
  if(elemento.id)return '#'+CSS.escape(elemento.id);
@@ -1648,11 +2196,19 @@ function localizarFoco(elemento){
  if(!act)return null;
  return `[data-act="${CSS.escape(act)}"]`+(arg===undefined?':not([data-arg])':`[data-arg="${CSS.escape(arg)}"]`);
 }
+/* --------------------------------------------------------------
+ * # effects: cambia el foco del documento.
+ * elemento: Elemento | Ausente --> enfocarSeccion()
+ * -------------------------------------------------------------- */
 function enfocarSeccion(elemento){
  if(!elemento)return;
  elemento.setAttribute('tabindex','-1');
  elemento.focus({preventScroll:true});
 }
+/* --------------------------------------------------------------
+ * # effects: gestiona el foco y bloquea la interacción fuera del diálogo.
+ * selector_foco: Text | Ausente, habia_dialogo: B, activar: B --> sincronizarDialogo()
+ * -------------------------------------------------------------- */
 function sincronizarDialogo(selectorFoco,habiaDialogo,activar){
  const dialogo=$r.querySelector('.modal [role="dialog"]');
  for(const elemento of $r.children){
@@ -1671,6 +2227,10 @@ function sincronizarDialogo(selectorFoco,habiaDialogo,activar){
 }
 
 // Actualiza los controles y los resultados sin desmontar el mapa de Google.
+/* --------------------------------------------------------------
+ * # effects: actualiza controles y resultados sin desmontar Google Maps.
+ * contenido: Html --> renderMapaEnSitio()
+ * -------------------------------------------------------------- */
 function renderMapaEnSitio(html){
  const plantilla=document.createElement('template');
  plantilla.innerHTML=html;
@@ -1687,10 +2247,42 @@ function renderMapaEnSitio(html){
  }
 }
 
+/* --------------------------------------------------------------
+ * # effects: actualiza el documento, la navegación, el mapa y el foco.
+ * solo_datos: B --> render()
+ * -------------------------------------------------------------- */
 function render(soloDatos=false){const r=route();
  if(PAN.includes(r)&&!S.user){location.replace('#acceso');S.e={};S.f.notice=true;return}
  if(PAN.includes(r)&&!ACCESS[S.user.r].includes(r)){location.replace('#'+HOME[S.user.r]);toast('Tu rol no tiene acceso a esa sección');return}
- const V={inicio:vInicio,mapa:()=>{S.layer='zonas';S.avSel=null;return vMapa()},comunidad:()=>{S.layer='comunidad';S.sel=null;return vMapa()},historial:vHist,comparar:vCmp,'como-funciona':vComo,privacidad:vPriv,acceso:()=>vAcceso(false),recuperar:()=>vAcceso(true),panel:vFlota,'panel-sensores':vSensores,'panel-editar':vEditar,'panel-prestamos':vPrestamos,'panel-puntos':vPuntos,'panel-regalos':vRegalos,'panel-trabajadores':vTrabajadores,activar:vActivar};
+ const V={inicio:vInicio,/* --------------------------------------------------------------
+  * # effects: cambia la capa a zonas y limpia la selección de avisos.
+  * -
+  *         mapa() --x
+  *     <--
+  *   Html
+  * -------------------------------------------------------------- */
+ mapa:()=>{S.layer='zonas';S.avSel=null;return vMapa()},/* --------------------------------------------------------------
+  * # effects: cambia la capa a comunidad y limpia la selección de zona.
+  * -
+  *         comunidad() --x
+  *     <--
+  *   Html
+  * -------------------------------------------------------------- */
+ comunidad:()=>{S.layer='comunidad';S.sel=null;return vMapa()},historial:vHist,comparar:vCmp,'como-funciona':vComo,privacidad:vPriv,/* --------------------------------------------------------------
+  * # effects: lee el formulario de acceso.
+  * -
+  *         acceso() --x
+  *     <--
+  *   Html
+  * -------------------------------------------------------------- */
+ acceso:()=>vAcceso(false),/* --------------------------------------------------------------
+  * # effects: lee el formulario de recuperación.
+  * -
+  *         recuperar() --x
+  *     <--
+  *   Html
+  * -------------------------------------------------------------- */
+ recuperar:()=>vAcceso(true),panel:vFlota,'panel-sensores':vSensores,'panel-editar':vEditar,'panel-prestamos':vPrestamos,'panel-puntos':vPuntos,'panel-regalos':vRegalos,'panel-trabajadores':vTrabajadores,activar:vActivar};
  const ae=document.activeElement;const keep=ae&&ae.id&&ae.dataset&&ae.dataset.live?[ae.id,ae.selectionStart]:null;
  const mapaAbierto=r==='mapa'||r==='comunidad';
  const listaAnterior=$r.querySelector('.mapview .side');
@@ -1732,16 +2324,44 @@ function render(soloDatos=false){const r=route();
 
 /* ---------- acciones ---------- */
 // Panel con servidor: si hay API, la acción la hace datos-api.js (y devuelve true)
+/* --------------------------------------------------------------
+ * # effects: delega una acción a la API cuando está configurada.
+ * accion: Text, datos: Datos --> SRV() --> B
+ * -------------------------------------------------------------- */
 const SRV=(k,d)=>{const D=window.RespiraDatos;if(!D||!D.conApi())return false;D.accion(k,d);return true};
+/* --------------------------------------------------------------
+ * # effects: consulta el enlace de activación local o inicia su validación por red.
+ * enlaceAct() --> Datos | Ausente | B
+ * -------------------------------------------------------------- */
 const enlaceAct=()=>window.RespiraDatos&&RespiraDatos.conApi()?RespiraDatos.enlace(S.tok):STAFF.find(x=>x.r==='trabajador'&&x.token&&x.token===S.tok);
+/* --------------------------------------------------------------
+ * # effects: lee el código introducido en el formulario.
+ * codigoCanje() --> Text
+ * -------------------------------------------------------------- */
 const codigoCanje=()=>String(S.f.ccode||'').trim().toUpperCase();
+/* --------------------------------------------------------------
+ * # effects: borra el canje comprobado del estado y del documento.
+ * limpiarCanje()
+ * -------------------------------------------------------------- */
 function limpiarCanje(){
  S.canje=null;
  $r.querySelector('.panel-resultado-canje')?.remove();
 }
+/* --------------------------------------------------------------
+ * texto: Text --> vEmail() --> B
+ * -------------------------------------------------------------- */
 const vEmail=v=>/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v);
+/* --------------------------------------------------------------
+ * texto: Text --> bytes() --> N
+ * -------------------------------------------------------------- */
 const bytes=texto=>new TextEncoder().encode(texto).length;
 const A={
+ /* --------------------------------------------------------------
+  * # effects: alterna la pausa y actualiza el botón accesible.
+  * -   argumento: Text | Ausente, boton: Elemento
+  *     -->
+  *         pausaParque() --x
+  * -------------------------------------------------------------- */
  pausaParque:(_,boton)=>{
   const ahora=performance.now();
   if(TV.pausaEn===null){
@@ -1758,7 +2378,17 @@ const A={
   boton.title=etiquetaParque(pausa);
   boton.innerHTML=iconoParque(pausa);
  },
+ /* --------------------------------------------------------------
+  * # effects: cambia y guarda el tema, repinta y conserva el foco.
+  * -   argumento: Text | Ausente, boton: Elemento
+  *     -->
+  *         tema() --x
+  * -------------------------------------------------------------- */
  tema:(_,boton)=>{
+  /* --------------------------------------------------------------
+   * # effects: actualiza el tema y la vista.
+   * cambiar()
+   * -------------------------------------------------------------- */
   const cambiar=()=>{
    TEMA=TEMA==='oscuro'?'claro':'oscuro';
    try{localStorage.setItem('respira-tema',TEMA)}catch(_){}
@@ -1768,22 +2398,91 @@ const A={
   };
   transicionVista(cambiar);
  },
+ /* --------------------------------------------------------------
+  * # effects: muestra un aviso temporal en el documento.
+  * -   mensaje: Text
+  *     -->
+  *         toast() --x
+  * -------------------------------------------------------------- */
  toast:a=>toast(a),
+ /* --------------------------------------------------------------
+  * # effects: actualiza la magnitud seleccionada y repinta.
+  * -   magnitud: Text
+  *     -->
+  *         mag() --x
+  * -------------------------------------------------------------- */
  mag:a=>{S.mag=a;render()},
  sel:seleccionarZona,
+ /* --------------------------------------------------------------
+  * # effects: restablece el encuadre del mapa.
+  * -
+  *         zoom() --x
+  * -------------------------------------------------------------- */
  zoom:()=>GMAP().reset(),
+ /* --------------------------------------------------------------
+  * # effects: alterna la perspectiva del mapa.
+  * -
+  *         tilt() --x
+  * -------------------------------------------------------------- */
  tilt:()=>GMAP().perspectiva(),
+ /* --------------------------------------------------------------
+  * # effects: actualiza el filtro de niveles de comunidad.
+  * -   nivel: Text
+  *     -->
+  *         avf() --x
+  * -------------------------------------------------------------- */
  avf:a=>{S.avf=+a;S.avSel=null;render()},
+ /* --------------------------------------------------------------
+  * # effects: actualiza el filtro de percepciones de comunidad.
+  * -   tipo: Text
+  *     -->
+  *         avt() --x
+  * -------------------------------------------------------------- */
  avt:a=>{S.avt=a;S.avf=0;S.avSel=null;render()},
+ /* --------------------------------------------------------------
+  * # effects: lleva el foco al buscador.
+  * -
+  *         buscarZona() --x
+  * -------------------------------------------------------------- */
  buscarZona:()=>document.getElementById('q')?.focus(),
+ /* --------------------------------------------------------------
+  * # effects: selecciona una percepción y ajusta el foco en móvil.
+  * -   id: Text
+  *     -->
+  *         verPercepcion() --x
+  * -------------------------------------------------------------- */
  verPercepcion:id=>{
   S.avSel=id;
   render();
   if(matchMedia('(max-width: 780px)').matches)document.getElementById('aviso-'+id)?.focus();
  },
+ /* --------------------------------------------------------------
+  * # effects: actualiza la pestaña informativa y sus atributos accesibles.
+  * -   pestana: Text
+  *     -->
+  *         tabIni() --x
+  * -------------------------------------------------------------- */
  tabIni:a=>{S.tabIni=a;document.querySelectorAll('[data-act=tabIni]').forEach(b=>{const seleccionada=b.dataset.arg===a;b.setAttribute('aria-selected',seleccionada);b.tabIndex=seleccionada?0:-1});document.querySelectorAll('.ic-panel').forEach(p=>p.hidden=p.id!=='icp-'+a)},
+ /* --------------------------------------------------------------
+  * # effects: selecciona una zona y abre el mapa.
+  * -   id: Text
+  *     -->
+  *         verZona() --x
+  * -------------------------------------------------------------- */
  verZona:a=>{S.q='';S.sel=a;nav('mapa')},
+ /* --------------------------------------------------------------
+  * # effects: prepara el historial de una zona y navega a él.
+  * -   id: Text
+  *     -->
+  *         toHist() --x
+  * -------------------------------------------------------------- */
  toHist:a=>{S.hist={id:a,mag:S.mag==='gen'?'o3':S.mag,per:'24h',desde:'',hasta:''};S.sel=null;nav('historial')},
+ /* --------------------------------------------------------------
+  * # effects: prepara una comparación conservando el periodo del historial.
+  * -   id: Text
+  *     -->
+  *         toCmp() --x
+  * -------------------------------------------------------------- */
  toCmp:a=>{
   const desdeHistorial=route()==='historial';
   const mag=desdeHistorial?S.hist.mag:S.mag;
@@ -1794,8 +2493,31 @@ const A={
   S.sel=null;
   nav('comparar');
  },
- hmag:a=>{S.hist.mag=a;render()}, hper:a=>{S.hist.per=a;S.e={};render()},
+ /* --------------------------------------------------------------
+  * # effects: cambia la magnitud del historial y repinta.
+  * -   magnitud: Text
+  *     -->
+  *         hmag() --x
+  * -------------------------------------------------------------- */
+ hmag:a=>{S.hist.mag=a;render()}, /* --------------------------------------------------------------
+  * # effects: cambia el periodo del historial y borra sus errores.
+  * -   periodo: Text
+  *     -->
+  *         hper() --x
+  * -------------------------------------------------------------- */
+ hper:a=>{S.hist.per=a;S.e={};render()},
+ /* --------------------------------------------------------------
+  * # effects: intercambia las zonas de comparación.
+  * -
+  *         swap() --x
+  * -------------------------------------------------------------- */
  swap:()=>{const c=S.cmp;[c.a,c.b]=[c.b,c.a];render()},
+ /* --------------------------------------------------------------
+  * # effects: rellena las credenciales de demostración y enfoca el acceso.
+  * -   rol: Text
+  *     -->
+  *         usarCuentaPrueba() --x
+  * -------------------------------------------------------------- */
  usarCuentaPrueba:rol=>{
   const cuenta=CUENTAS_PANEL_PRUEBA.find(c=>c.r===rol);
   if(!cuenta)return;
@@ -1805,28 +2527,161 @@ const A={
   render();
   $r.querySelector('#f-login button[type="submit"]')?.focus();
  },
- showPass:()=>{S.showPass=!S.showPass;render()}, recBack:()=>{S.recOk=false},
+ /* --------------------------------------------------------------
+  * # effects: alterna la visibilidad de la contraseña.
+  * -
+  *         showPass() --x
+  * -------------------------------------------------------------- */
+ showPass:()=>{S.showPass=!S.showPass;render()}, /* --------------------------------------------------------------
+  * # effects: restablece el formulario de recuperación.
+  * -
+  *         recBack() --x
+  * -------------------------------------------------------------- */
+ recBack:()=>{S.recOk=false},
+ /* --------------------------------------------------------------
+  * # effects: cierra la sesión y vuelve al acceso municipal.
+  * -
+  *         logout() --x
+  * -------------------------------------------------------------- */
  logout:()=>{window.RespiraDatos&&RespiraDatos.cerrarSesion();S.user=null;S.f={};S.altaOk=null;S.edit=null;S.canje=null;toast('Has cerrado sesión');nav('acceso')},
+ /* --------------------------------------------------------------
+  * # effects: solicita de nuevo los datos municipales.
+  * -
+  *         reintentarPanel() --x
+  * -------------------------------------------------------------- */
  reintentarPanel:()=>window.RespiraDatos?.reintentarPanel(),
+ /* --------------------------------------------------------------
+  * # effects: solicita de nuevo una fuente pública.
+  * -   nombre: Text
+  *     -->
+  *         reintentarPublico() --x
+  * -------------------------------------------------------------- */
  reintentarPublico:nombre=>window.RespiraDatos?.reintentarPublico(nombre),
+ /* --------------------------------------------------------------
+  * # effects: repite la validación del enlace de activación.
+  * -
+  *         reintentarEnlace() --x
+  * -------------------------------------------------------------- */
  reintentarEnlace:()=>window.RespiraDatos?.reintentarEnlace(S.tok),
- fT:a=>{S.fT=a;render()}, fE:a=>{S.fE=S.fE===a&&a!=='todos'?'todos':a;if(route()!=='panel')nav('panel');else render()},
+ /* --------------------------------------------------------------
+  * # effects: actualiza el filtro de tipos de sensor.
+  * -   tipo: Text
+  *     -->
+  *         fT() --x
+  * -------------------------------------------------------------- */
+ fT:a=>{S.fT=a;render()}, /* --------------------------------------------------------------
+  * # effects: actualiza el filtro de estado del sensor.
+  * -   estado: Text
+  *     -->
+  *         fE() --x
+  * -------------------------------------------------------------- */
+ fE:a=>{S.fE=S.fE===a&&a!=='todos'?'todos':a;if(route()!=='panel')nav('panel');else render()},
+ /* --------------------------------------------------------------
+  * # effects: prepara el sensor que se va a editar.
+  * -   codigo: Text
+  *     -->
+  *         editar() --x
+  * -------------------------------------------------------------- */
  editar:a=>{const s=a&&byCode(a);S.edit=s?{orig:s.code,code:s.code,mags:[...s.mags],tipo:s.tipo,asig:s.asig||'',estado:s.est==='mant'?'mant':'ok',motivo:s.motivo||''}:{orig:null,code:'',mags:[],tipo:'vol',asig:'',estado:'ok',motivo:''};S.e={};nav('panel-editar')},
+ /* --------------------------------------------------------------
+  * # effects: alterna una magnitud del sensor editado.
+  * -   magnitud: Text
+  *     -->
+  *         emag() --x
+  * -------------------------------------------------------------- */
  emag:a=>{const m=S.edit.mags;const i=m.indexOf(a);i>=0?m.splice(i,1):m.push(a);delete S.e.mags;render()},
+ /* --------------------------------------------------------------
+  * # effects: cambia el tipo del sensor editado.
+  * -   tipo: Text
+  *     -->
+  *         etipo() --x
+  * -------------------------------------------------------------- */
  etipo:a=>{const s=S.edit.orig&&byCode(S.edit.orig);if(s&&s.est==='prestado'){toast('Está prestado: registra la devolución antes de cambiar el tipo');return}S.edit.tipo=a;delete S.e.asig;render()},
+ /* --------------------------------------------------------------
+  * # effects: cambia el estado de mantenimiento del sensor editado.
+  * -   estado: Text
+  *     -->
+  *         eest() --x
+  * -------------------------------------------------------------- */
  eest:a=>{S.edit.estado=a;delete S.e.motivo;render()},
+ /* --------------------------------------------------------------
+  * # effects: abre la confirmación de baja del sensor.
+  * -   codigo: Text
+  *     -->
+  *         baja() --x
+  * -------------------------------------------------------------- */
  baja:a=>{if(S.user.r!=='admin')return;S.f.bmot='';S.f.bconf='';S.e={};S.modal={k:'baja',id:a};render()},
+ /* --------------------------------------------------------------
+  * # effects: abre el formulario de devolución del préstamo.
+  * -   codigo: Text
+  *     -->
+  *         dest() --x
+  * -------------------------------------------------------------- */
  dest:a=>{S.f.dest=a;render()},
+ /* --------------------------------------------------------------
+  * # effects: abre el formulario de alta de regalo.
+  * -
+  *         nuevoRegalo() --x
+  * -------------------------------------------------------------- */
  nuevoRegalo:()=>{S.f.gn='';S.f.gc='';S.f.gs='';S.e={};S.modal={k:'regalo',id:null};render()},
+ /* --------------------------------------------------------------
+  * # effects: abre el formulario de edición de regalo.
+  * -   id: Text
+  *     -->
+  *         editRegalo() --x
+  * -------------------------------------------------------------- */
  editRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.f.gn=g.n;S.f.gc=String(g.c);S.f.gs=String(g.stock);S.e={};S.modal={k:'regalo',id:a};render()},
+ /* --------------------------------------------------------------
+  * # effects: abre la confirmación de retirada de regalo.
+  * -   id: Text
+  *     -->
+  *         retirarRegalo() --x
+  * -------------------------------------------------------------- */
  retirarRegalo:a=>{const g=GIFTS.find(x=>x.id===a);S.modal={k:'confirm',t:`¿Retirar «${g.n}»?`,p:'Dejará de verse en la app. Los canjes pendientes de este regalo se podrán seguir entregando.',ok:'Retirar',danger:true,fn:()=>{if(SRV('retirar',{id:a}))return;GIFTS=GIFTS.filter(x=>x.id!==a);toast('Regalo retirado del catálogo')}};render()},
+ /* --------------------------------------------------------------
+  * # effects: entrega el canje comprobado mediante API o demostración.
+  * -   argumento: Text | Ausente, boton: Elemento
+  *     -->
+  *         entregar() --x
+  * -------------------------------------------------------------- */
  entregar:(_,boton)=>{const c=S.canje;if(!c||c.code!==codigoCanje())return;if(SRV('entregar',{codigo:c.code})){boton.disabled=true;return}const g=GIFTS.find(x=>x.id===c.gift);c.estado='entregado';if(g)g.stock=Math.max(0,g.stock-1);S.canje=null;S.f.ccode='';render();toast(g&&g.stock===0?`Entregado. «${g.n}» queda agotado en la app.`:'Regalo entregado')},
+ /* --------------------------------------------------------------
+  * # effects: cierra el diálogo, borra sus errores y repinta.
+  * -
+  *         closeModal() --x
+  * -------------------------------------------------------------- */
  closeModal:()=>{S.modal=null;S.e={};render()},
+ /* --------------------------------------------------------------
+  * # effects: abre la leyenda de valores.
+  * -
+  *         guia() --x
+  * -------------------------------------------------------------- */
  guia:()=>{S.modal={k:'guia'};render()},
+ /* --------------------------------------------------------------
+  * # effects: abre la leyenda con una magnitud destacada.
+  * -   magnitud: Text
+  *     -->
+  *         aValores() --x
+  * -------------------------------------------------------------- */
  aValores:k=>{S.modal={k:'guia',foco:k};render()},
+ /* --------------------------------------------------------------
+  * # effects: cierra el diálogo solo si se pulsa su fondo.
+  * -   argumento: Text, elemento: Elemento, evento: Evento
+  *     -->
+  *         backdrop() --x
+  * -------------------------------------------------------------- */
  backdrop:(a,el,ev)=>{if(ev.target===el)A.closeModal()},
+ /* --------------------------------------------------------------
+  * # effects: ejecuta la acción confirmada y cierra el diálogo.
+  * -
+  *         confirmOk() --x
+  * -------------------------------------------------------------- */
  confirmOk:()=>{const f=S.modal.fn;S.modal=null;f();render()}
 };
+/* --------------------------------------------------------------
+ * # effects: actualiza el menú móvil y sus atributos accesibles.
+ * boton: Elemento, abierto: B --> menuMovil()
+ * -------------------------------------------------------------- */
 function menuMovil(boton,abierto){
  const panel=document.getElementById(boton.getAttribute('aria-controls'));
  panel.inert=!abierto;
@@ -1834,6 +2689,10 @@ function menuMovil(boton,abierto){
  boton.setAttribute('aria-label',abierto?'Cerrar menú':'Abrir menú');
  boton.innerHTML=TV_BURGER(abierto);
 }
+/* --------------------------------------------------------------
+ * # effects: consulta el documento.
+ * menuAbierto() --> Elemento | Ausente
+ * -------------------------------------------------------------- */
 const menuAbierto=()=>$r.querySelector('.tv-burger[aria-expanded="true"]');
 matchMedia('(min-width: 768px)').addEventListener('change',e=>{
  const boton=menuAbierto();
@@ -1875,6 +2734,10 @@ document.addEventListener('keydown',e=>{
  else if(S.modal)A.closeModal();
  else if(S.sel)A.sel('');
 });
+/* --------------------------------------------------------------
+ * # effects: actualiza una propiedad anidada del estado de la interfaz.
+ * ruta: Text, valor: Valor --> setPath()
+ * -------------------------------------------------------------- */
 function setPath(b,v){const p=b.split('.');let o=S;for(let i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=v}
 const ERRKEY={'f.mail':'mail','f.pass':'pass','f.rmail':'rmail','f.puser':'puser','f.pcode':'pcode','f.dcode':'dcode','f.ccode':'ccode','f.bconf':'bconf','f.gn':'gn','f.gc':'gc','f.gs':'gs','f.tn':'tn','f.te':'te','f.temp':'temp','f.ts':'ts','f.tp1':'tp1','f.tp2':'tp2','edit.code':'code','edit.asig':'asig','edit.motivo':'motivo','hist.desde':'desde','hist.hasta':'hasta'};
 $r.addEventListener('input',e=>{const el=e.target,b=el.dataset.bind;if(!b||el.tagName==='SELECT')return;setPath(b,el.value);
@@ -1882,7 +2745,14 @@ $r.addEventListener('input',e=>{const el=e.target,b=el.dataset.bind;if(!b||el.ta
  if(el.dataset.live){if(b==='q'&&S.sel&&!zonaCoincide(byZ(S.sel)))S.sel=null;render();return}
  const key=ERRKEY[b];if(key&&S.e[key]){delete S.e[key];el.removeAttribute('aria-invalid');const x=document.getElementById('e-'+key);x&&x.remove()}});
 $r.addEventListener('change',e=>{const el=e.target;const b=el.dataset.bind;if(!b)return;setPath(b,el.value);if(el.dataset.rr)render();});
-$r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const er={};const ok=()=>{S.e=er;if(Object.keys(er).length){S.focusErr=true;render();return false}S.e={};return true};const up=v=>(v||'').trim().toUpperCase();
+$r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const er={};/* --------------------------------------------------------------
+ * # effects: publica los errores y enfoca el primero si falla la validación.
+ * ok() --> B
+ * -------------------------------------------------------------- */
+const ok=()=>{S.e=er;if(Object.keys(er).length){S.focusErr=true;render();return false}S.e={};return true};/* --------------------------------------------------------------
+ * texto: Text | Ausente --> up() --> Text
+ * -------------------------------------------------------------- */
+const up=v=>(v||'').trim().toUpperCase();
  if(id==='f-login'){const m=(S.f.mail||'').trim().toLowerCase(),p=S.f.pass||'';
   if(!m)er.mail='Escribe tu correo.';else if(!vEmail(m))er.mail='El correo no tiene un formato válido. Ejemplo: nombre@ayto.es';
   if(!p)er.pass='Escribe tu contraseña.';
@@ -1970,8 +2840,106 @@ $r.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;const e
 });
 /* Lo que necesita js/mapa-google.js */
 window.Respira={S,ZONAS,AVISOS,MAG,PERC,nivel,fmt,hace,esc,avOk,render,byZ,seleccionarZona,zonaCoincide,
- zonaMapa,actualizarZonas,actualizarPercepciones,urlApi:URL_API,sens:()=>SENS,nav,toast,HOME,
- estado:{get SENS(){return SENS},set SENS(v){SENS=v},get LOANS(){return LOANS},set LOANS(v){LOANS=v},get RULES(){return RULES},set RULES(v){RULES=v},get GIFTS(){return GIFTS},set GIFTS(v){GIFTS=v},get CANJES(){return CANJES},set CANJES(v){CANJES=v},get STAFF(){return STAFF},set STAFF(v){STAFF=v},get APPUSERS(){return APPUSERS},set APPUSERS(v){APPUSERS=v},AYTOS,PUNTOS_REPARTO,REGALOS_PUBLICOS}};
+ zonaMapa,actualizarZonas,actualizarPercepciones,urlApi:URL_API,/* --------------------------------------------------------------
+  * # effects: lee el inventario compartido.
+  * +
+  *         sens() --x
+  *     <--
+  *   [Datos]
+  * -------------------------------------------------------------- */
+ sens:()=>SENS,nav,toast,HOME,
+ estado:{/* --------------------------------------------------------------
+  * # effects: lee el inventario compartido.
+  * +
+  *         SENS() --x
+  *     <--
+  *   [Datos]
+  * -------------------------------------------------------------- */
+ get SENS(){return SENS},/* --------------------------------------------------------------
+  * # effects: sustituye el inventario compartido.
+  * +   valor: [Datos]
+  *     -->
+  *         SENS() --x
+  * -------------------------------------------------------------- */
+ set SENS(v){SENS=v},/* --------------------------------------------------------------
+  * # effects: lee los préstamos compartidos.
+  * +
+  *         LOANS() --x
+  *     <--
+  *   [Datos]
+  * -------------------------------------------------------------- */
+ get LOANS(){return LOANS},/* --------------------------------------------------------------
+  * # effects: sustituye los préstamos compartidos.
+  * +   valor: [Datos]
+  *     -->
+  *         LOANS() --x
+  * -------------------------------------------------------------- */
+ set LOANS(v){LOANS=v},/* --------------------------------------------------------------
+  * # effects: lee las reglas de puntos.
+  * +
+  *         RULES() --x
+  *     <--
+  *   Datos
+  * -------------------------------------------------------------- */
+ get RULES(){return RULES},/* --------------------------------------------------------------
+  * # effects: sustituye las reglas de puntos.
+  * +   valor: Datos
+  *     -->
+  *         RULES() --x
+  * -------------------------------------------------------------- */
+ set RULES(v){RULES=v},/* --------------------------------------------------------------
+  * # effects: lee el catálogo compartido.
+  * +
+  *         GIFTS() --x
+  *     <--
+  *   [Datos]
+  * -------------------------------------------------------------- */
+ get GIFTS(){return GIFTS},/* --------------------------------------------------------------
+  * # effects: sustituye el catálogo compartido.
+  * +   valor: [Datos]
+  *     -->
+  *         GIFTS() --x
+  * -------------------------------------------------------------- */
+ set GIFTS(v){GIFTS=v},/* --------------------------------------------------------------
+  * # effects: lee los canjes compartidos.
+  * +
+  *         CANJES() --x
+  *     <--
+  *   [Datos]
+  * -------------------------------------------------------------- */
+ get CANJES(){return CANJES},/* --------------------------------------------------------------
+  * # effects: sustituye los canjes compartidos.
+  * +   valor: [Datos]
+  *     -->
+  *         CANJES() --x
+  * -------------------------------------------------------------- */
+ set CANJES(v){CANJES=v},/* --------------------------------------------------------------
+  * # effects: lee las cuentas municipales.
+  * +
+  *         STAFF() --x
+  *     <--
+  *   [Datos]
+  * -------------------------------------------------------------- */
+ get STAFF(){return STAFF},/* --------------------------------------------------------------
+  * # effects: sustituye las cuentas municipales.
+  * +   valor: [Datos]
+  *     -->
+  *         STAFF() --x
+  * -------------------------------------------------------------- */
+ set STAFF(v){STAFF=v},/* --------------------------------------------------------------
+  * # effects: lee las cuentas de la app.
+  * +
+  *         APPUSERS() --x
+  *     <--
+  *   [Datos]
+  * -------------------------------------------------------------- */
+ get APPUSERS(){return APPUSERS},/* --------------------------------------------------------------
+  * # effects: sustituye las cuentas de la app.
+  * +   valor: [Datos]
+  *     -->
+  *         APPUSERS() --x
+  * -------------------------------------------------------------- */
+ set APPUSERS(v){APPUSERS=v},AYTOS,PUNTOS_REPARTO,REGALOS_PUBLICOS}};
 aplicarTema();
 render();
 programarCaducidad();

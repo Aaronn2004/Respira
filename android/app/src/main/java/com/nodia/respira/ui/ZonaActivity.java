@@ -27,6 +27,15 @@ import com.nodia.respira.datos.Zona;
 // y evolución en 24 h / 7 días (con huecos cortos aproximados,
 // alertas y picos).
 // ==============================================================
+// --------------------------------------------------------------
+// class ZonaActivity
+// # Detalle de zona, series, estadísticas y alertas.
+// # AppCompatActivity <--- ZonaActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Entorno = { densidad: R, tema: Text }
+// Vista = { contenido: Text, visible: B, habilitada: B }
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class ZonaActivity extends AppCompatActivity {
 
     public static final String EXTRA_ZONA = "zona";
@@ -42,10 +51,22 @@ public class ZonaActivity extends AppCompatActivity {
     private int generacionSerie;
     private String claveSerie;        // de qué zona, magnitud y periodo es
 
+    // --------------------------------------------------------------
+    // # effects: abre la pantalla de destino
+    // + ctx: Entorno, zonaId: Text
+    //       -->
+    //           abrir() --x
+    // --------------------------------------------------------------
     public static void abrir(Context ctx, String zonaId) {
         ctx.startActivity(new Intent(ctx, ZonaActivity.class).putExtra(EXTRA_ZONA, zonaId));
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -59,6 +80,11 @@ public class ZonaActivity extends AppCompatActivity {
         c = Ui.pantalla(this, zona.nombre);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz
+    // +
+    //   onResume() -->
+    // --------------------------------------------------------------
     @Override
     protected void onResume() {
         super.onResume();
@@ -67,6 +93,12 @@ public class ZonaActivity extends AppCompatActivity {
         }
     }
 
+    // --------------------------------------------------------------
+    // # La generación descarta respuestas de una selección anterior; el resumen excluye aproximaciones.
+    // # effects: lee el repositorio, solicita la serie y actualiza la interfaz
+    // -
+    //   pintar() -->
+    // --------------------------------------------------------------
     private void pintar() {
         Zona actual = repo.zona(zonaId);   // las zonas se renuevan al leer la API
         if (actual != null) {
@@ -230,10 +262,22 @@ public class ZonaActivity extends AppCompatActivity {
         Ui.nota(c, getString(com.nodia.respira.R.string.nota_privacidad_mapa));
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - tarjeta: Vista, titulo: Text, valor: R | Ausente
+    //       -->
+    //           mostrarEstadistica() <--
+    // --------------------------------------------------------------
     private void mostrarEstadistica(LinearLayout tarjeta, String titulo, Double valor) {
         Ui.valor(tarjeta, titulo, valor == null ? "—" : magnitud.formatear(valor) + " " + magnitud.unidad);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - lista: Vista, evento: Serie.Evento, titulo: Text, prefijo: Text, nivel: Nivel
+    //       -->
+    //           evento() <--
+    // --------------------------------------------------------------
     private void evento(LinearLayout lista, Serie.Evento evento, String titulo, String prefijo, Nivel nivel) {
         String origen = "simulado".equals(evento.origen) ? " · Simulado" : "";
         LinearLayout fila = Ui.fila(lista, titulo, prefijo + magnitud.formatear(evento.valor)
@@ -245,11 +289,27 @@ public class ZonaActivity extends AppCompatActivity {
     private static final java.time.format.DateTimeFormatter FMT_HORA = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
     private static final java.time.format.DateTimeFormatter FMT_DIA = java.time.format.DateTimeFormatter.ofPattern("EEE d HH:mm", new java.util.Locale("es", "ES"));
 
+    // --------------------------------------------------------------
+    // # effects: lee la zona horaria del dispositivo
+    // + ms: DateTime, conDia: B
+    //       -->
+    //           hora() --x
+    //       <--
+    //   resultado: Text
+    // --------------------------------------------------------------
     public static String hora(long ms, boolean conDia) {
         java.time.ZonedDateTime t = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault());
         return (conDia ? FMT_DIA : FMT_HORA).format(t);
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee la zona horaria del dispositivo
+    // + desde: DateTime, hasta: DateTime
+    //       -->
+    //           franja() --x
+    //       <--
+    //   resultado: Text
+    // --------------------------------------------------------------
     static String franja(long desde, long hasta) {
         java.time.ZoneId z = java.time.ZoneId.systemDefault();
         boolean mismoDia = java.time.Instant.ofEpochMilli(desde).atZone(z).toLocalDate()

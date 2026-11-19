@@ -26,6 +26,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+// # Ausente representa la ausencia lógica (null en el código).
+// # ValorJson = Ausente | B | R | Text | [ValorJson] | Map[Text, ValorJson].
+// # ObjetoJson = Map[Text, ValorJson].
+// # ErrorApi = { codigo: Z, mensaje: Text, campos: Map[Text, Text] }.
+// # EntornoAndroid = { aplicacion: Text }; identifica los recursos y servicios de la app.
+// # Observador = { identificador: N }; suscripción que recibe cambios del repositorio.
+// # Avisador = { identificador: N }; destino de las notificaciones de alerta.
+// # T representa el tipo lógico de resultado acordado por quien llama.
+// # ErrorDatos = { detalle: Text }; fallo al leer o interpretar datos.
+
 // ==============================================================
 // Repositorio: único punto de acceso a los datos de la app.
 //
@@ -59,14 +69,34 @@ public final class Repositorio {
 
     // Resultado de una operación con el servidor (llega en el hilo principal)
     public interface Hecho<T> {
+        // --------------------------------------------------------------
+        // # effects: entrega el resultado a quien recibe la respuesta.
+        // + resultado: T
+        //       -->
+        //     ok() -->
+        // --------------------------------------------------------------
         void ok(T resultado);
 
         // mensaje para enseñar; campos = errores de cada campo del formulario
+        // --------------------------------------------------------------
+        // # effects: entrega el resultado a quien recibe la respuesta.
+        // + mensaje: Text, campos: Map[Text, Text]
+        //       -->
+        //     error() -->
+        // --------------------------------------------------------------
         void error(String mensaje, Map<String, String> campos);
     }
 
     // Lo usa RespiraApp para enseñar la notificación de una alerta
     public interface AvisoDeAlerta {
+        // --------------------------------------------------------------
+        // # effects: entrega el resultado a quien recibe la respuesta.
+        // + alerta: Alerta, zona: Zona
+        //       -->
+        //     avisar() -->
+        //       <--
+        //   B
+        // --------------------------------------------------------------
         boolean avisar(Alerta alerta, Zona zona);
     }
 
@@ -87,7 +117,7 @@ public final class Repositorio {
     private final List<Runnable> observadores = new ArrayList<>();
     private final ApiRespira api = new ApiRespira();
 
-    // Zonas: las de demostración hasta que responde la API; luego, las reales
+    // Los contornos costeros permanecen estables; la API aporta sus mediciones por id.
     private final List<Zona> zonas = new ArrayList<>(DatosDemo.zonas());
     private boolean datosReales = false;
     private final Map<String, Double> ultimosValores = new HashMap<>();
@@ -119,7 +149,12 @@ public final class Repositorio {
     private AvisoDeAlerta avisoDeAlerta;
 
     // --------------------------------------------------------------
-    // contexto: Context --> obtener() --> Repositorio
+    // # effects: actualiza la caché persistente.
+    // + contexto: EntornoAndroid
+    //       -->
+    //     obtener() --x
+    //       <--
+    //   Repositorio
     // --------------------------------------------------------------
     public static synchronized Repositorio obtener(Context contexto) {
         if (instancia == null) {
@@ -128,6 +163,12 @@ public final class Repositorio {
         return instancia;
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe preferencias locales.
+    // - contexto: EntornoAndroid
+    //       -->
+    //     Repositorio() -->
+    // --------------------------------------------------------------
     private Repositorio(Context contexto) {
         this.contexto = contexto.getApplicationContext();
         zonas.forEach(z -> z.conSimulado(true));
@@ -147,14 +188,31 @@ public final class Repositorio {
     // ==============================================================
     // Observadores: las pantallas se refrescan cuando cambia algo
     // ==============================================================
+    // --------------------------------------------------------------
+    // # effects: registra o retira una suscripción.
+    // + r: Observador
+    //       -->
+    //     observar() -->
+    // --------------------------------------------------------------
     public synchronized void observar(Runnable r) {
         observadores.add(r);
     }
 
+    // --------------------------------------------------------------
+    // # effects: registra o retira una suscripción.
+    // + r: Observador
+    //       -->
+    //     dejarDeObservar() -->
+    // --------------------------------------------------------------
     public synchronized void dejarDeObservar(Runnable r) {
         observadores.remove(r);
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe preferencias locales; notifica en el hilo principal.
+    // -
+    //     cambio() -->
+    // --------------------------------------------------------------
     private void cambio() {
         guardar();
         TrabajoAlertas.programar(contexto, necesitaTrabajoAlertas());
@@ -169,6 +227,12 @@ public final class Repositorio {
         });
     }
 
+    // --------------------------------------------------------------
+    // # effects: registra o retira una suscripción.
+    // + a: Avisador
+    //       -->
+    //     alAvisarDeAlerta() -->
+    // --------------------------------------------------------------
     public void alAvisarDeAlerta(AvisoDeAlerta a) {
         avisoDeAlerta = a;
     }
@@ -176,30 +240,49 @@ public final class Repositorio {
     // ==============================================================
     // Zonas, favoritos y alertas
     // ==============================================================
+    // --------------------------------------------------------------
+    // +
+    //     zonas() <--
+    //       <--
+    //   [Zona]
+    // --------------------------------------------------------------
     public synchronized List<Zona> zonas() {
         return Collections.unmodifiableList(new ArrayList<>(zonas));
     }
 
     // --------------------------------------------------------------
-    // datosReales() --> B   (F = la API no responde: se ven los de demostración)
+    // +
+    //     datosReales() <--
+    //       <--
+    //   B
     // --------------------------------------------------------------
     public synchronized boolean datosReales() {
         return datosReales;
     }
 
     // --------------------------------------------------------------
-    // actualizarZonas(): GET /zonas y, si responde, sustituye las zonas
-    // y comprueba las alertas de este móvil con los datos nuevos
+    // # La API actualiza las lecturas sin sustituir el catálogo por zonas del prototipo.
+    // # effects: consulta o actualiza la API.
+    // +
+    //     actualizarZonas() -->
     // --------------------------------------------------------------
     public void actualizarZonas() {
         actualizarZonas(ok -> { });
     }
 
+    // --------------------------------------------------------------
+    // # La API actualiza las lecturas sin sustituir el catálogo por zonas del prototipo.
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // +
+    //     actualizarZonas() -->
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public void actualizarZonas(ApiRespira.Listo<Boolean> hecho) {
         api.obtenerZonas(lista -> hiloPrincipal.post(() -> {
             synchronized (this) {
                 zonas.clear();
-                zonas.addAll(lista);
+                zonas.addAll(ZonasCosta.conMediciones(lista));
                 datosReales = true;
             }
             comprobarAlertas();
@@ -212,7 +295,13 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // zonaId, magnitud, periodo --> serie() --> Serie | null (en el hilo principal)
+    // # La respuesta se entrega en el hilo principal; un fallo devuelve Ausente.
+    // # effects: consulta o actualiza la API.
+    // + zona_id: Text, m: Magnitud, periodo: Text
+    //       -->
+    //     serie() <--
+    //       <--
+    //   Serie | Ausente
     // --------------------------------------------------------------
     public void serie(String zonaId, Magnitud m, String periodo, ApiRespira.Listo<Serie> listo) {
         api.obtenerSerie(zonaId, m, periodo, d -> hiloPrincipal.post(() -> listo.ok(d)),
@@ -220,7 +309,10 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // Solo se avisa con datos de la API y con la magnitud vigente.
+    // # Solo emite avisos con datos recientes y respeta una hora entre avisos de la misma alerta.
+    // # effects: consulta o actualiza la API; registra avisos de alerta; consulta el reloj; actualiza la caché persistente.
+    // -
+    //     comprobarAlertas() -->
     // --------------------------------------------------------------
     private void comprobarAlertas() {
         final long ahora = System.currentTimeMillis();
@@ -243,10 +335,22 @@ public final class Repositorio {
         enviarAvisos();
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     necesitaTrabajoAlertas() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public synchronized boolean necesitaTrabajoAlertas() {
         return !alertas.isEmpty() || !avisosPendientes.isEmpty() || seguimientoPendiente;
     }
 
+    // --------------------------------------------------------------
+    // # effects: registra avisos de alerta.
+    // - alerta: Alerta, zona: Zona
+    //       -->
+    //     anotarAviso() -->
+    // --------------------------------------------------------------
     private void anotarAviso(Alerta alerta, Zona zona) {
         Zona.Dato dato = zona.dato(alerta.magnitud);
         if (token == null || dato.momento == 0 || dato.origen.isEmpty()) return;
@@ -259,12 +363,25 @@ public final class Repositorio {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API.
+    // +
+    //     comprobacionEnSegundoPlano() -->
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public void comprobacionEnSegundoPlano(ApiRespira.Listo<Boolean> hecho) {
         subirSeguimiento();
         enviarAvisos();
         actualizarZonas(hecho);
     }
 
+    // --------------------------------------------------------------
+    // # Un error definitivo retira el aviso; los errores temporales permiten reintentarlo.
+    // # effects: consulta o actualiza la API; actualiza la caché persistente.
+    // -
+    //     enviarAvisos() -->
+    // --------------------------------------------------------------
     private void enviarAvisos() {
         final String t;
         final JSONObject aviso;
@@ -275,12 +392,28 @@ public final class Repositorio {
             enviandoAvisos = true;
         }
         api.pedir("POST", "/yo/alertas/emitidas", aviso, t, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override public void ok(String cuerpo) { registrado(true); }
 
+            // --------------------------------------------------------------
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override public void error(ApiRespira.Error e) {
                 registrado(e.codigo == 400 || e.codigo == 404 || e.codigo == 409);
             }
 
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; consulta o actualiza la API.
+            // - retirar: B
+            //       -->
+            //     registrado() -->
+            // --------------------------------------------------------------
             private void registrado(boolean retirar) {
                 synchronized (Repositorio.this) {
                     if (!t.equals(token)) return;
@@ -294,7 +427,13 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // alerta, zona --> seCumple() --> B
+    // # La condición media también incluye el nivel alto; el límite personalizado es estricto.
+    // + a: Alerta, z: Zona
+    //       -->
+    //     seCumple() --x
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public static boolean seCumple(Alerta a, Zona z) {
         Double v = z.valor(a.magnitud);
         if (v == null) {
@@ -318,6 +457,12 @@ public final class Repositorio {
     }
 
     // Último valor recibido del sensor del recorrido (pantalla «Mi sensor»)
+    // --------------------------------------------------------------
+    // # effects: actualiza la caché persistente; notifica en el hilo principal.
+    // + magnitud: Text, valor: R
+    //       -->
+    //     anotarUltimoValor() -->
+    // --------------------------------------------------------------
     public void anotarUltimoValor(String magnitud, double valor) {
         synchronized (this) {
             ultimosValores.put(magnitud, valor);
@@ -325,10 +470,23 @@ public final class Repositorio {
         cambio();
     }
 
+    // --------------------------------------------------------------
+    // + magnitud: Text
+    //       -->
+    //     ultimoValor() <--
+    //       <--
+    //   R | Ausente
+    // --------------------------------------------------------------
     public synchronized Double ultimoValor(String magnitud) {
         return ultimosValores.get(magnitud);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la caché persistente; notifica en el hilo principal.
+    // + dueño: Text, enviadas: Z, pendientes: Z, rechazadas: Z, ultima: Z
+    //       -->
+    //     actualizarEnvios() -->
+    // --------------------------------------------------------------
     public void actualizarEnvios(String dueño, int enviadas, int pendientes, int rechazadas, long ultima) {
         synchronized (this) {
             if (usuario == null || !dueño.equals(usuario.id) || recorrido == null) return;
@@ -343,6 +501,12 @@ public final class Repositorio {
         cambio();
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     parques() <--
+    //       <--
+    //   [Zona]
+    // --------------------------------------------------------------
     public synchronized List<Zona> parques() {
         List<Zona> p = new ArrayList<>();
         for (Zona z : zonas) {
@@ -353,6 +517,13 @@ public final class Repositorio {
         return p;
     }
 
+    // --------------------------------------------------------------
+    // + id: Text
+    //       -->
+    //     zona() <--
+    //       <--
+    //   Zona | Ausente
+    // --------------------------------------------------------------
     public synchronized Zona zona(String id) {
         for (Zona z : zonas) {
             if (z.id.equals(id)) {
@@ -363,15 +534,28 @@ public final class Repositorio {
     }
 
     // Parque (no barrio) que contiene el punto, o null
+    // --------------------------------------------------------------
+    // + lat: R, lng: R
+    //       -->
+    //     parqueEn() <--
+    //       <--
+    //   Zona | Ausente
+    // --------------------------------------------------------------
     public synchronized Zona parqueEn(double lat, double lng) {
         for (Zona z : zonas) {
-            if (z.esParque() && Reglas.dentro(lat, lng, z.contorno)) {
+            if (z.esParque() && z.contiene(lat, lng)) {
                 return z;
             }
         }
         return null;
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     favoritos() <--
+    //       <--
+    //   [Zona]
+    // --------------------------------------------------------------
     public synchronized List<Zona> favoritos() {
         List<Zona> f = new ArrayList<>();
         for (String id : favoritos) {
@@ -383,10 +567,23 @@ public final class Repositorio {
         return f;
     }
 
+    // --------------------------------------------------------------
+    // + id: Text
+    //       -->
+    //     esFavorito() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public synchronized boolean esFavorito(String id) {
         return favoritos.contains(id);
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // + id: Text
+    //       -->
+    //     alternarFavorito() -->
+    // --------------------------------------------------------------
     public void alternarFavorito(String id) {
         synchronized (this) {
             if (!favoritos.remove(id)) {
@@ -401,19 +598,47 @@ public final class Repositorio {
         subirSeguimiento();
     }
 
+    // --------------------------------------------------------------
+    // + zona_id: Text
+    //       -->
+    //     alerta() <--
+    //       <--
+    //   Alerta | Ausente
+    // --------------------------------------------------------------
     public synchronized Alerta alerta(String zonaId) {
         for (Alerta a : alertas.values()) if (a.zonaId.equals(zonaId)) return a;
         return null;
     }
 
+    // --------------------------------------------------------------
+    // + zona_id: Text, magnitud: Magnitud
+    //       -->
+    //     alerta() <--
+    //       <--
+    //   Alerta | Ausente
+    // --------------------------------------------------------------
     public synchronized Alerta alerta(String zonaId, Magnitud magnitud) {
         return alertas.get(Alerta.clave(zonaId, magnitud));
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     alertas() <--
+    //       <--
+    //   [Alerta]
+    // --------------------------------------------------------------
     public synchronized List<Alerta> alertas() {
         return new ArrayList<>(alertas.values());
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // + alerta: Alerta
+    //       -->
+    //     guardarAlerta() -->
+    //       <--
+    //   B | ErrorApi
+    // --------------------------------------------------------------
     public void guardarAlerta(Alerta alerta, Hecho<Boolean> hecho) {
         synchronized (this) {
             alertas.put(alerta.clave(), alerta);
@@ -427,6 +652,14 @@ public final class Repositorio {
         subirSeguimiento();
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // + zona_id: Text, magnitud: Magnitud
+    //       -->
+    //     borrarAlerta() -->
+    //       <--
+    //   B | ErrorApi
+    // --------------------------------------------------------------
     public void borrarAlerta(String zonaId, Magnitud magnitud, Hecho<Boolean> hecho) {
         synchronized (this) {
             alertas.remove(Alerta.clave(zonaId, magnitud));
@@ -439,12 +672,22 @@ public final class Repositorio {
         subirSeguimiento();
     }
 
+    // --------------------------------------------------------------
+    // -
+    //     marcarSeguimiento() --x
+    // --------------------------------------------------------------
     private void marcarSeguimiento() {
         revisionSeguimiento++;
         seguimientoPendiente = token != null;
     }
 
     // Envía una copia de la lista completa; solo una petición a la vez.
+    // --------------------------------------------------------------
+    // # La revisión evita sobrescribir cambios locales realizados durante la petición.
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // -
+    //     subirSeguimiento() -->
+    // --------------------------------------------------------------
     private void subirSeguimiento() {
         final String t;
         final long revision;
@@ -469,9 +712,25 @@ public final class Repositorio {
             }
         }
         api.pedir("PUT", "/yo/seguimiento", cuerpo, t, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
+            // --------------------------------------------------------------
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override public void ok(String cuerpo) { terminar(null); }
             @Override public void error(ApiRespira.Error e) { terminar(e); }
 
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal; consulta o actualiza la API.
+            // - error: ErrorApi | Ausente
+            //       -->
+            //     terminar() -->
+            // --------------------------------------------------------------
             private void terminar(ApiRespira.Error error) {
                 hiloPrincipal.post(() -> {
                     final Hecho<Boolean> hecho;
@@ -501,11 +760,12 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // {favoritos: [id], alertas: [{zona, magnitud, condicion, valor}]} --> aplicarSeguimiento()
-    //   --> true si hay que subir lo del móvil a la cuenta
-    // Recién iniciada la sesión se suman los dos (en una misma zona, manda
-    // la alerta del móvil); con cambios sin subir manda el móvil; si no, la cuenta.
-    // (llamar con el monitor de this)
+    // # Requiere el monitor de this; al fusionar prevalecen las alertas locales de cada pareja zona/magnitud.
+    // - s: ObjetoJson
+    //       -->
+    //     aplicarSeguimiento() -->
+    //       <--
+    //   B | ErrorDatos
     // --------------------------------------------------------------
     private boolean aplicarSeguimiento(JSONObject s) throws JSONException {
         Set<String> fav = new LinkedHashSet<>();
@@ -546,11 +806,23 @@ public final class Repositorio {
     }
 
     // 60.0 --> "60"; 0.075 --> "0.075"
+    // --------------------------------------------------------------
+    // - v: R
+    //       -->
+    //     numero() --x
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     static String numero(double v) {
         return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
     }
 
     // Al cerrar sesión los parques seguidos se quedan en la cuenta, no en el móvil
+    // --------------------------------------------------------------
+    // # effects: lee o escribe preferencias locales.
+    // -
+    //     olvidarSeguimiento() -->
+    // --------------------------------------------------------------
     private void olvidarSeguimiento() {
         synchronized (this) {
             favoritos.clear();
@@ -568,10 +840,21 @@ public final class Repositorio {
     // ==============================================================
     // Bienvenida
     // ==============================================================
+    // --------------------------------------------------------------
+    // +
+    //     onboardingVisto() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public synchronized boolean onboardingVisto() {
         return onboardingVisto;
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe preferencias locales; notifica en el hilo principal.
+    // +
+    //     marcarOnboardingVisto() -->
+    // --------------------------------------------------------------
     public void marcarOnboardingVisto() {
         synchronized (this) {
             onboardingVisto = true;
@@ -582,28 +865,69 @@ public final class Repositorio {
     // ==============================================================
     // Sesión y cuenta (servidor)
     // ==============================================================
+    // --------------------------------------------------------------
+    // +
+    //     usuario() <--
+    //       <--
+    //   Usuario | Ausente
+    // --------------------------------------------------------------
     public synchronized Usuario usuario() {
         return usuario;
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     haySesion() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public synchronized boolean haySesion() {
         return usuario != null && token != null;
     }
 
     // token de la sesión (para mandar las mediciones a su nombre)
+    // --------------------------------------------------------------
+    // +
+    //     token() <--
+    //       <--
+    //   Text | Ausente
+    // --------------------------------------------------------------
     public synchronized String token() {
         return token;
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta el reloj.
+    // +
+    //     bloqueadoHasta() <--
+    //       <--
+    //   Z
+    // --------------------------------------------------------------
     public synchronized long bloqueadoHasta() {
         return bloqueoHasta > System.currentTimeMillis() ? bloqueoHasta : 0;
     }
 
     // Pasa el resultado al hilo principal
+    // --------------------------------------------------------------
+    // # effects: notifica en el hilo principal.
+    // - r: T
+    //       -->
+    //     enPrincipal() <--
+    //       <--
+    //   T
+    // --------------------------------------------------------------
     private <T> void enPrincipal(Hecho<T> h, T r) {
         hiloPrincipal.post(() -> h.ok(r));
     }
 
+    // --------------------------------------------------------------
+    // # effects: notifica en el hilo principal; actualiza la caché persistente.
+    // - e: ErrorApi
+    //       -->
+    //     errorEnPrincipal() -->
+    //       <--
+    //   ErrorApi
+    // --------------------------------------------------------------
     private void errorEnPrincipal(Hecho<?> h, ApiRespira.Error e) {
         if (e.codigo == 401 && haySesion()) {
             sesionCaducada();
@@ -611,6 +935,11 @@ public final class Repositorio {
         hiloPrincipal.post(() -> h.error(e.mensaje, e.campos));
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // -
+    //     sesionCaducada() -->
+    // --------------------------------------------------------------
     private void sesionCaducada() {
         synchronized (this) {
             if (token != null) olvidarSeguimiento();
@@ -624,12 +953,28 @@ public final class Repositorio {
         cambio();
     }
 
+    // --------------------------------------------------------------
+    // - u: ObjetoJson
+    //       -->
+    //     usuarioDeJSON() --x
+    //       <--
+    //   Usuario | ErrorDatos
+    // --------------------------------------------------------------
     private static Usuario usuarioDeJSON(JSONObject u) throws JSONException {
         return new Usuario(u.getString("id"), u.getString("nombre"), u.getString("email"),
                 u.optString("rol", Usuario.VECINO), u.optBoolean("requiere_cambio_clave"));
     }
 
     // Respuesta de POST /sesiones o /usuarios: {token, usuario}
+    // --------------------------------------------------------------
+    // # Prepara la fusión de favoritos locales al abrir la sesión; una clave inicial exige renovarla.
+    // # effects: consulta o actualiza la API.
+    // - cuerpo: Text
+    //       -->
+    //     abrirSesion() -->
+    //       <--
+    //   Usuario | ErrorDatos
+    // --------------------------------------------------------------
     private Usuario abrirSesion(String cuerpo) throws JSONException {
         JSONObject o = new JSONObject(cuerpo);
         Usuario u = usuarioDeJSON(o.getJSONObject("usuario"));
@@ -653,7 +998,12 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // email, clave --> iniciarSesion() --> Usuario (por Hecho)
+    // # effects: consulta o actualiza la API; consulta el reloj; actualiza la caché persistente; notifica en el hilo principal.
+    // + email: Text, clave: Text
+    //       -->
+    //     iniciarSesion() -->
+    //       <--
+    //   Usuario | ErrorApi
     // --------------------------------------------------------------
     public void iniciarSesion(String email, String clave, Hecho<Usuario> hecho) {
         JSONObject c = new JSONObject();
@@ -663,6 +1013,12 @@ public final class Repositorio {
             // no pasa con textos
         }
         api.pedir("POST", "/sesiones", c, null, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 try {
@@ -673,6 +1029,12 @@ public final class Repositorio {
                 }
             }
 
+            // --------------------------------------------------------------
+            // # effects: consulta el reloj; actualiza la caché persistente; notifica en el hilo principal.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 if (e.codigo == 423) {
@@ -686,6 +1048,14 @@ public final class Repositorio {
         });
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // + clave: Text
+    //       -->
+    //     cambiarClaveInicial() -->
+    //       <--
+    //   Usuario | ErrorApi
+    // --------------------------------------------------------------
     public void cambiarClaveInicial(String clave, Hecho<Usuario> hecho) {
         final String t;
         synchronized (this) { t = tokenTemporal; }
@@ -701,6 +1071,12 @@ public final class Repositorio {
             return;
         }
         api.pedir("PUT", "/yo/clave", cuerpo, t, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal.
+            // + respuesta: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override public void ok(String respuesta) {
                 try {
                     synchronized (Repositorio.this) {
@@ -713,12 +1089,23 @@ public final class Repositorio {
                 }
             }
 
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override public void error(ApiRespira.Error e) {
                 errorEnPrincipal(hecho, e);
             }
         });
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API.
+    // +
+    //     cancelarClaveInicial() -->
+    // --------------------------------------------------------------
     public void cancelarClaveInicial() {
         final String t;
         synchronized (this) {
@@ -726,14 +1113,29 @@ public final class Repositorio {
             tokenTemporal = null;
         }
         if (t != null) api.pedir("DELETE", "/sesiones", null, t, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
+            // --------------------------------------------------------------
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override public void ok(String cuerpo) { }
             @Override public void error(ApiRespira.Error e) { }
         });
     }
 
     // --------------------------------------------------------------
-    // nombre, email, clave, acepta --> registrar() --> Usuario (deja la sesión abierta)
-    // Errores por campo: nombre, email, clave, acepta
+    // # Errores por campo: nombre, email, clave, acepta
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // + nombre: Text, email: Text, clave: Text, acepta: B
+    //       -->
+    //     registrar() -->
+    //       <--
+    //   Usuario | ErrorApi
     // --------------------------------------------------------------
     public void registrar(String nombre, String email, String clave, boolean acepta, Hecho<Usuario> hecho) {
         JSONObject c = new JSONObject();
@@ -743,6 +1145,12 @@ public final class Repositorio {
             // no pasa con textos
         }
         api.pedir("POST", "/usuarios", c, null, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 try {
@@ -753,6 +1161,12 @@ public final class Repositorio {
                 }
             }
 
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 errorEnPrincipal(hecho, e);
@@ -762,6 +1176,14 @@ public final class Repositorio {
 
     // Enlace para crear una contraseña nueva (llega por correo). La
     // respuesta es la misma exista o no la cuenta.
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API.
+    // + email: Text
+    //       -->
+    //     recuperar() -->
+    //       <--
+    //   0 | ErrorApi
+    // --------------------------------------------------------------
     public void recuperar(String email, Hecho<Void> hecho) {
         JSONObject c = new JSONObject();
         try {
@@ -772,13 +1194,32 @@ public final class Repositorio {
         api.pedir("POST", "/recuperaciones", c, null, respuestaVacia(hecho));
     }
 
+    // --------------------------------------------------------------
+    // # effects: notifica en el hilo principal.
+    // -
+    //     respuestaVacia() <--
+    //       <--
+    //   0 | ErrorApi
+    // --------------------------------------------------------------
     private ApiRespira.Respuesta respuestaVacia(Hecho<Void> hecho) {
         return new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 enPrincipal(hecho, null);
             }
 
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 errorEnPrincipal(hecho, e);
@@ -786,6 +1227,11 @@ public final class Repositorio {
         };
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API; actualiza la caché persistente.
+    // +
+    //     cerrarSesion() -->
+    // --------------------------------------------------------------
     public void cerrarSesion() {
         String t;
         synchronized (this) {
@@ -795,11 +1241,21 @@ public final class Repositorio {
         olvidarSeguimiento();
         if (t != null) {
             api.pedir("DELETE", "/sesiones", null, t, new ApiRespira.Respuesta() {
+                // --------------------------------------------------------------
+                // + cuerpo: Text
+                //       -->
+                //     ok() -->
+                // --------------------------------------------------------------
                 @Override
                 public void ok(String cuerpo) {
                     // nada más que hacer
                 }
 
+                // --------------------------------------------------------------
+                // + e: ErrorApi
+                //       -->
+                //     error() -->
+                // --------------------------------------------------------------
                 @Override
                 public void error(ApiRespira.Error e) {
                     // sin red: la sesión caduca sola en el servidor
@@ -810,9 +1266,22 @@ public final class Repositorio {
     }
 
     // Borra la cuenta en el servidor (no se puede con un sensor prestado)
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // +
+    //     borrarCuenta() -->
+    //       <--
+    //   0 | ErrorApi
+    // --------------------------------------------------------------
     public void borrarCuenta(Hecho<Void> hecho) {
         final Usuario borrar = usuario();
         api.pedir("DELETE", "/yo", null, token(), new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 if (borrar != null) EnvioMediciones.obtener(contexto).borrarCuenta(borrar.id);
@@ -821,6 +1290,12 @@ public final class Repositorio {
                 enPrincipal(hecho, null);
             }
 
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 errorEnPrincipal(hecho, e);
@@ -829,13 +1304,22 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // refrescar(forzar): pone al día la caché (cuenta, préstamo, regalos,
-    // percepciones). Sin forzar, como mucho cada 30 s.
+    // # Se aplica la respuesta solo si sigue perteneciendo a la sesión que la solicitó.
+    // # effects: consulta o actualiza la API.
+    // +
+    //     refrescar() -->
     // --------------------------------------------------------------
     public void refrescar() {
         refrescar(false);
     }
 
+    // --------------------------------------------------------------
+    // # Se aplica la respuesta solo si sigue perteneciendo a la sesión que la solicitó.
+    // # effects: consulta o actualiza la API; consulta el reloj; actualiza la caché persistente; notifica en el hilo principal.
+    // + forzar: B
+    //       -->
+    //     refrescar() -->
+    // --------------------------------------------------------------
     public void refrescar(boolean forzar) {
         final String t;
         synchronized (this) {
@@ -847,6 +1331,12 @@ public final class Repositorio {
             t = token;
         }
         api.pedir("GET", "/percepciones", null, t, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 try {
@@ -862,12 +1352,23 @@ public final class Repositorio {
                 }
             }
 
+            // --------------------------------------------------------------
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 Log.w("Respira", "percepciones: " + e.mensaje);
             }
         });
         api.pedir("GET", "/regalos", null, null, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 try {
@@ -887,6 +1388,11 @@ public final class Repositorio {
                 }
             }
 
+            // --------------------------------------------------------------
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 Log.w("Respira", "regalos: " + e.mensaje);
@@ -896,6 +1402,12 @@ public final class Repositorio {
             return;
         }
         api.pedir("GET", "/yo", null, t, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal; consulta o actualiza la API.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 try {
@@ -926,6 +1438,12 @@ public final class Repositorio {
                 }
             }
 
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 if (e.codigo == 401) {
@@ -934,6 +1452,12 @@ public final class Repositorio {
             }
         });
         api.pedir("GET", "/yo/percepciones", null, t, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 try {
@@ -948,6 +1472,11 @@ public final class Repositorio {
                 }
             }
 
+            // --------------------------------------------------------------
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 Log.w("Respira", "mis percepciones: " + e.mensaje);
@@ -958,6 +1487,13 @@ public final class Repositorio {
     // ---------- JSON del servidor --> modelo de la app ----------
 
     // 'YYYY-MM-DD' --> '6 nov'
+    // --------------------------------------------------------------
+    // - iso: Text
+    //       -->
+    //     fechaCorta() --x
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     static String fechaCorta(String iso) {
         try {
             LocalDate d = LocalDate.parse(iso.substring(0, 10));
@@ -968,6 +1504,13 @@ public final class Repositorio {
         }
     }
 
+    // --------------------------------------------------------------
+    // - o: ObjetoJson
+    //       -->
+    //     cuentaDeJSON() --x
+    //       <--
+    //   Cuenta | ErrorDatos
+    // --------------------------------------------------------------
     private static Cuenta cuentaDeJSON(JSONObject o) throws JSONException {
         Cuenta c = new Cuenta();
         c.puntos = o.getInt("puntos");
@@ -1002,6 +1545,14 @@ public final class Repositorio {
     }
 
     // (llamar con el monitor de this: usa el usuario de la sesión)
+    // --------------------------------------------------------------
+    // # effects: consulta el reloj.
+    // - p: ObjetoJson
+    //       -->
+    //     percepcionDeJSON() <--
+    //       <--
+    //   Percepcion | ErrorDatos
+    // --------------------------------------------------------------
     private Percepcion percepcionDeJSON(JSONObject p) throws JSONException {
         long cuando;
         try {
@@ -1014,6 +1565,13 @@ public final class Repositorio {
                 p.getDouble("lng"), cuando, p.getString("direccion"), autor, p.optBoolean("simulado"));
     }
 
+    // --------------------------------------------------------------
+    // - a: [ValorJson]
+    //       -->
+    //     percepcionesDeJSON() <--
+    //       <--
+    //   [Percepcion] | ErrorDatos
+    // --------------------------------------------------------------
     private List<Percepcion> percepcionesDeJSON(JSONArray a) throws JSONException {
         List<Percepcion> l = new ArrayList<>();
         for (int i = 0; i < a.length(); i++) {
@@ -1027,15 +1585,34 @@ public final class Repositorio {
     // ==============================================================
 
     // código del préstamo en curso de la cuenta (o null)
+    // --------------------------------------------------------------
+    // +
+    //     sensorPrestado() <--
+    //       <--
+    //   Text | Ausente
+    // --------------------------------------------------------------
     public synchronized String sensorPrestado() {
         return sensorPrestado;
     }
 
     // fecha límite para devolver el sensor prestado (ms) o 0: 10 días desde la recogida
+    // --------------------------------------------------------------
+    // +
+    //     prestamoHasta() <--
+    //       <--
+    //   Z
+    // --------------------------------------------------------------
     public synchronized long prestamoHasta() {
         return prestamoHasta;
     }
 
+    // --------------------------------------------------------------
+    // - iso: Text
+    //       -->
+    //     msDeISO() --x
+    //       <--
+    //   Z
+    // --------------------------------------------------------------
     private static long msDeISO(String iso) {
         try {
             return java.time.Instant.parse(iso).toEpochMilli();
@@ -1045,9 +1622,14 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // codigo, conRed --> comprobarSensor() --> código normalizado (por Hecho)
-    // Primero lo que se puede ver en el móvil (vacío, formato, sin red);
-    // luego pregunta al servidor si ese sensor es de quien tiene la sesión.
+    // # Primero lo que se puede ver en el móvil (vacío, formato, sin red);
+    // # luego pregunta al servidor si ese sensor es de quien tiene la sesión.
+    // # effects: consulta o actualiza la API; notifica en el hilo principal.
+    // + codigo: Text, con_red: B
+    //       -->
+    //     comprobarSensor() -->
+    //       <--
+    //   Text | ErrorApi
     // --------------------------------------------------------------
     public void comprobarSensor(String codigo, boolean conRed, Hecho<String> hecho) {
         String c = codigo.trim().toUpperCase(Locale.ROOT);
@@ -1068,6 +1650,12 @@ public final class Repositorio {
             // no pasa
         }
         api.pedir("POST", "/yo/sensor", cuerpo, token(), new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal.
+            // + texto: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String texto) {
                 String cod = c;
@@ -1079,6 +1667,12 @@ public final class Repositorio {
                 enPrincipal(hecho, cod);
             }
 
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 errorEnPrincipal(hecho, e);
@@ -1086,10 +1680,22 @@ public final class Repositorio {
         });
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     recorrido() <--
+    //       <--
+    //   Recorrido | Ausente
+    // --------------------------------------------------------------
     public synchronized Recorrido recorrido() {
         return recorrido;
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe preferencias locales; notifica en el hilo principal.
+    // + codigo: Text
+    //       -->
+    //     iniciarRecorrido() -->
+    // --------------------------------------------------------------
     public void iniciarRecorrido(String codigo) {
         synchronized (this) {
             recorrido = new Recorrido(codigo.trim().toUpperCase(Locale.ROOT), hora(new Date()));
@@ -1099,6 +1705,12 @@ public final class Repositorio {
         EnvioMediciones.obtener(contexto).reanudar();
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la caché persistente; notifica en el hilo principal.
+    // + estado: Text
+    //       -->
+    //     estadoSensor() -->
+    // --------------------------------------------------------------
     public void estadoSensor(String estado) {
         synchronized (this) {
             if (recorrido == null || !recorrido.enCurso() || estado.equals(recorrido.estado)) return;
@@ -1107,6 +1719,11 @@ public final class Repositorio {
         cambio();
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe preferencias locales; notifica en el hilo principal; consulta o actualiza la API.
+    // +
+    //     terminarRecorrido() -->
+    // --------------------------------------------------------------
     public void terminarRecorrido() {
         synchronized (this) {
             if (recorrido != null) {
@@ -1117,6 +1734,11 @@ public final class Repositorio {
         cambio();
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe preferencias locales; notifica en el hilo principal.
+    // +
+    //     olvidarRecorrido() -->
+    // --------------------------------------------------------------
     public void olvidarRecorrido() {
         synchronized (this) {
             recorrido = null;
@@ -1125,6 +1747,12 @@ public final class Repositorio {
     }
 
     // {minutos válidos, en parques, descartados} de hoy (los calcula el servidor)
+    // --------------------------------------------------------------
+    // +
+    //     hoy() <--
+    //       <--
+    //   [Z]
+    // --------------------------------------------------------------
     public synchronized int[] hoy() {
         return cuenta == null ? new int[]{0, 0, 0} : new int[]{cuenta.hoyMin, cuenta.hoyMinParque, cuenta.hoyDescartados};
     }
@@ -1132,6 +1760,12 @@ public final class Repositorio {
     // ==============================================================
     // Puntos, regalos y canjes
     // ==============================================================
+    // --------------------------------------------------------------
+    // +
+    //     cuenta() <--
+    //       <--
+    //   Cuenta | Ausente
+    // --------------------------------------------------------------
     public synchronized Cuenta cuenta() {
         if (usuario == null) {
             return null;
@@ -1142,13 +1776,24 @@ public final class Repositorio {
         return cuenta;
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     regalos() <--
+    //       <--
+    //   [Regalo]
+    // --------------------------------------------------------------
     public synchronized List<Regalo> regalos() {
         return new ArrayList<>(regalos);
     }
 
     // --------------------------------------------------------------
-    // regaloId --> canjear() --> Canje (por Hecho). El servidor comprueba
-    // el saldo y las existencias y resta los puntos.
+    // # el saldo y las existencias y resta los puntos.
+    // # effects: consulta o actualiza la API; notifica en el hilo principal.
+    // + regalo_id: Text
+    //       -->
+    //     canjear() -->
+    //       <--
+    //   Canje | ErrorApi
     // --------------------------------------------------------------
     public void canjear(String regaloId, Hecho<Canje> hecho) {
         JSONObject c = new JSONObject();
@@ -1158,6 +1803,12 @@ public final class Repositorio {
             // no pasa
         }
         api.pedir("POST", "/canjes", c, token(), new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal; consulta o actualiza la API.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 try {
@@ -1171,6 +1822,12 @@ public final class Repositorio {
                 }
             }
 
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal; consulta o actualiza la API.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 refrescar(true);
@@ -1182,21 +1839,41 @@ public final class Repositorio {
     // ==============================================================
     // Percepciones de los vecinos
     // ==============================================================
+    // --------------------------------------------------------------
+    // # effects: consulta el reloj.
+    // +
+    //     percepciones() <--
+    //       <--
+    //   [Percepcion]
+    // --------------------------------------------------------------
     public synchronized List<Percepcion> percepciones() {
         long limite = System.currentTimeMillis() - 24 * 3_600_000L;
         List<Percepcion> l = new ArrayList<>();
         for (Percepcion p : percepciones) {
-            if (p.cuando >= limite) {
+            if (p.cuando >= limite && ZonasCosta.enAmbito(p.lat, p.lng)) {
                 l.add(p);
             }
         }
         return l;
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     misPercepciones() <--
+    //       <--
+    //   [Percepcion]
+    // --------------------------------------------------------------
     public synchronized List<Percepcion> misPercepciones() {
         return usuario == null ? new ArrayList<>() : new ArrayList<>(mias);
     }
 
+    // --------------------------------------------------------------
+    // + id: Z
+    //       -->
+    //     percepcion() <--
+    //       <--
+    //   Percepcion | Ausente
+    // --------------------------------------------------------------
     public synchronized Percepcion percepcion(long id) {
         for (Percepcion p : percepciones()) {
             if (p.id == id) {
@@ -1212,12 +1889,32 @@ public final class Repositorio {
     }
 
     // Solo quien la publicó puede editarla o borrarla
+    // --------------------------------------------------------------
+    // + p: Percepcion
+    //       -->
+    //     esMia() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public synchronized boolean esMia(Percepcion p) {
         return p != null && !p.simulada && usuario != null && usuario.id.equals(p.autorId);
     }
 
+    // --------------------------------------------------------------
+    // # effects: notifica en el hilo principal; consulta o actualiza la API.
+    // -
+    //     respuestaPercepcion() <--
+    //       <--
+    //   Percepcion | ErrorApi
+    // --------------------------------------------------------------
     private ApiRespira.Respuesta respuestaPercepcion(Hecho<Percepcion> hecho) {
         return new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal; consulta o actualiza la API.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 try {
@@ -1232,6 +1929,12 @@ public final class Repositorio {
                 }
             }
 
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 errorEnPrincipal(hecho, e);
@@ -1240,8 +1943,13 @@ public final class Repositorio {
     }
 
     // --------------------------------------------------------------
-    // tipo, nivel, lat, lng, direccion --> nuevaPercepcion() --> Percepcion
-    // El servidor limita a 3 por hora y cuenta.
+    // # El servidor limita a 3 por hora y cuenta.
+    // # effects: consulta o actualiza la API.
+    // + tipo: Text, nivel: Z, lat: R, lng: R, direccion: Text
+    //       -->
+    //     nuevaPercepcion() -->
+    //       <--
+    //   Percepcion | ErrorApi
     // --------------------------------------------------------------
     public void nuevaPercepcion(String tipo, int nivel, double lat, double lng, String direccion, Hecho<Percepcion> hecho) {
         JSONObject c = new JSONObject();
@@ -1254,6 +1962,14 @@ public final class Repositorio {
     }
 
     // Cambia tipo y nivel; conserva lugar, hora y autor. Solo la propia.
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API.
+    // + id: Z, tipo: Text, nivel: Z
+    //       -->
+    //     editarPercepcion() -->
+    //       <--
+    //   Percepcion | ErrorApi
+    // --------------------------------------------------------------
     public void editarPercepcion(long id, String tipo, int nivel, Hecho<Percepcion> hecho) {
         JSONObject c = new JSONObject();
         try {
@@ -1264,8 +1980,22 @@ public final class Repositorio {
         api.pedir("PUT", "/percepciones/" + id, c, token(), respuestaPercepcion(hecho));
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o actualiza la API; actualiza la caché persistente; notifica en el hilo principal.
+    // + id: Z
+    //       -->
+    //     borrarPercepcion() -->
+    //       <--
+    //   0 | ErrorApi
+    // --------------------------------------------------------------
     public void borrarPercepcion(long id, Hecho<Void> hecho) {
         api.pedir("DELETE", "/percepciones/" + id, null, token(), new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la caché persistente; notifica en el hilo principal; consulta o actualiza la API.
+            // + cuerpo: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(String cuerpo) {
                 synchronized (Repositorio.this) {
@@ -1277,6 +2007,12 @@ public final class Repositorio {
                 enPrincipal(hecho, null);
             }
 
+            // --------------------------------------------------------------
+            // # effects: notifica en el hilo principal.
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(ApiRespira.Error e) {
                 errorEnPrincipal(hecho, e);
@@ -1287,6 +2023,11 @@ public final class Repositorio {
     // ==============================================================
     // Borrar lo guardado en este móvil (favoritos, alertas, sesión…)
     // ==============================================================
+    // --------------------------------------------------------------
+    // # effects: lee o escribe preferencias locales; notifica en el hilo principal.
+    // +
+    //     olvidarEsteMovil() -->
+    // --------------------------------------------------------------
     public void olvidarEsteMovil() {
         cerrarSesion();
         synchronized (this) {
@@ -1304,11 +2045,24 @@ public final class Repositorio {
     // ==============================================================
     // Utilidades privadas
     // ==============================================================
+    // --------------------------------------------------------------
+    // - d: DateTime
+    //       -->
+    //     hora() --x
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     private static String hora(Date d) {
         return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(d);
     }
 
     // ---------- guardar / cargar (SharedPreferences, JSON) ----------
+    // --------------------------------------------------------------
+    // # La caché local acelera la apertura; la autoridad de los datos compartidos sigue siendo la API.
+    // # effects: lee o escribe preferencias locales.
+    // -
+    //     guardar() -->
+    // --------------------------------------------------------------
     private synchronized void guardar() {
         try {
             JSONObject o = new JSONObject();
@@ -1375,6 +2129,13 @@ public final class Repositorio {
         }
     }
 
+    // --------------------------------------------------------------
+    // - o: ObjetoJson
+    //       -->
+    //     cargar() -->
+    //       <--
+    //   0 | ErrorDatos
+    // --------------------------------------------------------------
     private void cargar(JSONObject o) throws JSONException {
         token = o.isNull("token") ? null : o.getString("token");
         JSONObject u = o.optJSONObject("usuario");
@@ -1443,6 +2204,13 @@ public final class Repositorio {
     }
 
     // favoritos, alertas y bienvenida (iguales en la versión 1 y la 2)
+    // --------------------------------------------------------------
+    // - o: ObjetoJson
+    //       -->
+    //     cargarLocales() -->
+    //       <--
+    //   0 | ErrorDatos
+    // --------------------------------------------------------------
     private void cargarLocales(JSONObject o) throws JSONException {
         JSONArray fv = o.optJSONArray("favoritos");
         for (int i = 0; fv != null && i < fv.length(); i++) {
@@ -1460,6 +2228,15 @@ public final class Repositorio {
 
     // Versión 1 (datos de demostración en el móvil): solo se conservan
     // favoritos, alertas y la bienvenida. Las cuentas ahora son del servidor.
+    // --------------------------------------------------------------
+    // # Solo recupera preferencias locales del formato anterior.
+    // # effects: actualiza la caché persistente.
+    // - o: ObjetoJson
+    //       -->
+    //     cargarV1() -->
+    //       <--
+    //   0 | ErrorDatos
+    // --------------------------------------------------------------
     private void cargarV1(JSONObject o) throws JSONException {
         cargarLocales(o);
         prefs.edit().remove(CLAVE_V1).apply();

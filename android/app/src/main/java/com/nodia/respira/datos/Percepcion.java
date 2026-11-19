@@ -1,5 +1,7 @@
 package com.nodia.respira.datos;
 
+// # Aviso ciudadano independiente de una medición del sensor, con posición y autor.
+
 // ==============================================================
 // Percepción de un vecino: cómo nota el ruido, el calor o el aire.
 // tipo: "ruido" | "temp" | "aire"; nivel: 1..3
@@ -18,6 +20,11 @@ public class Percepcion {
     public final boolean simulada;
     public final String autorId;   // null si es de otro vecino (demo)
 
+    // --------------------------------------------------------------
+    // + id: Z, tipo: Text, nivel: Z, lat: R, lng: R, cuando: Z, direccion: Text, autor_id: Text, simulada: B
+    //       -->
+    //     Percepcion() -->
+    // --------------------------------------------------------------
     public Percepcion(long id, String tipo, int nivel, double lat, double lng,
                       long cuando, String direccion, String autorId, boolean simulada) {
         this.simulada = simulada;
@@ -31,6 +38,13 @@ public class Percepcion {
         this.autorId = autorId;
     }
 
+    // --------------------------------------------------------------
+    // + tipo: Text
+    //       -->
+    //     nombreTipo() --x
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public static String nombreTipo(String tipo) {
         switch (tipo) {
             case "temp": return "Sensación térmica";
@@ -39,6 +53,13 @@ public class Percepcion {
         }
     }
 
+    // --------------------------------------------------------------
+    // + tipo: Text
+    //       -->
+    //     nivelesTipo() --x
+    //       <--
+    //   [Text]
+    // --------------------------------------------------------------
     public static String[] nivelesTipo(String tipo) {
         switch (tipo) {
             case "temp": return new String[]{"Agradable", "Calor", "Mucho calor"};
@@ -47,6 +68,13 @@ public class Percepcion {
         }
     }
 
+    // --------------------------------------------------------------
+    // + tipo: Text
+    //       -->
+    //     detallesTipo() --x
+    //       <--
+    //   [Text]
+    // --------------------------------------------------------------
     public static String[] detallesTipo(String tipo) {
         switch (tipo) {
             case "temp": return new String[]{"Se está bien", "Apetece buscar sombra", "Agobiante"};
@@ -55,10 +83,22 @@ public class Percepcion {
         }
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     titulo() <--
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public String titulo() {
         return nombreTipo(tipo) + ": " + nivelesTipo(tipo)[nivel - 1];
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     comoNivel() <--
+    //       <--
+    //   Nivel
+    // --------------------------------------------------------------
     public Nivel comoNivel() {
         return nivel == 1 ? Nivel.BAJO : nivel == 2 ? Nivel.MEDIO : Nivel.ALTO;
     }

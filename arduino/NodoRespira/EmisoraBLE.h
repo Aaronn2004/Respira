@@ -13,6 +13,7 @@
 
 #include <bluefruit.h>
 
+// # Adapta la configuración y publicidad iBeacon de Bluefruit.
 class EmisoraBLE {
 private:
   const char * nombreEmisora;
@@ -21,17 +22,24 @@ private:
 
 public:
   // --------------------------------------------------------------
-  // nombre: Text, fabricante: N, potencia: Z --> EmisoraBLE()
+  // + nombre: Text, fabricante: N, potencia: Z
+  //     -->
+  //         EmisoraBLE() -->
   // --------------------------------------------------------------
   EmisoraBLE( const char * nombre, uint16_t fabricante, int8_t potencia )
     : nombreEmisora( nombre ), fabricanteID( fabricante ), txPower( potencia ) {
   }
 
   // --------------------------------------------------------------
-  // encenderEmisora() -->
+  // # effects: inicializa Bluefruit y detiene la publicidad anterior.
+  // +       encenderEmisora() -->
   // --------------------------------------------------------------
   void encenderEmisora() {
     Bluefruit.begin();
+    // --------------------------------------------------------------
+    // # effects: detiene la publicidad BLE si estaba activa.
+    // +       detenerAnuncio() -->
+    // --------------------------------------------------------------
     detenerAnuncio();
   }
 
@@ -45,14 +53,21 @@ public:
   }
 
   // --------------------------------------------------------------
-  // estaAnunciando() --> B
+  // # effects: consulta el estado de la publicidad BLE.
+  // +       estaAnunciando() <--
+  //     <--
+  //     B
   // --------------------------------------------------------------
   bool estaAnunciando() {
     return Bluefruit.Advertising.isRunning();
   }
 
   // --------------------------------------------------------------
-  // uuid: [N]_16, major: N, minor: N, rssi: Z --> emitirAnuncioIBeacon() -->
+  // # El anuncio continúa hasta detenerAnuncio(); el intervalo BLE se expresa en unidades de 0,625 ms.
+  // # effects: configura y comienza la publicidad BLE.
+  // + uuid: [N]_16, major: N, minor: N, rssi: Z
+  //     -->
+  //         emitirAnuncioIBeacon() -->
   // --------------------------------------------------------------
   void emitirAnuncioIBeacon( uint8_t * uuid, uint16_t major, uint16_t minor, int8_t rssi ) {
     detenerAnuncio();

@@ -12,16 +12,34 @@ import com.nodia.respira.datos.Zona;
 
 import java.util.List;
 
+// --------------------------------------------------------------
+// class MisAlertasActivity
+// # Listado de alertas configuradas por el usuario.
+// # AppCompatActivity <--- MisAlertasActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class MisAlertasActivity extends AppCompatActivity {
 
     private LinearLayout c;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         c = Ui.pantalla(this, "Mis alertas");
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza el ciclo de vida de la pantalla
+    // +
+    //   onResume() -->
+    // --------------------------------------------------------------
     @Override
     protected void onResume() {
         super.onResume();

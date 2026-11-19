@@ -1,6 +1,5 @@
 package com.nodia.respira.ui;
 
-import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.ImageView;
@@ -17,6 +16,13 @@ import com.nodia.respira.datos.Repositorio;
 // Bienvenida (solo la primera vez): 3 pasos.
 // No hay términos obligatorios aquí: se aceptan al crear la cuenta.
 // ==============================================================
+// --------------------------------------------------------------
+// class OnboardingActivity
+// # Guía inicial de uso y avance entre pasos.
+// # AppCompatActivity <--- OnboardingActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class OnboardingActivity extends AppCompatActivity {
 
     // true = se abre desde «Más › Ver la bienvenida otra vez»: al terminar solo se cierra
@@ -34,6 +40,12 @@ public class OnboardingActivity extends AppCompatActivity {
     private int paso = 0;
     private LinearLayout contenido;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -50,12 +62,23 @@ public class OnboardingActivity extends AppCompatActivity {
         pintar();
     }
 
+    // --------------------------------------------------------------
+    // # effects: guarda el paso actual en el estado de la pantalla
+    // + out: EstadoPantalla | Ausente
+    //       -->
+    //           onSaveInstanceState() -->
+    // --------------------------------------------------------------
     @Override
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
         out.putInt("paso", paso);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   pintar() -->
+    // --------------------------------------------------------------
     private void pintar() {
         contenido.removeAllViews();
 
@@ -92,13 +115,21 @@ public class OnboardingActivity extends AppCompatActivity {
         });
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   terminar() -->
+    // --------------------------------------------------------------
     private void terminar() {
         if (getIntent().getBooleanExtra(EXTRA_REPASO, false)) {
             finish();
             return;
         }
         Repositorio.obtener(this).marcarOnboardingVisto();
-        startActivity(new Intent(this, MainActivity.class));
-        finish();
+        if (Repositorio.obtener(this).haySesion()) {
+            AccesoSesion.abrirPrincipal(this);
+        } else {
+            AccesoSesion.abrirLogin(this);
+        }
     }
 }

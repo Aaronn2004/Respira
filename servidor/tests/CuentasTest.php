@@ -9,6 +9,7 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/../logica/Cuentas.php';
 require_once __DIR__ . '/bd_prueba.php';
@@ -16,6 +17,10 @@ require_once __DIR__ . '/mini_test.php';
 
 $T = strtotime('2026-11-09 10:00:00 UTC') * 1000;
 $correos = [];
+// --------------------------------------------------------------
+// # effects: prepara o modifica los datos de prueba.
+// nuevas() --> (bd: Conexion, cuentas: Cuentas) | Error
+// --------------------------------------------------------------
 function nuevas(): array {
     global $T, $correos;
     $correos = [];

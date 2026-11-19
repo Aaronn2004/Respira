@@ -13,8 +13,21 @@ import com.nodia.respira.datos.Repositorio;
 // ==============================================================
 // Pestaña «Puntos»: saldo, puntos de hoy, historial, regalos y canjes.
 // ==============================================================
+// --------------------------------------------------------------
+// class PuntosFragment
+// # Resumen de puntos y movimientos de la cuenta.
+// # Pestana <--- PuntosFragment
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Vista = { contenido: Text, visible: B, habilitada: B }
+// --------------------------------------------------------------
 public class PuntosFragment extends Pestana {
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + c: Vista
+    //       -->
+    //           pintar() -->
+    // --------------------------------------------------------------
     @Override
     protected void pintar(LinearLayout c) {
         Ui.titulo(c, "Mis puntos");

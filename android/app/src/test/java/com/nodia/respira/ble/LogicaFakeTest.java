@@ -29,6 +29,14 @@ public class LogicaFakeTest {
     private final AtomicReference<String> tokenRecibido = new AtomicReference<>();
 
     // Servidor HTTP mínimo: atiende UNA petición y responde con el código dado
+    // --------------------------------------------------------------
+    // # effects: usa un servidor HTTP de prueba local.
+    // - codigo: Z, respuesta: Text
+    //       -->
+    //     arrancarServidorFalso() -->
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     private String arrancarServidorFalso(int codigo, String respuesta) throws Exception {
         servidorFalso = new ServerSocket(0);
         Thread hilo = new Thread(() -> {
@@ -69,6 +77,11 @@ public class LogicaFakeTest {
         return "http://127.0.0.1:" + servidorFalso.getLocalPort() + "/api/index.php";
     }
 
+    // --------------------------------------------------------------
+    // # effects: usa un servidor HTTP de prueba local.
+    // +
+    //     pararServidorFalso() -->
+    // --------------------------------------------------------------
     @After
     public void pararServidorFalso() throws Exception {
         if (servidorFalso != null) {
@@ -76,10 +89,21 @@ public class LogicaFakeTest {
         }
     }
 
+    // --------------------------------------------------------------
+    // -
+    //     ejemplo() --x
+    //       <--
+    //   Medicion
+    // --------------------------------------------------------------
     private static Medicion ejemplo() {
         return new Medicion("RSP-4F7K", "o3", 0.042, 7, 1000L).conUbicacion(38.9657, -0.1827, 8);
     }
 
+    // --------------------------------------------------------------
+    // # effects: usa un servidor HTTP de prueba local; comprueba el contrato mediante aserciones.
+    // +
+    //     guardarMedicionHacePOSTConElJSON() -->
+    // --------------------------------------------------------------
     @Test
     public void guardarMedicionHacePOSTConElJSON() throws Exception {
         String url = arrancarServidorFalso(201, "{\"id\":1}");
@@ -96,8 +120,11 @@ public class LogicaFakeTest {
     }
 
     // --------------------------------------------------------------
-    // Con sesión, el token va en la cabecera X-Respira-Token (así el
-    // servidor sabe a quién darle los puntos); el JSON no cambia
+    // # Con sesión, el token va en la cabecera X-Respira-Token (así el
+    // # servidor sabe a quién darle los puntos); el JSON no cambia
+    // # effects: usa un servidor HTTP de prueba local; comprueba el contrato mediante aserciones.
+    // +
+    //     conSesionMandaElToken() -->
     // --------------------------------------------------------------
     @Test
     public void conSesionMandaElToken() throws Exception {
@@ -110,6 +137,11 @@ public class LogicaFakeTest {
         assertEquals("abc123", tokenRecibido.get());
     }
 
+    // --------------------------------------------------------------
+    // # effects: usa un servidor HTTP de prueba local; comprueba el contrato mediante aserciones.
+    // +
+    //     unaRepetida409CuentaComoEntregada() -->
+    // --------------------------------------------------------------
     @Test
     public void unaRepetida409CuentaComoEntregada() throws Exception {
         String url = arrancarServidorFalso(409, "{\"error\":\"repetida\"}");
@@ -126,6 +158,11 @@ public class LogicaFakeTest {
         assertEquals(409, cod.get());
     }
 
+    // --------------------------------------------------------------
+    // # effects: usa un servidor HTTP de prueba local; comprueba el contrato mediante aserciones.
+    // +
+    //     loteDePendientes() -->
+    // --------------------------------------------------------------
     @Test
     public void loteDePendientes() throws Exception {
         String url = arrancarServidorFalso(201, "{\"guardadas\":2,\"repetidas\":0,\"errores\":[]}");
@@ -135,6 +172,11 @@ public class LogicaFakeTest {
         assertEquals("{\"mediciones\":[" + ejemplo().toJSON() + "," + ejemplo().toJSON() + "]}", cuerpoRecibido.get());
     }
 
+    // --------------------------------------------------------------
+    // # effects: usa un servidor HTTP de prueba local; comprueba el contrato mediante aserciones.
+    // +
+    //     sinServidorAvisaDelFalloConCodigoMenosUno() -->
+    // --------------------------------------------------------------
     @Test
     public void sinServidorAvisaDelFalloConCodigoMenosUno() throws Exception {
         CountDownLatch terminado = new CountDownLatch(1);

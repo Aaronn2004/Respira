@@ -16,12 +16,17 @@
 #include "Configuracion.h"
 #include "Conversiones.h"
 
+// # Estima el ruido y conserva la amplitud de la última medida.
 class MedidorRuido {
 private:
   float ultimoVpp = 0.0f;
 
   // --------------------------------------------------------------
-  // vppVentana() --> R   (V pico a pico durante RUIDO_VENTANA_MS)
+  // # Devuelve la tensión pico a pico en voltios.
+  // # effects: lee el ADC y el reloj durante la ventana de muestreo.
+  // -       vppVentana() --x
+  //     <--
+  //     R
   // --------------------------------------------------------------
   float vppVentana() {
     int minimo = 4095, maximo = 0;
@@ -37,8 +42,11 @@ private:
 
 public:
   // --------------------------------------------------------------
-  // medir() --> R   (dB aproximados, 30..130)
-  // Media de RUIDO_VENTANAS ventanas en energía (no en dB).
+  // # Promedia las ventanas en energía, no directamente en dB; el KY-037 proporciona una aproximación.
+  // # effects: lee el ADC y actualiza la última amplitud medida.
+  // +       medir() -->
+  //     <--
+  //     R
   // --------------------------------------------------------------
   float medir() {
     float sumaCuadrados = 0.0f;
@@ -51,6 +59,12 @@ public:
   }
 
   // Para calibrar: el Vpp de la última medida (se escribe por el monitor serie)
+  // --------------------------------------------------------------
+  // # Amplitud de la última medida, útil para calibrar con el monitor serie.
+  // +       getUltimoVpp() <--
+  //     <--
+  //     R
+  // --------------------------------------------------------------
   float getUltimoVpp() { return ultimoVpp; }
 };
 

@@ -1,70 +1,61 @@
 package com.nodia.respira.datos;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
+// # Ausente representa la ausencia lógica (null en el código).
+
 // ==============================================================
-// DatosDemo: los mismos datos de ejemplo que el prototipo (v17),
-// colocados sobre Gandía. Las zonas son APROXIMADAS y ficticias:
-// cuando exista la API de zonas, esto se sustituye por la respuesta
-// del servidor (GET /zonas).
+// DatosDemo: series de demostración y acceso al catálogo costero real.
+// Las zonas sin lecturas de la API conservan sus contornos y no inventan valores.
 // ==============================================================
 public final class DatosDemo {
 
-    // Caja de Gandía que corresponde al lienzo 390 x 560 del prototipo
-    private static final double LAT_NORTE = 38.9815, LAT_SUR = 38.9540;
-    private static final double LNG_OESTE = -0.1980, LNG_ESTE = -0.1700;
+    // Ámbito del Grau i Platja (el mismo que usa la web).
+    private static final double LAT_NORTE = 39.026, LAT_SUR = 38.981;
+    private static final double LNG_OESTE = -0.187, LNG_ESTE = -0.139;
 
-    public static final double LAT_CENTRO = 38.9677;
-    public static final double LNG_CENTRO = -0.1840;
+    public static final double LAT_CENTRO = 39.002;
+    public static final double LNG_CENTRO = -0.165;
 
+    // --------------------------------------------------------------
+    // -
+    //     DatosDemo() -->
+    // --------------------------------------------------------------
     private DatosDemo() { }
 
     // x, y del prototipo --> [lat, lng]
+    // --------------------------------------------------------------
+    // + x: R, y: R
+    //       -->
+    //     geo() --x
+    //       <--
+    //   [R]
+    // --------------------------------------------------------------
     public static double[] geo(double x, double y) {
         return new double[]{
                 LAT_NORTE - y / 560.0 * (LAT_NORTE - LAT_SUR),
                 LNG_OESTE + x / 390.0 * (LNG_ESTE - LNG_OESTE)};
     }
 
-    // Contorno orgánico (parque) alrededor de un punto del prototipo
-    private static List<double[]> mancha(double x, double y, double rx, double ry, int semilla) {
-        List<double[]> p = new ArrayList<>();
-        int n = 14;
-        for (int i = 0; i < n; i++) {
-            double t = i * 2 * Math.PI / n;
-            double r = 1 + 0.14 * Math.sin(3 * t + semilla) + 0.07 * Math.cos(5 * t + semilla * 2);
-            p.add(geo(x + Math.cos(t) * rx * r, y + Math.sin(t) * ry * r));
-        }
-        return p;
-    }
-
-    private static List<double[]> rect(double x, double y, double w, double h) {
-        return new ArrayList<>(Arrays.asList(geo(x, y), geo(x + w, y), geo(x + w, y + h), geo(x, y + h)));
-    }
-
+    // --------------------------------------------------------------
+    // +
+    //     zonas() --x
+    //       <--
+    //   [Zona]
+    // --------------------------------------------------------------
     public static List<Zona> zonas() {
-        List<Zona> z = new ArrayList<>();
-        // Barrios primero: se dibujan debajo de los parques
-        z.add(new Zona("norte", Zona.BARRIO, "Barrio Norte", rect(0, 0, 390, 196), 4, 210, 0.058, 25.2, 59.0)
-                .conEtiquetaEn(geo(195, 90)));
-        z.add(new Zona("centro", Zona.BARRIO, "Centro", rect(0, 262, 390, 110), 2, 388, 0.066, 26.1, 63.0)
-                .conEtiquetaEn(geo(300, 350)));
-        z.add(new Zona("sur", Zona.BARRIO, "Barrio Sur", rect(0, 384, 390, 176), 11, 96, 0.049, 24.0, 55.0)
-                .conEtiquetaEn(geo(195, 470)));
-        z.add(new Zona("ribera", Zona.PARQUE, "Parque de la Ribera", mancha(92, 128, 52, 40, 1), 6, 84, 0.041, 26.8, 49.0));
-        z.add(new Zona("molino", Zona.PARQUE, "Jardín del Molino", mancha(298, 108, 46, 38, 2), 14, 31, 0.072, 24.1, 57.0));
-        z.add(new Zona("central", Zona.PARQUE, "Parque Central", mancha(208, 306, 58, 34, 3), 3, 152, 0.097, 27.9, 67.0));
-        z.add(new Zona("estacion", Zona.PARQUE, "Jardines de la Estación", mancha(88, 430, 40, 28, 4), 190, 0, 0.055, 22.0, 61.0));
-        z.add(new Zona("oeste", Zona.PARQUE, "Parque del Oeste", mancha(302, 445, 40, 30, 5), null, 0, null, null, null));
-        return z;
+        return ZonasCosta.zonas();
     }
 
     // --------------------------------------------------------------
-    // Serie para la gráfica de evolución (misma fórmula que el prototipo).
-    // per: "24h" (48 puntos, cada 30 min) | "7d" (56 puntos, cada 3 h)
-    // null = no pasó ningún sensor (no se rellena).
+    // # Serie para la gráfica de evolución (misma fórmula que el prototipo).
+    // # per: "24h" (48 puntos, cada 30 min) | "7d" (56 puntos, cada 3 h)
+    // # null = no pasó ningún sensor (no se rellena).
+    // + z: Zona, m: Magnitud, per: Text
+    //       -->
+    //     serie() --x
+    //       <--
+    //   [R | Ausente]
     // --------------------------------------------------------------
     public static Double[] serie(Zona z, Magnitud m, String per) {
         boolean dia = "24h".equals(per);
@@ -105,6 +96,15 @@ public final class DatosDemo {
         return out;
     }
 
+    // --------------------------------------------------------------
+    // # La semilla se actualiza para mantener una secuencia reproducible.
+    // # effects: actualiza la semilla recibida.
+    // - semilla: [Z]
+    //       -->
+    //     rnd() --x
+    //       <--
+    //   R, semilla: [Z]
+    // --------------------------------------------------------------
     private static double rnd(long[] semilla) {
         semilla[0] = (semilla[0] * 9301 + 49297) % 233280;
         return semilla[0] / 233280.0;

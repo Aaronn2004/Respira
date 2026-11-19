@@ -26,9 +26,11 @@
 // Fecha:       10/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/Base.php';
 
+// Base <--- Simulador
 class Simulador extends Base {
 
     const PASO_MS = 600000;                 // un dato cada 10 min por zona y magnitud
@@ -45,6 +47,12 @@ class Simulador extends Base {
 
     private $marca;      // fichero con la hora de la última pasada (para no consultar la BD en cada petición)
 
+    // --------------------------------------------------------------
+    // # effects: inicializa el estado y la conexión.
+    // + bd: Conexion, prefijo: Text, reloj: Reloj | Ausente, marca: Text | Ausente
+    //     -->
+    //         __construct() -->
+    // --------------------------------------------------------------
     public function __construct(PDO $bd, string $prefijo = '', ?callable $reloj = null, ?string $marca = null) {
         parent::__construct($bd, $prefijo, $reloj);
         $this->marca = $marca;
@@ -52,19 +60,36 @@ class Simulador extends Base {
 
     // ---------- números «aleatorios» deterministas ----------
 
-    // texto --> [0, 1)
+    // --------------------------------------------------------------
+    // + semilla: Text
+    //     -->
+    //         azar() --x
+    //     <--
+    //     R
+    // --------------------------------------------------------------
     public static function azar(string $semilla): float {
         return (crc32($semilla) % 1000003) / 1000003.0;
     }
 
     // campana centrada en c (horas), anchura w
+    // --------------------------------------------------------------
+    // - h: R, c: R, w: R
+    //     -->
+    //         campana() --x
+    //     <--
+    //     R
+    // --------------------------------------------------------------
     private static function campana(float $h, float $c, float $w): float {
         $d = min(abs($h - $c), 24 - abs($h - $c));
         return exp(-($d * $d) / (2 * $w * $w));
     }
 
     // --------------------------------------------------------------
-    // zona: {id, tipo}, magnitud, ms --> medida() --> R
+    // + z: Registro, mag: Text, ms: Instante
+    //     -->
+    //         medida() --x
+    //     <--
+    //     R
     // --------------------------------------------------------------
     public static function medida(array $z, string $mag, int $ms): float {
         $l = new DateTime('@' . intdiv($ms, 1000));
@@ -101,6 +126,13 @@ class Simulador extends Base {
     }
 
     // ¿Hueco sin datos en ese instante? (cortos de día; largos de noche en parques)
+    // --------------------------------------------------------------
+    // + z: Registro, ms: Instante
+    //     -->
+    //         hueco() --x
+    //     <--
+    //     B
+    // --------------------------------------------------------------
     public static function hueco(array $z, int $ms): bool {
         $l = new DateTime('@' . intdiv($ms, 1000));
         $l->setTimezone(new DateTimeZone(self::ZONA_HORARIA));
@@ -127,7 +159,13 @@ class Simulador extends Base {
     }
 
     // --------------------------------------------------------------
-    // alDia() --> N (filas nuevas). Rellena hasta ahora.
+    // # Rellena por lotes y bloquea la marca para evitar dos pasadas simultáneas.
+    // # effects: consulta y modifica la base de datos; lee, bloquea y actualiza el archivo de marca; consulta el reloj inyectado.
+    // + forzar: B
+    //     -->
+    //         alDia() -->
+    //     <--
+    //     N | Error
     // --------------------------------------------------------------
     public function alDia(bool $forzar = false): int {
         if ($this->marca === null) {
@@ -157,6 +195,14 @@ class Simulador extends Base {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // - ahora: Instante
+    //     -->
+    //         rellenar() -->
+    //     <--
+    //     (total: N, completo: B) | Error
+    // --------------------------------------------------------------
     private function rellenar(int $ahora): array {
         @set_time_limit(120);
         $completo = true;
@@ -216,6 +262,14 @@ class Simulador extends Base {
     }
 
     // Inserta en bloques de 300 filas (rápido también en Plesk)
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // - filas: [[Valor]]
+    //     -->
+    //         insertar() -->
+    //     <--
+    //     N | Error
+    // --------------------------------------------------------------
     private function insertar(array $filas): int {
         foreach (array_chunk($filas, 300) as $bloque) {
             $sql = "INSERT INTO {$this->p}medicion (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, origen)

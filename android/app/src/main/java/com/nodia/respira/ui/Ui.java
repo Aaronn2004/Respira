@@ -38,10 +38,27 @@ import com.nodia.respira.datos.Zona;
 // en lugar de un XML por pantalla: así se "repintan" igual que en
 // el prototipo cuando cambian los datos.
 // ==============================================================
+// --------------------------------------------------------------
+// class Ui
+// # Piezas comunes de las pantallas y formularios.
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Entorno = { densidad: R, tema: Text }
+// Vista = { contenido: Text, visible: B, habilitada: B }
+// Pantalla = { contenido: Vista, destino: Text }
+// Disposicion = { ancho: Z, alto: Z, margen_superior: Z }
+// ResultadoAccion = Completada | Fallo{ mensaje: Text, campos: Map[Text, Text] }
+// Dato = Text | Z | R | B | Ausente
+// --------------------------------------------------------------
 public final class Ui {
 
     public static final int BOTON_LLENO = 0;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + tarjeta: Vista, zona: Zona, magnitud: Magnitud
+    //       -->
+    //           datoZona() --x
+    // --------------------------------------------------------------
     public static void datoZona(LinearLayout tarjeta, Zona zona, Magnitud magnitud) {
         Zona.Dato dato = zona.dato(magnitud);
         String estado = zona.estado(magnitud);
@@ -67,19 +84,43 @@ public final class Ui {
     public static final int BOTON_BORDE = 1;
     public static final int BOTON_TEXTO = 2;
 
+    // --------------------------------------------------------------
+    // -
+    //   Ui() --x
+    // --------------------------------------------------------------
     private Ui() { }
 
+    // --------------------------------------------------------------
+    // # effects: lee la densidad o los colores de los recursos Android
+    // + c: Entorno, v: R
+    //       -->
+    //           dp() --x
+    //       <--
+    //   resultado: Z
+    // --------------------------------------------------------------
     public static int dp(Context c, float v) {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v,
                 c.getResources().getDisplayMetrics()));
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee la densidad o los colores de los recursos Android
+    // + c: Entorno, res: N
+    //       -->
+    //           color() --x
+    //       <--
+    //   resultado: Z
+    // --------------------------------------------------------------
     public static int color(Context c, int res) {
         return ContextCompat.getColor(c, res);
     }
 
     // --------------------------------------------------------------
-    // vista: View --> insets()   (Android 15+ dibuja bajo las barras)
+    // # Se conserva el padding inicial para no acumular las barras en cada actualización.
+    // # effects: actualiza la interfaz Android
+    // + vista: Vista, arriba: B, abajo: B
+    //       -->
+    //           insets() --x
     // --------------------------------------------------------------
     public static void insets(View vista, boolean arriba, boolean abajo) {
         final int l = vista.getPaddingLeft(), t = vista.getPaddingTop();
@@ -92,8 +133,12 @@ public final class Ui {
     }
 
     // --------------------------------------------------------------
-    // Pantalla estándar de una Activity: barra con «atrás» + scroll.
-    // actividad, titulo --> pantalla() --> contenido: LinearLayout
+    // # effects: actualiza la interfaz Android
+    // + a: Pantalla, titulo: Text
+    //       -->
+    //           pantalla() --x
+    //       <--
+    //   resultado: Vista
     // --------------------------------------------------------------
     public static LinearLayout pantalla(AppCompatActivity a, String titulo) {
         LinearLayout raiz = new LinearLayout(a);
@@ -119,6 +164,14 @@ public final class Ui {
         return contenido;
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + c: Entorno
+    //       -->
+    //           columna() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static LinearLayout columna(Context c) {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.VERTICAL);
@@ -127,6 +180,14 @@ public final class Ui {
         return l;
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - c: Entorno, arriba: Z
+    //       -->
+    //           separado() --x
+    //       <--
+    //   resultado: Disposicion
+    // --------------------------------------------------------------
     private static LinearLayout.LayoutParams separado(Context c, int arriba) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -135,6 +196,14 @@ public final class Ui {
     }
 
     // ---------- textos ----------
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, s: Text, sp: R, negrita: B, colorRes: Z
+    //       -->
+    //           texto() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static TextView texto(ViewGroup padre, String s, float sp, boolean negrita, int colorRes) {
         Context c = padre.getContext();
         TextView t = new TextView(c);
@@ -148,20 +217,52 @@ public final class Ui {
         return t;
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, s: Text
+    //       -->
+    //           titulo() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static TextView titulo(ViewGroup padre, String s) {
         return texto(padre, s, 24, true, R.color.tinta);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, s: Text
+    //       -->
+    //           parrafo() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static TextView parrafo(ViewGroup padre, String s) {
         return texto(padre, s, 15, false, R.color.tinta_2);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, s: Text
+    //       -->
+    //           nota() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static TextView nota(ViewGroup padre, String s) {
         TextView t = texto(padre, s, 13, false, R.color.tinta_3);
         ((LinearLayout.LayoutParams) t.getLayoutParams()).topMargin = dp(padre.getContext(), 12);
         return t;
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, s: Text
+    //       -->
+    //           etiqueta() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static TextView etiqueta(ViewGroup padre, String s) {
         TextView t = texto(padre, s.toUpperCase(), 12, true, R.color.tinta_3);
         t.setLetterSpacing(0.06f);
@@ -170,6 +271,14 @@ public final class Ui {
     }
 
     // ---------- tarjetas y filas ----------
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista
+    //       -->
+    //           tarjeta() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static LinearLayout tarjeta(ViewGroup padre) {
         Context c = padre.getContext();
         MaterialCardView card = new MaterialCardView(c);
@@ -186,6 +295,14 @@ public final class Ui {
     }
 
     // Fila pulsable: título, subtítulo opcional y ">" a la derecha
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz y registra la acción del usuario
+    // + padre: Vista, titulo: Text, sub: Text
+    //       -->
+    //           fila() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static LinearLayout fila(ViewGroup padre, String titulo, String sub, View.OnClickListener al) {
         Context c = padre.getContext();
         LinearLayout f = new LinearLayout(c);
@@ -228,6 +345,12 @@ public final class Ui {
     }
 
     // Fila de valor: "etiqueta ........ valor"
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, etiqueta: Text, valor: Text
+    //       -->
+    //           valor() --x
+    // --------------------------------------------------------------
     public static void valor(ViewGroup padre, String etiqueta, String valor) {
         LinearLayout f = fila(padre, etiqueta, null, null);
         TextView e = (TextView) ((LinearLayout) f.getChildAt(0)).getChildAt(0);
@@ -240,6 +363,14 @@ public final class Ui {
         f.addView(v);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, txt: Text, n: Nivel
+    //       -->
+    //           insignia() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static TextView insignia(ViewGroup padre, String txt, Nivel n) {
         Context c = padre.getContext();
         TextView t = new TextView(c);
@@ -257,6 +388,14 @@ public final class Ui {
     }
 
     // Aviso de color (ok / atención / error)
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, txt: Text, n: Nivel
+    //       -->
+    //           aviso() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static TextView aviso(ViewGroup padre, String txt, Nivel n) {
         Context c = padre.getContext();
         TextView t = new TextView(c);
@@ -274,6 +413,14 @@ public final class Ui {
         return t;
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz y registra la acción del usuario
+    // + padre: Vista, txt: Text, estilo: N
+    //       -->
+    //           boton() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static MaterialButton boton(ViewGroup padre, String txt, int estilo, View.OnClickListener al) {
         Context c = padre.getContext();
         int attr = estilo == BOTON_BORDE ? com.google.android.material.R.attr.materialButtonOutlinedStyle
@@ -289,6 +436,12 @@ public final class Ui {
     }
 
     // Estado vacío: título + texto + botón opcional
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz y registra la acción del usuario
+    // + padre: Vista, titulo: Text, texto: Text, boton: Text
+    //       -->
+    //           vacio() --x
+    // --------------------------------------------------------------
     public static void vacio(ViewGroup padre, String titulo, String texto, String boton, View.OnClickListener al) {
         LinearLayout c = tarjeta(padre);
         int p = dp(padre.getContext(), 20);
@@ -304,6 +457,12 @@ public final class Ui {
     }
 
     // Pide iniciar sesión (cuentas: APP-10)
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, a: Pantalla, titulo: Text, texto: Text
+    //       -->
+    //           necesitaSesion() --x
+    // --------------------------------------------------------------
     public static void necesitaSesion(ViewGroup padre, Activity a, String titulo, String texto) {
         LinearLayout c = tarjeta(padre);
         int p = dp(a, 20);
@@ -315,6 +474,14 @@ public final class Ui {
     }
 
     // Campo de texto con etiqueta y mensaje de error (Material)
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + padre: Vista, etiqueta: Text, tipoEntrada: N
+    //       -->
+    //           campo() --x
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     public static TextInputLayout campo(ViewGroup padre, String etiqueta, int tipoEntrada) {
         Context c = padre.getContext();
         TextInputLayout campo = new TextInputLayout(c, null,
@@ -331,6 +498,14 @@ public final class Ui {
         return campo;
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee el texto introducido en la interfaz
+    // + campo: Vista
+    //       -->
+    //           leer() --x
+    //       <--
+    //   resultado: Text
+    // --------------------------------------------------------------
     public static String leer(TextInputLayout campo) {
         return campo.getEditText() == null || campo.getEditText().getText() == null
                 ? "" : campo.getEditText().getText().toString();
@@ -340,13 +515,34 @@ public final class Ui {
     // Respuesta del servidor para acciones sencillas: si va bien, alAcabar;
     // si no, enseña el mensaje del servidor (p. ej. «Sin conexión…»)
     // --------------------------------------------------------------
+    // --------------------------------------------------------------
+    // # Contrato de la respuesta futura; se omite el adaptador de callbacks.
+    // # effects: prepara la confirmación de la acción o su aviso de error
+    // + c: Entorno
+    //       -->
+    //           hecho() --x
+    //       <--
+    //   resultado: ResultadoAccion
+    // --------------------------------------------------------------
     public static <T> com.nodia.respira.datos.Repositorio.Hecho<T> hecho(Context c, Runnable alAcabar) {
         return new com.nodia.respira.datos.Repositorio.Hecho<T>() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la interfaz Android
+            // + r: Dato
+            //       -->
+            //           ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(T r) {
                 alAcabar.run();
             }
 
+            // --------------------------------------------------------------
+            // # effects: actualiza la interfaz Android
+            // + mensaje: Text, campos: Map[Text, Text]
+            //       -->
+            //           error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(String mensaje, java.util.Map<String, String> campos) {
                 android.widget.Toast.makeText(c, mensaje, android.widget.Toast.LENGTH_LONG).show();
@@ -354,6 +550,12 @@ public final class Ui {
         };
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz y registra la acción del usuario
+    // + c: Entorno, titulo: Text, mensaje: Text, ok: Text
+    //       -->
+    //           confirmar() --x
+    // --------------------------------------------------------------
     public static void confirmar(Context c, String titulo, String mensaje, String ok, Runnable accion) {
         new MaterialAlertDialogBuilder(c)
                 .setTitle(titulo)

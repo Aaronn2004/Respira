@@ -9,6 +9,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+// # Ausente representa la ausencia lógica (null en el código).
+// # ErrorDatos = { detalle: Text }; fallo al leer o interpretar datos.
+
 // ==============================================================
 // PeticionarioREST: hace peticiones HTTP en un hilo aparte
 // (Android no deja usar la red en el hilo principal).
@@ -16,22 +19,38 @@ import java.util.concurrent.Executors;
 public class PeticionarioREST {
 
     public interface RespuestaREST {
+        // --------------------------------------------------------------
+        // # effects: entrega el resultado a quien recibe la respuesta.
+        // + codigo: Z, cuerpo: Text
+        //       -->
+        //     callback() -->
+        // --------------------------------------------------------------
         void callback(int codigo, String cuerpo);
     }
 
     private static final ExecutorService hilos = Executors.newSingleThreadExecutor();
 
     // --------------------------------------------------------------
-    // metodo: Text, urlDestino: Text, cuerpo: Text
-    //    --> hacerPeticionREST()
-    //    --> codigo: Z, cuerpoRespuesta: Text   (por callback; codigo -1 = error de red)
+    // # La respuesta llega desde el hilo de red; el código -1 representa un fallo de conexión.
+    // # effects: accede a la red; entrega el resultado de forma asíncrona.
+    // + metodo: Text, url_destino: Text, cuerpo: Text | Ausente
+    //       -->
+    //     hacerPeticionREST() <--
+    //       <--
+    //   (codigo: Z, cuerpo: Text)
     // --------------------------------------------------------------
     public void hacerPeticionREST(String metodo, String urlDestino, String cuerpo, RespuestaREST laRespuesta) {
         hacerPeticionREST(metodo, urlDestino, cuerpo, null, laRespuesta);
     }
 
     // --------------------------------------------------------------
-    // Igual, con el token de la sesión (cabecera X-Respira-Token)
+    // # La respuesta llega desde el hilo de red; el código -1 representa un fallo de conexión.
+    // # effects: accede a la red; entrega el resultado de forma asíncrona.
+    // + metodo: Text, url_destino: Text, cuerpo: Text | Ausente, token: Text | Ausente
+    //       -->
+    //     hacerPeticionREST() <--
+    //       <--
+    //   (codigo: Z, cuerpo: Text)
     // --------------------------------------------------------------
     public void hacerPeticionREST(String metodo, String urlDestino, String cuerpo, String token, RespuestaREST laRespuesta) {
         hilos.execute(() -> {
@@ -68,7 +87,12 @@ public class PeticionarioREST {
     }
 
     // --------------------------------------------------------------
-    // entrada: InputStream --> leerTodo() --> Text
+    // # effects: consume y cierra el flujo de entrada.
+    // - entrada: [Z] | Ausente
+    //       -->
+    //     leerTodo() --x
+    //       <--
+    //   Text | ErrorDatos
     // --------------------------------------------------------------
     private static String leerTodo(InputStream entrada) throws java.io.IOException {
         if (entrada == null) {

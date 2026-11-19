@@ -9,6 +9,7 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/../logica/Logica.php';
 require_once __DIR__ . '/../logica/Puntos.php';
@@ -19,6 +20,10 @@ require_once __DIR__ . '/mini_test.php';
 $T = strtotime('2026-11-08 09:00:00 UTC') * 1000;
 $Z = json_decode(file_get_contents(__DIR__ . '/zonas_prueba.json'), true);
 
+// --------------------------------------------------------------
+// # effects: prepara o modifica los datos de prueba.
+// entorno() --> (bd: Conexion, logica: Logica, puntos: Puntos) | Error
+// --------------------------------------------------------------
 function entorno(): array {
     global $T;
     $bd = crearBDPrueba();
@@ -33,6 +38,10 @@ function entorno(): array {
 
 // Un día andando por el barrio Centro (fuera de los parques): una lectura por
 // minuto desde las 9:00 UTC, unos 60 m cada minuto. Puntos = minutos / 5 (máx. 100)
+// --------------------------------------------------------------
+// # effects: prepara o modifica los datos de prueba.
+// bd: Conexion, dia: Date, minutos: N --> andar() --> 0 | Error
+// --------------------------------------------------------------
 function andar(PDO $bd, string $dia, int $minutos): void {
     $st = $bd->prepare("INSERT INTO medicion (id_nodo, tipo, valor, fecha_medicion, lat, lng, zona_id, portador_id, origen)
         VALUES ('RSP-4F7K', 'temp', ?, ?, 38.9628, ?, 'centro', 'U-48213', 'real')");
@@ -44,6 +53,14 @@ function andar(PDO $bd, string $dia, int $minutos): void {
 }
 
 // Recorrido: n mediciones cada «cada» min desde «desde», moviéndose dlat por paso
+// --------------------------------------------------------------
+// # effects: prepara o modifica los datos de prueba.
+// l: Logica, desde: Instante, n: Z, cada: N, ini: [R]_2, dlat: R, cont: N, dlng: R
+//     -->
+//         paseo()
+//     <--
+//     cont: N | Error
+// --------------------------------------------------------------
 function paseo(Logica $l, int $desde, int $n, int $cada, array $ini, float $dlat, int &$cont, float $dlng = 0): void {
     $u = ['id' => 'U-48213', 'rol' => 'vecino'];
     for ($i = 0; $i < $n; $i++) {

@@ -7,19 +7,31 @@ import com.nodia.respira.ble.EnvioMediciones;
 import com.nodia.respira.datos.Repositorio;
 import com.nodia.respira.datos.TrabajoAlertas;
 import com.nodia.respira.datos.Zona;
+import com.nodia.respira.ui.AccesoSesion;
 import com.nodia.respira.ui.Notificaciones;
 import com.nodia.respira.ui.Tema;
 import com.nodia.respira.ui.ZonaActivity;
 
 // Aplicación: aplica el modo claro u oscuro guardado antes de abrir ninguna
 // pantalla y enseña las notificaciones de las alertas del usuario.
+// --------------------------------------------------------------
+// class RespiraApp
+// # Inicialización del tema y las tareas de alertas y envío.
+// # Application <--- RespiraApp
+// --------------------------------------------------------------
 public class RespiraApp extends Application {
 
+    // --------------------------------------------------------------
+    // # effects: aplica preferencias, registra avisos y reanuda tareas de envío
+    // +
+    //   onCreate() -->
+    // --------------------------------------------------------------
     @Override
     public void onCreate() {
         super.onCreate();
         Tema.aplicar(this);
         Repositorio repo = Repositorio.obtener(this);
+        new AccesoSesion(this);
         repo.alAvisarDeAlerta((a, z) -> {
             String titulo = a.magnitud.nombre + ("custom".equals(a.condicion) ? " por encima de tu límite"
                     : " en nivel " + a.condicion) + " en " + z.nombre;

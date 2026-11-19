@@ -16,8 +16,21 @@ import java.util.List;
 // legales y unas pruebas (actualizar, probar una alerta, borrar
 // lo guardado en el móvil).
 // ==============================================================
+// --------------------------------------------------------------
+// class MasFragment
+// # Acceso a cuenta, ajustes, ayuda y pruebas del prototipo.
+// # Pestana <--- MasFragment
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Vista = { contenido: Text, visible: B, habilitada: B }
+// --------------------------------------------------------------
 public class MasFragment extends Pestana {
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + c: Vista
+    //       -->
+    //           pintar() -->
+    // --------------------------------------------------------------
     @Override
     protected void pintar(LinearLayout c) {
         Ui.titulo(c, "Más");
@@ -71,6 +84,11 @@ public class MasFragment extends Pestana {
         Ui.nota(c, "Cuentas de prueba: lucia@correo.es / Respira2026 (sensor RSP-4F7K) · marcos@correo.es / Marcos2026");
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   simularAlerta() -->
+    // --------------------------------------------------------------
     private void simularAlerta() {
         List<Alerta> alertas = repo.alertas();
         if (alertas.isEmpty()) {
@@ -79,6 +97,10 @@ public class MasFragment extends Pestana {
         }
         Alerta a = alertas.get(alertas.size() - 1);
         Zona z = repo.zona(a.zonaId);
+        if (z == null) {
+            aviso("Esta alerta pertenece al mapa anterior. Configura una alerta en uno de los parques actuales.");
+            return;
+        }
         String titulo = a.magnitud.nombre + ("custom".equals(a.condicion) ? " por encima de tu límite"
                 : " en nivel " + a.condicion) + " en " + z.nombre;
         Intent ir = new Intent(requireContext(), ZonaActivity.class).putExtra(ZonaActivity.EXTRA_ZONA, z.id);
@@ -88,10 +110,22 @@ public class MasFragment extends Pestana {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: abre la pantalla de destino
+    // - pantalla: Text
+    //       -->
+    //           abrir() -->
+    // --------------------------------------------------------------
     private void abrir(Class<?> pantalla) {
         startActivity(new Intent(requireContext(), pantalla));
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - txt: Text
+    //       -->
+    //           aviso() -->
+    // --------------------------------------------------------------
     private void aviso(String txt) {
         Toast.makeText(requireContext(), txt, Toast.LENGTH_LONG).show();
     }

@@ -14,12 +14,22 @@ import java.util.Collections;
 
 @RunWith(AndroidJUnit4.class)
 public class EnvioMedicionesTest {
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     resultadoParcialConservaElIndiceRechazado() --x
+    // --------------------------------------------------------------
     @Test public void resultadoParcialConservaElIndiceRechazado() throws Exception {
         JSONObject respuesta = new JSONObject("{\"guardadas\":1,\"repetidas\":1,"
                 + "\"errores\":[{\"i\":1,\"error\":\"ubicación fuera de zona\"}]}");
         assertEquals(Collections.singleton(1), EnvioMediciones.indicesRechazados(respuesta, 3));
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     unResultadoIncompletoNoConfirmaElLote() --x
+    // --------------------------------------------------------------
     @Test public void unResultadoIncompletoNoConfirmaElLote() throws Exception {
         JSONObject respuesta = new JSONObject("{\"guardadas\":1,\"repetidas\":0,\"errores\":[]}");
         try {

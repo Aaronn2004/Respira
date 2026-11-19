@@ -8,16 +8,34 @@ import android.widget.LinearLayout;
 import androidx.appcompat.app.AppCompatActivity;
 
 // Ajustes: notificaciones (las gestiona Android) e idioma.
+// --------------------------------------------------------------
+// class AjustesActivity
+// # Preferencias y acceso al cambio de tema.
+// # AppCompatActivity <--- AjustesActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class AjustesActivity extends AppCompatActivity {
 
     private LinearLayout c;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         c = Ui.pantalla(this, "Ajustes");
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza el ciclo de vida de la pantalla
+    // +
+    //   onResume() -->
+    // --------------------------------------------------------------
     @Override
     protected void onResume() {
         super.onResume();

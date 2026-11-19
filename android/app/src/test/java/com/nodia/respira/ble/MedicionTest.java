@@ -10,6 +10,11 @@ public class MedicionTest {
 
     private static final String UUID = "RESPIRA-RSP-4F7K";
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     ozonoVieneEnMilesimasDePpm() --x
+    // --------------------------------------------------------------
     @Test
     public void ozonoVieneEnMilesimasDePpm() {
         TramaIBeacon t = new TramaIBeacon(TramaIBeaconTest.construirAnuncio(true, UUID, (11 << 8) + 7, 42));
@@ -19,6 +24,11 @@ public class MedicionTest {
         assertEquals(7, m.getContador());
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     temperaturaEnDecimasYConSigno() --x
+    // --------------------------------------------------------------
     @Test
     public void temperaturaEnDecimasYConSigno() {
         TramaIBeacon t = new TramaIBeacon(TramaIBeaconTest.construirAnuncio(true, UUID, (12 << 8) + 3, 234));
@@ -28,6 +38,11 @@ public class MedicionTest {
         assertEquals(-5.5, Medicion.desdeTrama(t, "RSP-4F7K", 0L).getValor(), 1e-9);
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     ruidoEnDecimasDeDecibelio() --x
+    // --------------------------------------------------------------
     @Test
     public void ruidoEnDecimasDeDecibelio() {
         TramaIBeacon t = new TramaIBeacon(TramaIBeaconTest.construirAnuncio(true, UUID, (13 << 8) + 9, 633));
@@ -36,12 +51,22 @@ public class MedicionTest {
         assertEquals(63.3, m.getValor(), 1e-9);
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     unTipoDesconocidoSeIgnora() --x
+    // --------------------------------------------------------------
     @Test
     public void unTipoDesconocidoSeIgnora() {
         TramaIBeacon t = new TramaIBeacon(TramaIBeaconTest.construirAnuncio(true, UUID, (99 << 8) + 1, 5));
         assertNull(Medicion.desdeTrama(t, "RSP-4F7K", 0L));
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     jsonConUbicacionRssiYPortador() --x
+    // --------------------------------------------------------------
     @Test
     public void jsonConUbicacionRssiYPortador() {
         Medicion m = new Medicion("RSP-4F7K", "o3", 0.042, 7, 1762423200000L)
@@ -51,12 +76,22 @@ public class MedicionTest {
                 + "\"rssi\":-61,\"portador\":\"U-48213\"}", m.toJSON());
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     jsonSinUbicacion() --x
+    // --------------------------------------------------------------
     @Test
     public void jsonSinUbicacion() {
         assertEquals("{\"nodo\":\"RSP-4F7K\",\"magnitud\":\"temp\",\"valor\":21.0,\"contador\":1,\"medida_en\":5}",
                 new Medicion("RSP-4F7K", "temp", 21.0, 1, 5L).toJSON());
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     uuidDelSensor() --x
+    // --------------------------------------------------------------
     @Test
     public void uuidDelSensor() {
         assertEquals(UUID, Medicion.uuidDelSensor("RSP-4F7K"));

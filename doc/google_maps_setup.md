@@ -6,9 +6,28 @@
 
 Según la confirmación del responsable de esta configuración, los mapas de Google de **Android y Web ya se han ejecutado correctamente en este equipo con Windows 11**. La dirección Web utilizada es **`http://127.0.0.1:5500`**.
 
-Este documento registra esa comprobación comunicada el 13 de noviembre de 2026; su redacción no ha incluido nuevas ejecuciones. La carga del mapa base no acredita por sí sola el funcionamiento de los sensores, la API de Respira o la base de datos.
+Esa comprobación se comunicó el 13 de noviembre de 2026. La verificación posterior en el móvil de Aitor se detalla a continuación. La carga del mapa base no acredita por sí sola el funcionamiento de los sensores, la API de Respira o la base de datos.
 
 No se incluyen claves API reales. Los valores de los ejemplos son marcadores de posición.
+
+### Comprobación en el móvil de Aitor — 19 de noviembre de 2026
+
+La clave configurada en `android/local.properties` coincide con la incorporada al APK instalado. El SDK de Google Maps devuelve **`Authorization failure`** e indica esta identidad de aplicación:
+
+```text
+Paquete: com.nodia.respira
+SHA-1: CD:95:9A:49:9C:8C:7F:52:03:50:8A:94:B7:0D:72:17:12:B4:2E:4B
+```
+
+El equipo corrigió la autorización en Google Cloud y se comprobó después que la cartografía carga correctamente en el móvil. Para otras compilaciones sigue siendo necesario habilitar **Maps SDK for Android**, mantener la facturación activa y autorizar la pareja paquete + SHA-1 correspondiente.
+
+La API de Respira es independiente del mapa base de Google. Para probar desde un móvil físico se ha sustituido la dirección local del emulador (`10.0.2.2:18862`) por la API publicada en Plesk, comprobando la conexión y el inicio de sesión. Este ajuste está en `local.properties`, que no se publica en Git.
+
+### Zonas compartidas entre Android y Web
+
+Android utiliza `ZonasCosta`, con los mismos ocho identificadores, contornos, anclas y nombres de `web/js/grau-platja.js`. Las respuestas de la API actualizan únicamente las mediciones de los identificadores coincidentes; no sustituyen la geografía por los contornos del prototipo.
+
+En la comprobación del 19 de noviembre, la API publicada todavía devuelve las diez zonas antiguas y ninguna de las ocho costeras. Por eso el mapa muestra las zonas reales con **Sin datos**. La migración del catálogo del servidor está en `servidor/bd/actualizar_zonas_costeras.sql`; la actualización de la app no ejecuta esa migración remota ni traslada lecturas entre zonas diferentes.
 
 ## Configuración común en Google Cloud
 

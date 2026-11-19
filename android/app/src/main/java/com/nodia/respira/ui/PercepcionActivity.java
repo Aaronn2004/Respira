@@ -25,6 +25,14 @@ import java.util.Map;
 // También sirve para EDITAR una percepción propia (tipo y nivel;
 // conserva el lugar y la hora en que se publicó).
 // ==============================================================
+// --------------------------------------------------------------
+// class PercepcionActivity
+// # Alta o edición de una percepción situada en el mapa.
+// # AppCompatActivity <--- PercepcionActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Entorno = { densidad: R, tema: Text }
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class PercepcionActivity extends AppCompatActivity {
 
     private static final String EXTRA_LAT = "lat", EXTRA_LNG = "lng", EXTRA_ID = "id";
@@ -33,14 +41,32 @@ public class PercepcionActivity extends AppCompatActivity {
     private int nivel = 0;
     private LinearLayout niveles;
 
+    // --------------------------------------------------------------
+    // # effects: abre la pantalla de destino
+    // + c: Entorno, lat: R, lng: R
+    //       -->
+    //           abrir() --x
+    // --------------------------------------------------------------
     public static void abrir(Context c, double lat, double lng) {
         c.startActivity(new Intent(c, PercepcionActivity.class).putExtra(EXTRA_LAT, lat).putExtra(EXTRA_LNG, lng));
     }
 
+    // --------------------------------------------------------------
+    // # effects: abre la pantalla de destino
+    // + c: Entorno, id: N
+    //       -->
+    //           editar() --x
+    // --------------------------------------------------------------
     public static void editar(Context c, long id) {
         c.startActivity(new Intent(c, PercepcionActivity.class).putExtra(EXTRA_ID, id));
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -107,6 +133,12 @@ public class PercepcionActivity extends AppCompatActivity {
             }
             v.setEnabled(false);
             Repositorio.Hecho<Percepcion> hecho = new Repositorio.Hecho<Percepcion>() {
+                // --------------------------------------------------------------
+                // # effects: actualiza la interfaz Android
+                // + p: Percepcion
+                //       -->
+                //           ok() -->
+                // --------------------------------------------------------------
                 @Override
                 public void ok(Percepcion p) {
                     Toast.makeText(PercepcionActivity.this, editando ? "Percepción actualizada"
@@ -114,6 +146,12 @@ public class PercepcionActivity extends AppCompatActivity {
                     finish();
                 }
 
+                // --------------------------------------------------------------
+                // # effects: actualiza la interfaz Android
+                // + mensaje: Text, campos: Map[Text, Text]
+                //       -->
+                //           error() -->
+                // --------------------------------------------------------------
                 @Override
                 public void error(String mensaje, Map<String, String> campos) {
                     v.setEnabled(true);
@@ -131,6 +169,11 @@ public class PercepcionActivity extends AppCompatActivity {
                 + "Puedes editarla o borrarla en Más › Mis percepciones.");
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   pintarNiveles() -->
+    // --------------------------------------------------------------
     private void pintarNiveles() {
         niveles.removeAllViews();
         Ui.etiqueta(niveles, "¿Cómo lo notas?");

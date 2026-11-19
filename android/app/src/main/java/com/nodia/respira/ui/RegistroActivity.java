@@ -21,15 +21,28 @@ import java.util.Map;
 // Crear cuenta (APP-10). Al terminar se muestra el ID (U-XXXXX):
 // es lo que el voluntario da en el punto de reparto.
 // ==============================================================
+// --------------------------------------------------------------
+// class RegistroActivity
+// # Formulario de creación de cuenta ciudadana.
+// # AppCompatActivity <--- RegistroActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class RegistroActivity extends AppCompatActivity {
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Repositorio repo = Repositorio.obtener(this);
         LinearLayout c = Ui.pantalla(this, "Crear cuenta");
         Ui.titulo(c, "Crea tu cuenta");
-        Ui.parrafo(c, "Solo hace falta para llevar un sensor y ganar puntos. El mapa y los parques funcionan sin cuenta.");
+        Ui.parrafo(c, "Crea tu cuenta para acceder a Respira, consultar el mapa y participar con un sensor.");
 
         TextInputLayout nombre = Ui.campo(c, "Nombre de usuario", InputType.TYPE_CLASS_TEXT);
         nombre.setHelperText("De 3 a 20 letras, números, puntos o guiones bajos");
@@ -54,6 +67,12 @@ public class RegistroActivity extends AppCompatActivity {
             errorGeneral.setVisibility(TextView.GONE);
             // Las reglas las comprueba el servidor (nombre y correo no repetidos, etc.)
             repo.registrar(Ui.leer(nombre), Ui.leer(email), Ui.leer(clave), acepta.isChecked(), new Repositorio.Hecho<Usuario>() {
+                // --------------------------------------------------------------
+                // # effects: actualiza la interfaz Android
+                // + u: Usuario
+                //       -->
+                //           ok() -->
+                // --------------------------------------------------------------
                 @Override
                 public void ok(Usuario u) {
                     nombre.setError(null);
@@ -65,10 +84,16 @@ public class RegistroActivity extends AppCompatActivity {
                             .setMessage("Tu ID es " + u.id + ".\n\nDalo en el punto de reparto cuando recojas un sensor. "
                                     + "Siempre lo tienes en Más › Mi cuenta.")
                             .setCancelable(false)
-                            .setPositiveButton("Entendido", (d, w) -> finish())
+                            .setPositiveButton("Entendido", (d, w) -> AccesoSesion.abrirPrincipal(RegistroActivity.this))
                             .show();
                 }
 
+                // --------------------------------------------------------------
+                // # effects: actualiza la interfaz Android
+                // + mensaje: Text, err: Map[Text, Text]
+                //       -->
+                //           error() -->
+                // --------------------------------------------------------------
                 @Override
                 public void error(String mensaje, Map<String, String> err) {
                     crear.setEnabled(true);

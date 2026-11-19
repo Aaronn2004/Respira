@@ -16,12 +16,27 @@ import com.nodia.respira.R;
 // Cada pestaña es un Fragment; se muestran/ocultan para no recargar
 // el mapa al cambiar de pestaña.
 // ==============================================================
+// --------------------------------------------------------------
+// class MainActivity
+// # Navegación entre las cinco pestañas sin recrear el mapa.
+// # AppCompatActivity <--- MainActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Vista = { contenido: Text, visible: B, habilitada: B }
+// Pantalla = { contenido: Vista, destino: Text }
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class MainActivity extends AppCompatActivity {
 
     public static final String EXTRA_PESTANA = "pestana";
 
     private BottomNavigationView navegacion;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -46,6 +61,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + intent: Intent
+    //       -->
+    //           onNewIntent() -->
+    // --------------------------------------------------------------
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
@@ -56,10 +77,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // Cambiar de pestaña desde un fragment (p. ej. «Ir al mapa»)
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + idPestana: N
+    //       -->
+    //           irA() -->
+    // --------------------------------------------------------------
     public void irA(int idPestana) {
         navegacion.setSelectedItemId(idPestana);
     }
 
+    // --------------------------------------------------------------
+    // - id: N
+    //       -->
+    //           crear() --x
+    //       <--
+    //   resultado: Pantalla
+    // --------------------------------------------------------------
     private Fragment crear(int id) {
         if (id == R.id.tab_parques) return new ParquesFragment();
         if (id == R.id.tab_sensor) return new SensorFragment();
@@ -68,6 +102,13 @@ public class MainActivity extends AppCompatActivity {
         return new MapaFragment();
     }
 
+    // --------------------------------------------------------------
+    // # Ocultar y mostrar los fragmentos conserva el mapa al cambiar de pestaña.
+    // # effects: actualiza la interfaz Android
+    // - id: N
+    //       -->
+    //           mostrar() -->
+    // --------------------------------------------------------------
     private void mostrar(int id) {
         FragmentManager fm = getSupportFragmentManager();
         FragmentTransaction tx = fm.beginTransaction();

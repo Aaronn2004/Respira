@@ -7,6 +7,11 @@ import org.junit.Test;
 // Textos de las estadísticas del recorrido (pantalla «Mi sensor» y Puntos)
 public class ResumenRecorridoTest {
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     distanciaEnMetrosYKilometros() --x
+    // --------------------------------------------------------------
     @Test
     public void distanciaEnMetrosYKilometros() {
         assertEquals("0 m", ResumenRecorrido.distanciaTexto(0));
@@ -15,6 +20,11 @@ public class ResumenRecorridoTest {
         assertEquals("2,4 km", ResumenRecorrido.distanciaTexto(2430));
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     duracionEnMinutosYHoras() --x
+    // --------------------------------------------------------------
     @Test
     public void duracionEnMinutosYHoras() {
         assertEquals("45 min", ResumenRecorrido.duracionTexto(45));
@@ -22,6 +32,11 @@ public class ResumenRecorridoTest {
         assertEquals("2 h", ResumenRecorrido.duracionTexto(120));
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     horaDelServidorEnHoraDeEspana() --x
+    // --------------------------------------------------------------
     @Test
     public void horaDelServidorEnHoraDeEspana() {
         assertEquals("10:00", ResumenRecorrido.hora("2026-11-08T09:00:00.000Z"));   // invierno: UTC+1

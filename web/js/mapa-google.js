@@ -1,3 +1,12 @@
+/* --------------------------------------------------------------
+ * # Firmas lógicas; se conservan los nombres del código.
+ * # Html = Text; Color = Text; Coordenada = { lat: R, lng: R }.
+ * # Valor = R | Text | B | Ausente | [Valor] | Map[Text, Valor].
+ * # Datos = Map[Text, Valor]; Ausente representa null o undefined.
+ * # Elemento y MapaWeb son recursos del navegador.
+ * # google.maps.OverlayView <--- Etiqueta; Etiqueta <>--- Elemento.
+ * -------------------------------------------------------------- */
+
 /* Google Maps como mapa base. Los contornos de Respira se cargan en WGS84. */
 (function () {
   'use strict';
@@ -5,10 +14,30 @@
   const { MAPS_API_KEY = '', MAP_ID = '' } = window.RESPIRA_CONFIG || {};
   const clave = MAPS_API_KEY.trim();
   const mapId = MAP_ID.trim();
+  /* --------------------------------------------------------------
+   * # effects: consulta la integración pública de Respira.
+   * R() --> MapaWeb
+   * -------------------------------------------------------------- */
   const R = () => window.Respira;
+  /* --------------------------------------------------------------
+   * # effects: lee los estilos calculados del documento.
+   * variable: Text --> css() --> Text
+   * -------------------------------------------------------------- */
   const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  /* --------------------------------------------------------------
+   * # El GeoJSON usa longitud/latitud; Google Maps recibe lat/lng.
+   * coordenadas: [R]_2 --> posicion() --> Coordenada
+   * -------------------------------------------------------------- */
   const posicion = ([lng, lat]) => ({ lat, lng });
+  /* --------------------------------------------------------------
+   * # effects: lee la paleta del tema.
+   * nivel: Text --> colorNivel() --> Color
+   * -------------------------------------------------------------- */
   const colorNivel = nivel => css(nivel === 'none' ? '--lv-none' : '--lv-' + nivel);
+  /* --------------------------------------------------------------
+   * # effects: lee el tema del documento.
+   * temaActual() --> Text
+   * -------------------------------------------------------------- */
   const temaActual = () => document.documentElement.dataset.tema === 'oscuro' ? 'oscuro' : 'claro';
 
   const PALETAS = {
@@ -24,6 +53,9 @@
     },
   };
 
+  /* --------------------------------------------------------------
+   * paleta: Datos --> estiloCallejero() --> [Datos]
+   * -------------------------------------------------------------- */
   function estiloCallejero({ terreno, manzanas, parques, agua, calle, avenida, borde, carretera, texto, halo, textoAgua }) {
     return [
       { elementType: 'geometry', stylers: [{ color: terreno }] },
@@ -51,15 +83,27 @@
   const contornos = new Map();
   let avisos = [];
 
+  /* --------------------------------------------------------------
+   * # effects: cancela la espera y publica el error de carga.
+   * fallo()
+   * -------------------------------------------------------------- */
   function fallo() {
     clearTimeout(timer);
     estado = 'error';
     R().render();
   }
 
+  /* --------------------------------------------------------------
+   * # effects: carga Google Maps por red y registra su finalización y tiempo límite.
+   * cargar()
+   * -------------------------------------------------------------- */
   function cargar() {
     estado = 'cargando';
     window.gm_authFailure = fallo;
+    /* --------------------------------------------------------------
+     * # effects: finaliza la espera y repinta si la carga sigue vigente.
+     * window.__respiraMapsListo()
+     * -------------------------------------------------------------- */
     window.__respiraMapsListo = () => {
       clearTimeout(timer);
       if (estado !== 'cargando') return;
@@ -78,10 +122,18 @@
     document.head.append(script);
   }
 
+  /* --------------------------------------------------------------
+   * # effects: ajusta el mapa a los límites de las zonas.
+   * encuadrar()
+   * -------------------------------------------------------------- */
   function encuadrar() {
     mapa.fitBounds(ambito, { top: 36, bottom: 36, left: 32, right: 32 });
   }
 
+  /* --------------------------------------------------------------
+   * # effects: aplica el estilo al mapa según el tema y el tipo de vista.
+   * actualizarCallejero()
+   * -------------------------------------------------------------- */
   function actualizarCallejero() {
     if (mapId) return;
     const estilo = mapa.getMapTypeId() === google.maps.MapTypeId.ROADMAP ? temaActual() : null;
@@ -90,6 +142,10 @@
     mapa.setOptions({ styles: estilo ? estiloCallejero(PALETAS[estilo]) : [] });
   }
 
+  /* --------------------------------------------------------------
+   * # effects: crea Google Maps, sus eventos y las etiquetas de las zonas.
+   * crear()
+   * -------------------------------------------------------------- */
   function crear() {
     const opciones = {
       center: { lat: 39.002, lng: -0.165 },
@@ -121,21 +177,42 @@
     });
 
     Etiqueta = class extends google.maps.OverlayView {
+      /* --------------------------------------------------------------
+       * # effects: inicializa la posición y el elemento de la etiqueta.
+       * +   ancla: [R]_2, elemento: Elemento
+       *     -->
+       *         constructor() -->
+       * -------------------------------------------------------------- */
       constructor(ancla, elemento) {
         super();
         this.pos = new google.maps.LatLng(posicion(ancla));
         this.el = elemento;
       }
+      /* --------------------------------------------------------------
+       * # effects: incorpora la etiqueta al mapa y evita propagar sus interacciones.
+       * +
+       *         onAdd() <--
+       * -------------------------------------------------------------- */
       onAdd() {
         this.getPanes().overlayMouseTarget.append(this.el);
         google.maps.OverlayView.preventMapHitsAndGesturesFrom(this.el);
       }
+      /* --------------------------------------------------------------
+       * # effects: actualiza la posición de la etiqueta según la proyección.
+       * +
+       *         draw() -->
+       * -------------------------------------------------------------- */
       draw() {
         const punto = this.getProjection().fromLatLngToDivPixel(this.pos);
         if (!punto) return;
         this.el.style.left = punto.x + 'px';
         this.el.style.top = punto.y + 'px';
       }
+      /* --------------------------------------------------------------
+       * # effects: retira la etiqueta del documento.
+       * +
+       *         onRemove() <--
+       * -------------------------------------------------------------- */
       onRemove() { this.el.remove(); }
     };
 
@@ -150,6 +227,10 @@
     }
   }
 
+  /* --------------------------------------------------------------
+   * # effects: sincroniza las geometrías y el encuadre cuando cambian las zonas.
+   * actualizarContornos()
+   * -------------------------------------------------------------- */
   function actualizarContornos() {
     let cambio = false;
     for (const zona of R().ZONAS) {
@@ -168,6 +249,10 @@
     if (!ultimaFirma) encuadrar();
   }
 
+  /* --------------------------------------------------------------
+   * # effects: actualiza el estilo y las etiquetas de las zonas.
+   * mostrar: B --> dibujarZonas()
+   * -------------------------------------------------------------- */
   function dibujarZonas(enMapa) {
     const { S, ZONAS, zonaMapa, esc, zonaCoincide } = R();
     const visibles = new Set(enMapa ? ZONAS.filter(zonaCoincide).map(z => z.id) : []);
@@ -201,6 +286,10 @@
     }
   }
 
+  /* --------------------------------------------------------------
+   * # effects: reemplaza los marcadores de percepciones visibles.
+   * mostrar: B --> dibujarAvisos()
+   * -------------------------------------------------------------- */
   function dibujarAvisos(mostrar) {
     avisos.forEach(etiqueta => etiqueta.setMap(null));
     const { AVISOS, PERC, S, avOk } = R();
@@ -222,6 +311,10 @@
     }) : [];
   }
 
+  /* --------------------------------------------------------------
+   * # effects: sincroniza tema, geometrías, filtros y selección del mapa.
+   * actualizar()
+   * -------------------------------------------------------------- */
   function actualizar() {
     actualizarCallejero();
     actualizarContornos();
@@ -247,10 +340,22 @@
   }
 
   window.RespiraMapa = {
+    /* --------------------------------------------------------------
+     * # effects: lee el estado de carga y la configuración de perspectiva.
+     * +
+     *         controlesHTML() --x
+     *     <--
+     *   Html
+     * -------------------------------------------------------------- */
     controlesHTML: () => estado === 'listo'
       ? `<div class="mapctl"><button type="button" aria-label="Volver a la vista inicial" title="Volver a la vista inicial" data-act="zoom" data-arg="reset">⟲</button>${mapId ? '<button type="button" class="t3" aria-label="Vista en perspectiva" data-act="tilt">3D</button>' : ''}</div>`
       : '',
 
+    /* --------------------------------------------------------------
+     * # effects: incorpora el mapa o su estado de carga al documento.
+     * +
+     *         montar() --x
+     * -------------------------------------------------------------- */
     montar() {
       const destino = document.querySelector('.gmap-slot');
       if (!destino) return;
@@ -269,6 +374,11 @@
       actualizar();
     },
 
+    /* --------------------------------------------------------------
+     * # effects: limpia la selección y restablece el encuadre.
+     * +
+     *         reset() --x
+     * -------------------------------------------------------------- */
     reset() {
       if (!mapa) return;
       R().S.sel = null;
@@ -277,6 +387,11 @@
       R().render();
     },
 
+    /* --------------------------------------------------------------
+     * # effects: alterna la inclinación y la orientación cuando hay un identificador de mapa.
+     * +
+     *         perspectiva() --x
+     * -------------------------------------------------------------- */
     perspectiva() {
       if (!mapa || !mapId) return;
       const inclinado = (mapa.getTilt() || 0) > 0;

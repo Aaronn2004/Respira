@@ -18,6 +18,8 @@
 #include "Conversiones.h"
 #include "EmisoraBLE.h"
 
+// Publicador <>--- EmisoraBLE
+// # Codifica las magnitudes ambientales en anuncios iBeacon.
 class Publicador {
 private:
   uint8_t beaconUUID[16];
@@ -25,22 +27,35 @@ private:
 
 public:
   // --------------------------------------------------------------
-  // Publicador()   (UUID = "RESPIRA-" + CODIGO_NODO)
+  // # El UUID se compone de "RESPIRA-" y los ocho caracteres de CODIGO_NODO.
+  // +       Publicador() -->
   // --------------------------------------------------------------
   Publicador() {
     memcpy( beaconUUID, "RESPIRA-", 8 );
     memcpy( beaconUUID + 8, Config::CODIGO_NODO, 8 );
   }
 
+  // --------------------------------------------------------------
+  // +       getUUID() <--
+  //     <--
+  //     [N]_16
+  // --------------------------------------------------------------
   const uint8_t * getUUID() { return beaconUUID; }
 
+  // --------------------------------------------------------------
+  // # effects: inicializa la emisora BLE.
+  // +       encenderEmisora() -->
+  // --------------------------------------------------------------
   void encenderEmisora() {
     laEmisora.encenderEmisora();
   }
 
   // --------------------------------------------------------------
-  // tipo: N, valor: Z, contador: N, tiempoMs: N --> publicar() -->
-  // anuncia durante tiempoMs y deja de anunciar
+  // # La conversión a entero sin signo conserva los bits del minor, también para temperaturas negativas.
+  // # effects: emite un iBeacon, espera tiempoMs y detiene el anuncio.
+  // + tipo: N, valor: Z, contador: N, tiempoMs: N
+  //     -->
+  //         publicar() -->
   // --------------------------------------------------------------
   void publicar( uint8_t tipo, int16_t valor, uint8_t contador, long tiempoMs ) {
     laEmisora.emitirAnuncioIBeacon( beaconUUID, Conversiones::major( tipo, contador ),

@@ -9,12 +9,20 @@ package com.nodia.respira.datos;
 // ==============================================================
 public final class Salud {
 
+    // --------------------------------------------------------------
+    // -
+    //     Salud() -->
+    // --------------------------------------------------------------
     private Salud() { }
 
     // ---------------- guía de valores ----------------
 
     // --------------------------------------------------------------
-    // magnitud, nivel --> significado() --> Text (una frase)
+    // + m: Magnitud, n: Nivel
+    //       -->
+    //     significado() --x
+    //       <--
+    //   Text
     // --------------------------------------------------------------
     public static String significado(Magnitud m, Nivel n) {
         return n == Nivel.BAJO ? "Intervalo inferior de la escala de Respira."
@@ -22,6 +30,13 @@ public final class Salud {
                 : "Intervalo superior de la escala de Respira.";
     }
 
+    // --------------------------------------------------------------
+    // + m: Magnitud
+    //       -->
+    //     fuenteGuia() --x
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public static String fuenteGuia(Magnitud m) {
         switch (m) {
             case O3:
@@ -37,8 +52,11 @@ public final class Salud {
     }
 
     // --------------------------------------------------------------
-    // magnitud, nivel --> rango() --> Text   p. ej. "< 0.060", "0.060 – 0.090", "≥ 0.090"
-    // (mismo criterio que Magnitud.nivel(): el límite ya cuenta como el nivel de arriba)
+    // + m: Magnitud, n: Nivel
+    //       -->
+    //     rango() --x
+    //       <--
+    //   Text
     // --------------------------------------------------------------
     public static String rango(Magnitud m, Nivel n) {
         String medio = m.formatear(m.limiteMedio), alto = m.formatear(m.limiteAlto);
@@ -58,6 +76,11 @@ public final class Salud {
         public final String detalle;   // p. ej. "1 h" (puede ser "")
         public final String efecto;
 
+        // --------------------------------------------------------------
+        // - gravedad: Z, valor: Text, detalle: Text, efecto: Text
+        //       -->
+        //     Paso() -->
+        // --------------------------------------------------------------
         Paso(int gravedad, String valor, String detalle, String efecto) {
             this.gravedad = gravedad;
             this.valor = valor;
@@ -75,6 +98,11 @@ public final class Salud {
         public final String hacer;
         public final String fuente;
 
+        // --------------------------------------------------------------
+        // - magnitud: Magnitud, nombre: Text, lema: Text, pasos: [Paso], peor_para: [Text], hacer: Text, fuente: Text
+        //       -->
+        //     Efecto() -->
+        // --------------------------------------------------------------
         Efecto(Magnitud magnitud, String nombre, String lema, Paso[] pasos, String[] peorPara,
                String hacer, String fuente) {
             this.magnitud = magnitud;

@@ -15,22 +15,27 @@
 #include <DHT.h>
 #include "Configuracion.h"
 
+// MedidorTemperatura <>--- DHT
+// # Encapsula las lecturas del DHT11 y comunica si son válidas.
 class MedidorTemperatura {
 private:
   DHT elDHT { Config::PIN_DHT11, DHT11 };
 
 public:
   // --------------------------------------------------------------
-  // iniciar() -->
+  // # effects: inicializa el sensor DHT11.
+  // +       iniciar() -->
   // --------------------------------------------------------------
   void iniciar() {
     elDHT.begin();
   }
 
   // --------------------------------------------------------------
-  // medir(), ok: B --> R   (°C)
-  // Si el DHT11 no responde (cable suelto, sin pull-up...), ok = false
-  // y NO se envía nada: nunca se inventa un valor.
+  // # ok es una salida lógica: si falla el sensor, temperatura vale cero y no debe anunciarse.
+  // # effects: lee el DHT11 y actualiza su estado de lectura.
+  // +       medir() -->
+  //     <--
+  //     (temperatura: R, ok: B)
   // --------------------------------------------------------------
   float medir( bool & ok ) {
     float c = elDHT.readTemperature();

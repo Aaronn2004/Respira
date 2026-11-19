@@ -16,14 +16,29 @@
 #include "NodoRespira.ino"
 
 static int ok = 0, fallos = 0;
+// --------------------------------------------------------------
+// # effects: actualiza los contadores de pruebas y escribe el resultado.
+// c: B, nombre: Text --> comprobar()
+// --------------------------------------------------------------
 void comprobar( bool c, const char * nombre ) {
   if ( c ) { ok++; printf( "ok     - %s\n", nombre ); }
   else { fallos++; printf( "FALLO  - %s\n", nombre ); }
 }
+// --------------------------------------------------------------
+// a: R, b: R, tol: R --> cerca() --> B
+// --------------------------------------------------------------
 bool cerca( float a, float b, float tol ) { return fabsf( a - b ) <= tol; }
-// voltios --> lectura del ADC (referencia 3,6 V, 12 bits)
+// --------------------------------------------------------------
+// # Reconstruye una lectura ADC de 12 bits con fondo de escala de 3,6 V.
+// v: R --> adc() --> Z
+// --------------------------------------------------------------
 int adc( float v ) { return (int) lroundf( v * 4095.0f / 3.6f ); }
 
+// --------------------------------------------------------------
+// # Devuelve cero si pasan todas las comprobaciones.
+// # effects: ejecuta las pruebas con periféricos simulados y escribe el resultado.
+// main() --> Z
+// --------------------------------------------------------------
 int main() {
   using namespace Conversiones;
 

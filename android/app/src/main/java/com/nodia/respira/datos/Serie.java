@@ -3,6 +3,9 @@ package com.nodia.respira.datos;
 import java.util.ArrayList;
 import java.util.List;
 
+// # Serie temporal con valores observados, estimaciones y eventos separados por procedencia.
+// # Ausente representa la ausencia lógica (null en el código).
+
 // ==============================================================
 // Serie: evolución de una magnitud en una zona (GET /zonas/{id}/serie).
 //   valores  media de cada tramo (null = sin datos)
@@ -20,6 +23,11 @@ public class Serie {
         public final String nivel;
         public final String origen;
 
+        // --------------------------------------------------------------
+        // + desde: Z, hasta: Z, valor: R, nivel: Text, origen: Text
+        //       -->
+        //     Evento() -->
+        // --------------------------------------------------------------
         public Evento(long desde, long hasta, double valor, String nivel, String origen) {
             this.origen = origen;
             this.desde = desde;
@@ -40,12 +48,23 @@ public class Serie {
     public Double maximo;
     public boolean conResumen;
 
+    // --------------------------------------------------------------
+    // +
+    //     tieneSimulacion() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public boolean tieneSimulacion() {
         if (origen == null) return false;
         for (String o : origen) if ("simulado".equals(o)) return true;
         return false;
     }
 
+    // --------------------------------------------------------------
+    // + valores: [R | Ausente], aprox: [R | Ausente] | Ausente
+    //       -->
+    //     Serie() -->
+    // --------------------------------------------------------------
     public Serie(Double[] valores, Double[] aprox) {
         this.valores = valores;
         this.aprox = aprox == null ? new Double[valores.length] : aprox;

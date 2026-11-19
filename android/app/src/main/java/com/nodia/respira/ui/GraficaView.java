@@ -16,6 +16,16 @@ import com.nodia.respira.datos.Magnitud;
 // Huecos cortos (hasta 2 h) que el servidor aproxima: línea de puntos.
 // Huecos largos (null y sin aproximación): franja gris, «sin datos».
 // ==============================================================
+// --------------------------------------------------------------
+// class GraficaView
+// # Gráfica que distingue observaciones, simulaciones y aproximaciones.
+// # View <--- GraficaView
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Entorno = { densidad: R, tema: Text }
+// Atributos = Map[Text, Text]
+// Lienzo = { ancho: R, alto: R }
+// Escala = { minimo: R, maximo: R, altura: R }
+// --------------------------------------------------------------
 public class GraficaView extends View {
 
     private Double[] datos = new Double[0];
@@ -25,14 +35,33 @@ public class GraficaView extends View {
     private boolean dia = true;
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + c: Entorno
+    //       -->
+    //           GraficaView() -->
+    // --------------------------------------------------------------
     public GraficaView(Context c) {
         super(c);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + c: Entorno, a: Atributos
+    //       -->
+    //           GraficaView() -->
+    // --------------------------------------------------------------
     public GraficaView(Context c, AttributeSet a) {
         super(c, a);
     }
 
+    // --------------------------------------------------------------
+    // # Una aproximación ausente o de distinta longitud se representa con huecos.
+    // # effects: actualiza la interfaz Android
+    // + datos: [ (R | Ausente) ], aprox: [ (R | Ausente) ], origen: [ Text ], m: Magnitud, dia: B
+    //       -->
+    //           mostrar() -->
+    // --------------------------------------------------------------
     public void mostrar(Double[] datos, Double[] aprox, String[] origen, Magnitud m, boolean dia) {
         this.origen = origen;
         this.datos = datos;
@@ -43,12 +72,25 @@ public class GraficaView extends View {
         invalidate();
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + w: Z, h: Z
+    //       -->
+    //           onMeasure() -->
+    // --------------------------------------------------------------
     @Override
     protected void onMeasure(int w, int h) {
         int ancho = MeasureSpec.getSize(w);
         setMeasuredDimension(ancho, Ui.dp(getContext(), 210));
     }
 
+    // --------------------------------------------------------------
+    // # Las aproximaciones no sustituyen los valores observados ni unen huecos largos.
+    // # effects: actualiza la interfaz Android
+    // + canvas: Lienzo
+    //       -->
+    //           onDraw() -->
+    // --------------------------------------------------------------
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -190,10 +232,23 @@ public class GraficaView extends View {
         }
     }
 
+    // --------------------------------------------------------------
+    // - i: N
+    //       -->
+    //           simulado() <--
+    //       <--
+    //   resultado: B
+    // --------------------------------------------------------------
     private boolean simulado(int i) {
         return origen != null && i < origen.length && "simulado".equals(origen[i]);
     }
 
+    // --------------------------------------------------------------
+    // # effects: dibuja una banda sobre el lienzo recibido
+    // - canvas: Lienzo, x0: R, x1: R, Y: Escala, a: R, b: R, color: Z
+    //       -->
+    //           banda() --x
+    // --------------------------------------------------------------
     private void banda(Canvas canvas, float x0, float x1, java.util.function.DoubleUnaryOperator Y,
                        double a, double b, int color) {
         float ya = (float) Y.applyAsDouble(a), yb = (float) Y.applyAsDouble(b);

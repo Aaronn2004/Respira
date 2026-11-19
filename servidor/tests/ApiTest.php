@@ -9,6 +9,7 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/bd_prueba.php';
 require_once __DIR__ . '/../logica/Logica.php';
@@ -29,6 +30,14 @@ $pid = (int) shell_exec($cmd);
 usleep(600000);
 $BASE = "http://127.0.0.1:$puerto/api/index.php";
 
+// --------------------------------------------------------------
+// # effects: realiza una petición HTTP al servidor de pruebas.
+// metodo: Text, ruta: Text, cuerpo: Valor, token: Text | Ausente, cab: Map[Text, Text]
+//     -->
+//         pedir()
+//     <--
+//     (codigo: N, datos: Valor)
+// --------------------------------------------------------------
 function pedir(string $metodo, string $ruta, $cuerpo = null, ?string $token = null, array $cab = []): array {
     global $BASE;
     $h = "Content-Type: application/json\r\n" . ($token ? "X-Respira-Token: $token\r\n" : '');
@@ -46,6 +55,10 @@ function pedir(string $metodo, string $ruta, $cuerpo = null, ?string $token = nu
 
 $fallos = 0;
 $total = 0;
+// --------------------------------------------------------------
+// # effects: actualiza los contadores de pruebas y escribe el resultado.
+// nombre: Text, f: Operacion --> prueba()
+// --------------------------------------------------------------
 function prueba(string $nombre, callable $f): void {
     global $fallos, $total;
     $total++;
@@ -57,12 +70,18 @@ function prueba(string $nombre, callable $f): void {
         echo "  FALLA $nombre: " . $e->getMessage() . "\n";
     }
 }
+// --------------------------------------------------------------
+// esperado: Valor, real: Valor, que: Text --> igual() --> 0 | Error
+// --------------------------------------------------------------
 function igual($esperado, $real, string $que = ''): void {
     if ($esperado !== $real) {
         throw new Exception("$que: esperaba " . var_export($esperado, true) . ' y salió ' . var_export($real, true));
     }
 }
 
+// --------------------------------------------------------------
+// v: Valor, que: Text --> cierto() --> 0 | Error
+// --------------------------------------------------------------
 function cierto($v, string $que = ''): void {
     if ($v !== true) {
         throw new Exception("$que: no se cumple");

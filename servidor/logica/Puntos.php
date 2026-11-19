@@ -26,9 +26,12 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
+// ReglasPuntos = { min: N, mult: N, max: N }.
 
 require_once __DIR__ . '/Base.php';
 
+// Base <--- Puntos
 class Puntos extends Base {
 
     const HUECO_MAX_MIN = 15;
@@ -43,18 +46,38 @@ class Puntos extends Base {
 
     const REGLAS = ['min' => 5, 'mult' => 2, 'max' => 100];   // min por punto, x parques, máximo al día
 
-    // reglas() --> {min, mult, max}   (el panel las enseña; no se cambian desde ahí)
+    // --------------------------------------------------------------
+    // + quien: Registro | Ausente
+    //     -->
+    //         reglas() --x
+    //     <--
+    //     ReglasPuntos | Error
+    // --------------------------------------------------------------
     public function reglas(?array $quien): array {
         self::exigirRol($quien, ['admin']);
         return self::REGLAS;
     }
 
+    // --------------------------------------------------------------
+    // + min: Z, minParque: N, r: Registro
+    //     -->
+    //         puntosDe() --x
+    //     <--
+    //     N
+    // --------------------------------------------------------------
     public static function puntosDe(int $min, int $minParque, array $r = self::REGLAS): int {
         $p = intdiv($min, $r['min']) + intdiv($minParque, $r['min']) * ($r['mult'] - 1);
         return max(0, min($r['max'], $p));
     }
 
     // distancia en metros entre dos puntos (haversine)
+    // --------------------------------------------------------------
+    // + lat1: R, lng1: R, lat2: R, lng2: R
+    //     -->
+    //         metros() --x
+    //     <--
+    //     R
+    // --------------------------------------------------------------
     public static function metros(float $lat1, float $lng1, float $lat2, float $lng2): float {
         $r = 6371000.0;
         $dLat = deg2rad($lat2 - $lat1);
@@ -68,11 +91,14 @@ class Puntos extends Base {
     // ==============================================================
 
     // --------------------------------------------------------------
-    // usuarioId, dia, hastaMs? --> calcularDia() -->
-    //   {minutos, minutos_parque, descartados, puntos,
-    //    inicio | null, fin | null, duracion_min, distancia_m, lecturas, parques: [nombre]}
-    // Estadísticas del recorrido: inicio y fin = primera y última medición del día;
-    // distancia = lo andado en los tramos válidos (sin huecos ni vehículo).
+    // # Estadísticas del recorrido: inicio y fin = primera y última medición del día;
+    // # distancia = lo andado en los tramos válidos (sin huecos ni vehículo).
+    // # effects: consulta la base de datos.
+    // + usuarioId: Text, dia: Date, hastaMs: Instante | Ausente
+    //     -->
+    //         calcularDia() <--
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function calcularDia(string $usuarioId, string $dia, ?int $hastaMs = null): array {
         $ini = self::inicioDia($dia);
@@ -162,16 +188,27 @@ class Puntos extends Base {
             'distancia_m' => (int) round($dist), 'lecturas' => count($puntos), 'parques' => array_keys($parques)];
     }
 
-    // calcularDia() --> recorridoJSON() --> {inicio, fin, duracion_min, distancia_m, lecturas, parques}
+    // --------------------------------------------------------------
+    // - c: Registro
+    //     -->
+    //         recorridoJSON() --x
+    //     <--
+    //     Registro
+    // --------------------------------------------------------------
     private static function recorridoJSON(array $c): array {
         return ['inicio' => $c['inicio'], 'fin' => $c['fin'], 'duracion_min' => $c['duracion_min'],
             'distancia_m' => $c['distancia_m'], 'lecturas' => $c['lecturas'], 'parques' => $c['parques']];
     }
 
     // --------------------------------------------------------------
-    // usuarioId --> cerrarDias()
-    // Guarda en «puntos_dia» los días ya acabados en los que llevó un
-    // sensor y que aún no estén guardados.
+    // # Guarda en «puntos_dia» los días ya acabados en los que llevó un
+    // # sensor y que aún no estén guardados.
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + usuarioId: Text
+    //     -->
+    //         cerrarDias() -->
+    //     <--
+    //     0 | Error
     // --------------------------------------------------------------
     public function cerrarDias(string $usuarioId): void {
         $hoy = self::diaLocal($this->ahora());
@@ -200,8 +237,15 @@ class Puntos extends Base {
         }
     }
 
-    // usuarioId --> dias() --> [{fecha, minutos, minutos_parque, descartados, puntos}]  (más reciente primero)
-    // Solo los días con algo que enseñar (minutos válidos o descartados).
+    // --------------------------------------------------------------
+    // # Solo los días con algo que enseñar (minutos válidos o descartados).
+    // # effects: consulta y modifica la base de datos.
+    // + usuarioId: Text, max: N
+    //     -->
+    //         dias() -->
+    //     <--
+    //     [Registro] | Error
+    // --------------------------------------------------------------
     public function dias(string $usuarioId, int $max = 60): array {
         $this->cerrarDias($usuarioId);
         return $this->filas("SELECT fecha, minutos, minutos_parque, descartados, puntos FROM {$this->p}puntos_dia
@@ -209,6 +253,13 @@ class Puntos extends Base {
     }
 
     // Canjes no recogidos a tiempo: caducan, y la unidad vuelve al stock
+    // --------------------------------------------------------------
+    // # Los canjes vencidos devuelven puntos y una unidad al stock.
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // +       caducarCanjes() -->
+    //     <--
+    //     0 | Error
+    // --------------------------------------------------------------
     public function caducarCanjes(): void {
         $hoy = self::diaLocal($this->ahora());
         $this->transaccion(function () use ($hoy) {
@@ -219,6 +270,14 @@ class Puntos extends Base {
         });
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + usuarioId: Text
+    //     -->
+    //         saldo() -->
+    //     <--
+    //     Z | Error
+    // --------------------------------------------------------------
     public function saldo(string $usuarioId): int {
         $this->cerrarDias($usuarioId);
         $mas = (int) $this->valor("SELECT COALESCE(SUM(puntos), 0) FROM {$this->p}puntos_dia WHERE usuario_id = ?", [$usuarioId]);
@@ -227,8 +286,12 @@ class Puntos extends Base {
     }
 
     // --------------------------------------------------------------
-    // cuenta(usuario) --> {puntos, hoy, historial, canjes, reglas}
-    //   historial: días con sensor y canjes, del más reciente al más antiguo
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + u: Registro
+    //     -->
+    //         cuenta() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function cuenta(array $u): array {
         $this->caducarCanjes();
@@ -264,11 +327,24 @@ class Puntos extends Base {
     // Regalos y canjes
     // ==============================================================
 
+    // --------------------------------------------------------------
+    // - r: Registro
+    //     -->
+    //         regaloJSON() --x
+    //     <--
+    //     Registro
+    // --------------------------------------------------------------
     private static function regaloJSON(array $r): array {
         return ['id' => $r['id'], 'nombre' => $r['nombre'], 'coste' => (int) $r['coste'], 'stock' => (int) $r['stock']];
     }
 
     // catálogo que se ve en la app (y en el panel)
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // +       regalos() -->
+    //     <--
+    //     [Registro] | Error
+    // --------------------------------------------------------------
     public function regalos(): array {
         $this->caducarCanjes();
         return array_map([self::class, 'regaloJSON'],
@@ -276,7 +352,13 @@ class Puntos extends Base {
     }
 
     // --------------------------------------------------------------
-    // usuario, regaloId --> canjear() --> {codigo, regalo, fecha, caduca, estado, coste}
+    // # Reserva stock y puntos en la misma transacción.
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + u: Registro | Ausente, regaloId: Text
+    //     -->
+    //         canjear() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function canjear(?array $u, string $regaloId): array {
         self::exigirRol($u, ['vecino', 'trabajador']);
@@ -308,6 +390,14 @@ class Puntos extends Base {
 
     // ---------- panel: catálogo (solo administración) ----------
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // - nombre: Text, coste: Valor, stock: Valor, id: Text | Ausente
+    //     -->
+    //         validarRegalo() <--
+    //     <--
+    //     (nombre: Text, coste: N, stock: N) | Error
+    // --------------------------------------------------------------
     private function validarRegalo(string $nombre, $coste, $stock, ?string $id): array {
         $n = trim($nombre);
         $c = trim((string) $coste);
@@ -330,6 +420,14 @@ class Puntos extends Base {
         return [$n, (int) $c, (int) $s];
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, nombre: Text, coste: Valor, stock: Valor
+    //     -->
+    //         crearRegalo() -->
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     public function crearRegalo(?array $quien, string $nombre, $coste, $stock): array {
         self::exigirRol($quien, ['admin']);
         [$n, $c, $s] = $this->validarRegalo($nombre, $coste, $stock, null);
@@ -340,6 +438,14 @@ class Puntos extends Base {
         return self::regaloJSON($this->fila("SELECT * FROM {$this->p}regalo WHERE id = ?", [$id]));
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, id: Text, nombre: Text, coste: Valor, stock: Valor
+    //     -->
+    //         editarRegalo() -->
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     public function editarRegalo(?array $quien, string $id, string $nombre, $coste, $stock): array {
         self::exigirRol($quien, ['admin']);
         if (!$this->fila("SELECT id FROM {$this->p}regalo WHERE id = ? AND activo = 1", [$id])) {
@@ -351,6 +457,14 @@ class Puntos extends Base {
     }
 
     // Retirar: deja de verse en la app; los canjes pendientes se siguen entregando
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, id: Text
+    //     -->
+    //         retirarRegalo() -->
+    //     <--
+    //     0 | Error
+    // --------------------------------------------------------------
     public function retirarRegalo(?array $quien, string $id): void {
         self::exigirRol($quien, ['admin']);
         $this->ejecutar("UPDATE {$this->p}regalo SET activo = 0 WHERE id = ?", [$id]);
@@ -358,12 +472,27 @@ class Puntos extends Base {
 
     // ---------- panel: canjes ----------
 
+    // --------------------------------------------------------------
+    // - c: Registro
+    //     -->
+    //         canjePanel() --x
+    //     <--
+    //     Registro
+    // --------------------------------------------------------------
     private function canjePanel(array $c): array {
         return ['codigo' => $c['codigo'], 'usuario' => $c['usuario_id'], 'regalo_id' => $c['regalo_id'],
             'regalo' => $c['nombre'], 'caduca' => $c['caduca'], 'estado' => $c['estado'],
             'creado' => self::isoDeBD($c['creado'])];
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente
+    //     -->
+    //         canjes() -->
+    //     <--
+    //     [Registro] | Error
+    // --------------------------------------------------------------
     public function canjes(?array $quien): array {
         self::exigirRol($quien, ['admin']);
         $this->caducarCanjes();
@@ -372,7 +501,12 @@ class Puntos extends Base {
     }
 
     // --------------------------------------------------------------
-    // codigo --> comprobarCanje() --> canje (pendiente y en plazo)
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, codigo: Text
+    //     -->
+    //         comprobarCanje() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function comprobarCanje(?array $quien, string $codigo): array {
         self::exigirRol($quien, ['admin', 'reparto']);
@@ -395,6 +529,14 @@ class Puntos extends Base {
         return $this->canjePanel($x);
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, codigo: Text
+    //     -->
+    //         entregarCanje() -->
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     public function entregarCanje(?array $quien, string $codigo): array {
         $x = $this->comprobarCanje($quien, $codigo);
         $this->ejecutar("UPDATE {$this->p}canje SET estado = 'entregado' WHERE codigo = ?", [$x['codigo']]);

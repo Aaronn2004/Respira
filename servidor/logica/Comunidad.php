@@ -14,9 +14,11 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/Base.php';
 
+// Base <--- Comunidad
 class Comunidad extends Base {
 
     const TIPOS = ['ruido', 'temp', 'aire'];
@@ -30,6 +32,14 @@ class Comunidad extends Base {
         [38.991451, -0.151895, 'Platja de Venècia', 'aire'],
     ];
 
+    // --------------------------------------------------------------
+    // # effects: consulta el reloj inyectado.
+    // - p: Registro, quien: Registro | Ausente
+    //     -->
+    //         json() <--
+    //     <--
+    //     Registro
+    // --------------------------------------------------------------
     private function json(array $p, ?array $quien): array {
         $creada = self::msDeFechaBD($p['creada']);
         return ['id' => (int) $p['id'], 'tipo' => $p['tipo'], 'nivel' => (int) $p['nivel'],
@@ -39,8 +49,13 @@ class Comunidad extends Base {
     }
 
     // --------------------------------------------------------------
-    // quien: usuario | null --> percepciones() --> las de las últimas 24 h
-    // ('mia' = la ha publicado quien pregunta; nunca se dice quién es el autor)
+    // # ('mia' = la ha publicado quien pregunta; nunca se dice quién es el autor)
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // + quien: Registro | Ausente, simulacion: B
+    //     -->
+    //         percepciones() <--
+    //     <--
+    //     [Registro] | Error
     // --------------------------------------------------------------
     public function percepciones(?array $quien, bool $simulacion = false): array {
         $ahora = $this->ahora();
@@ -64,6 +79,14 @@ class Comunidad extends Base {
     }
 
     // Las mías (también las que ya no se ven en el mapa), de los últimos 30 días
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // + quien: Registro | Ausente
+    //     -->
+    //         mias() <--
+    //     <--
+    //     [Registro] | Error
+    // --------------------------------------------------------------
     public function mias(?array $quien): array {
         self::exigirRol($quien, ['vecino', 'trabajador']);
         $desde = self::fechaBD($this->ahora() - 30 * self::DIA_MS);
@@ -72,6 +95,13 @@ class Comunidad extends Base {
                 [$quien['id'], $desde]));
     }
 
+    // --------------------------------------------------------------
+    // - tipo: Text, nivel: Valor
+    //     -->
+    //         validar() --x
+    //     <--
+    //     0 | Error
+    // --------------------------------------------------------------
     private static function validar(string $tipo, $nivel): void {
         if (!in_array($tipo, self::TIPOS, true)) {
             throw new DatosNoValidosException('tipo: ruido, temp o aire', 'tipo');
@@ -82,7 +112,13 @@ class Comunidad extends Base {
     }
 
     // --------------------------------------------------------------
-    // quien, tipo, nivel, lat, lng, direccion --> publicar() --> percepción
+    // # Cuenta todos los envíos de la hora, aunque luego se borre la percepción.
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + quien: Registro | Ausente, tipo: Text, nivel: Valor, lat: Valor, lng: Valor, direccion: Text
+    //     -->
+    //         publicar() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function publicar(?array $quien, string $tipo, $nivel, $lat, $lng, string $direccion): array {
         self::exigirRol($quien, ['vecino', 'trabajador']);
@@ -115,6 +151,15 @@ class Comunidad extends Base {
         });
     }
 
+    // --------------------------------------------------------------
+    // # Comprueba la autoría antes de permitir cambios en la percepción.
+    // # effects: consulta la base de datos.
+    // - quien: Registro | Ausente, id: Z
+    //     -->
+    //         propia() <--
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     private function propia(?array $quien, int $id): array {
         self::exigirRol($quien, ['vecino', 'trabajador']);
         $p = $this->fila("SELECT * FROM {$this->p}percepcion WHERE id = ?", [$id]);
@@ -128,6 +173,14 @@ class Comunidad extends Base {
     }
 
     // Cambia tipo y nivel; conserva lugar, hora y autor
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, id: Z, tipo: Text, nivel: Valor
+    //     -->
+    //         editar() -->
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     public function editar(?array $quien, int $id, string $tipo, $nivel): array {
         $this->propia($quien, $id);
         self::validar($tipo, $nivel);
@@ -136,6 +189,14 @@ class Comunidad extends Base {
         return $this->json($this->fila("SELECT * FROM {$this->p}percepcion WHERE id = ?", [$id]), $quien);
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + quien: Registro | Ausente, id: Z
+    //     -->
+    //         borrar() -->
+    //     <--
+    //     0 | Error
+    // --------------------------------------------------------------
     public function borrar(?array $quien, int $id): void {
         $this->propia($quien, $id);
         $this->ejecutar("DELETE FROM {$this->p}percepcion WHERE id = ?", [$id]);

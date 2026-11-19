@@ -7,10 +7,20 @@ import android.app.job.JobService;
 import android.content.ComponentName;
 import android.content.Context;
 
+// # JobService <--- TrabajoAlertas; delega la actualización periódica en Repositorio.
+// # EntornoAndroid = { aplicacion: Text }; identifica los recursos y servicios de la app.
+// # TrabajoAndroid = { id: N }; trabajo programado por Android.
+
 public class TrabajoAlertas extends JobService {
     private static final int ID = 203;
     private JobParameters activo;
 
+    // --------------------------------------------------------------
+    // # effects: programa o ejecuta comprobaciones de alertas con Android.
+    // + contexto: EntornoAndroid, necesario: B
+    //       -->
+    //     programar() --x
+    // --------------------------------------------------------------
     public static void programar(Context contexto, boolean necesario) {
         JobScheduler trabajos = contexto.getSystemService(JobScheduler.class);
         if (trabajos == null) return;
@@ -24,6 +34,14 @@ public class TrabajoAlertas extends JobService {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: programa o ejecuta comprobaciones de alertas con Android.
+    // + params: TrabajoAndroid
+    //       -->
+    //     onStartJob() -->
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     @Override public boolean onStartJob(JobParameters params) {
         activo = params;
         Repositorio.obtener(this).comprobacionEnSegundoPlano(ok -> {
@@ -35,6 +53,14 @@ public class TrabajoAlertas extends JobService {
         return true;
     }
 
+    // --------------------------------------------------------------
+    // # effects: programa o ejecuta comprobaciones de alertas con Android.
+    // + params: TrabajoAndroid
+    //       -->
+    //     onStopJob() -->
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     @Override public boolean onStopJob(JobParameters params) {
         if (activo == params) activo = null;
         return true;

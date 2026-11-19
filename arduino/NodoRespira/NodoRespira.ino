@@ -46,7 +46,9 @@ namespace Globales {
 };
 
 // --------------------------------------------------------------
-// setup() -->
+// # No espera al monitor USB: permite arrancar el nodo alimentado por batería.
+// # effects: inicializa BLE y sensores, calibra el ozono y escribe por el puerto serie.
+// setup()
 // --------------------------------------------------------------
 void setup() {
   using namespace Globales;
@@ -71,10 +73,9 @@ namespace Loop {
 };
 
 // --------------------------------------------------------------
-// loop() -->
-// mide las tres magnitudes y anuncia cada una TIEMPO_ANUNCIO_MS
-// (el mismo contador en las tres: así el servidor sabe que son
-// del mismo instante)
+// # Las tres magnitudes comparten contador; una lectura fallida del DHT11 no se anuncia.
+// # effects: lee sensores, actualiza el contador, acciona el LED y emite por BLE y serie.
+// loop()
 // --------------------------------------------------------------
 void loop() {
   using namespace Loop;

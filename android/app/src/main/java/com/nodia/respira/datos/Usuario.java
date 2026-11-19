@@ -1,5 +1,7 @@
 package com.nodia.respira.datos;
 
+// # Perfil de sesión; el rol distingue al trabajador y la clave inicial obliga a renovarla.
+
 // ==============================================================
 // Cuenta con la que se ha iniciado sesión en la app.
 //   id = "U-XXXXX" (vecinos: lo dicen en el punto de reparto) o
@@ -18,10 +20,20 @@ public class Usuario {
     public final String rol;
     public final boolean requiereCambioClave;
 
+    // --------------------------------------------------------------
+    // + id: Text, nombre: Text, email: Text, rol: Text
+    //       -->
+    //     Usuario() -->
+    // --------------------------------------------------------------
     public Usuario(String id, String nombre, String email, String rol) {
         this(id, nombre, email, rol, false);
     }
 
+    // --------------------------------------------------------------
+    // + id: Text, nombre: Text, email: Text, rol: Text, requiere_cambio_clave: B
+    //       -->
+    //     Usuario() -->
+    // --------------------------------------------------------------
     public Usuario(String id, String nombre, String email, String rol, boolean requiereCambioClave) {
         this.requiereCambioClave = requiereCambioClave;
         this.id = id;
@@ -30,6 +42,12 @@ public class Usuario {
         this.rol = rol == null ? VECINO : rol;
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     esTrabajador() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public boolean esTrabajador() {
         return TRABAJADOR.equals(rol);
     }

@@ -30,6 +30,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+
+// # SQLiteOpenHelper <--- EnvioMediciones; EnvioMediciones <>--- Lectura.
+// # Ausente representa la ausencia lógica (null en el código).
+// # ValorJson = Ausente | B | R | Text | [ValorJson] | Map[Text, ValorJson].
+// # ObjetoJson = Map[Text, ValorJson].
+// # ErrorApi = { codigo: Z, mensaje: Text, campos: Map[Text, Text] }.
+// # EntornoAndroid = { aplicacion: Text }; identifica los recursos y servicios de la app.
+// # TrabajoAndroid = { id: N }; trabajo programado por Android.
+// # BaseLocal = Map[Text, [ObjetoJson]]; tablas de la cola persistente.
+// # ErrorDatos = { detalle: Text }; fallo al leer o interpretar datos.
 /** Cola local por cuenta. Un resultado parcial confirma solo los índices aceptados por la API. */
 public final class EnvioMediciones extends SQLiteOpenHelper {
     private static final int TRABAJO = 204;
@@ -46,30 +56,66 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
         final long id;
         final String cuerpo;
 
+        // --------------------------------------------------------------
+        // - id: Z, cuerpo: Text
+        //       -->
+        //     Lectura() -->
+        // --------------------------------------------------------------
         Lectura(long id, String cuerpo) {
             this.id = id;
             this.cuerpo = cuerpo;
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe la cola SQLite.
+    // + contexto: EntornoAndroid
+    //       -->
+    //     obtener() --x
+    //       <--
+    //   EnvioMediciones
+    // --------------------------------------------------------------
     public static synchronized EnvioMediciones obtener(Context contexto) {
         if (instancia == null) instancia = new EnvioMediciones(contexto.getApplicationContext());
         return instancia;
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe la cola SQLite.
+    // - contexto: EntornoAndroid
+    //       -->
+    //     EnvioMediciones() -->
+    // --------------------------------------------------------------
     private EnvioMediciones(Context contexto) {
         super(contexto, "mediciones.db", null, 1);
         this.contexto = contexto;
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe la cola SQLite.
+    // + bd: BaseLocal
+    //       -->
+    //     onCreate() -->
+    // --------------------------------------------------------------
     @Override public void onCreate(SQLiteDatabase bd) {
         bd.execSQL("CREATE TABLE medicion (id INTEGER PRIMARY KEY, cuenta TEXT NOT NULL, "
                 + "momento INTEGER NOT NULL, estado INTEGER NOT NULL DEFAULT 0, cuerpo TEXT)");
         bd.execSQL("CREATE INDEX medicion_cuenta_estado ON medicion(cuenta,estado,momento)");
     }
 
+    // --------------------------------------------------------------
+    // + bd: BaseLocal, vieja: Z, nueva: Z
+    //       -->
+    //     onUpgrade() -->
+    // --------------------------------------------------------------
     @Override public void onUpgrade(SQLiteDatabase bd, int vieja, int nueva) { }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe la cola SQLite; envía mediciones cuando hay conexión.
+    // + cuenta: Text, medicion: Medicion
+    //       -->
+    //     guardar() -->
+    // --------------------------------------------------------------
     public void guardar(String cuenta, Medicion medicion) {
         ContentValues fila = new ContentValues();
         fila.put("cuenta", cuenta);
@@ -82,6 +128,11 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
         if (red != null && red.getActiveNetwork() != null) enviar(ok -> { });
     }
 
+    // --------------------------------------------------------------
+    // # effects: coordina el trabajo de envío en segundo plano.
+    // +
+    //     reanudar() -->
+    // --------------------------------------------------------------
     public void reanudar() {
         Usuario usuario = Repositorio.obtener(contexto).usuario();
         if (usuario != null) {
@@ -90,10 +141,22 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe la cola SQLite.
+    // + cuenta: Text
+    //       -->
+    //     borrarCuenta() -->
+    // --------------------------------------------------------------
     public void borrarCuenta(String cuenta) {
         getWritableDatabase().delete("medicion", "cuenta = ?", new String[]{cuenta});
     }
 
+    // --------------------------------------------------------------
+    // # effects: coordina el trabajo de envío en segundo plano.
+    // - cuenta: Text
+    //       -->
+    //     programar() -->
+    // --------------------------------------------------------------
     private void programar(String cuenta) {
         JobScheduler trabajos = contexto.getSystemService(JobScheduler.class);
         if (trabajos == null || trabajos.getPendingJob(TRABAJO) != null || pendientes(cuenta) == 0) return;
@@ -102,6 +165,14 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
                 .setBackoffCriteria(30_000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL).build());
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe la cola SQLite.
+    // - cuenta: Text
+    //       -->
+    //     pendientes() <--
+    //       <--
+    //   Z
+    // --------------------------------------------------------------
     private int pendientes(String cuenta) {
         try (Cursor cursor = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM medicion WHERE cuenta = ? AND estado = 0",
                 new String[]{cuenta})) {
@@ -110,6 +181,12 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: lee o escribe la cola SQLite; consulta el reloj.
+    // - cuenta: Text
+    //       -->
+    //     publicarEstado() -->
+    // --------------------------------------------------------------
     private void publicarEstado(String cuenta) {
         long inicio = Instant.now().atZone(ZONA).toLocalDate().atStartOfDay(ZONA).toInstant().toEpochMilli();
         int enviadas, rechazadas;
@@ -126,6 +203,14 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
         principal.post(() -> Repositorio.obtener(contexto).actualizarEnvios(cuenta, enviadas, enCola, rechazadas, ultima));
     }
 
+    // --------------------------------------------------------------
+    // # El lote queda ligado a la cuenta y al token capturados al iniciar el envío.
+    // # effects: lee o escribe la cola SQLite; envía mediciones cuando hay conexión; consulta el reloj.
+    // -
+    //     enviar() -->
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     private void enviar(ApiRespira.Listo<Boolean> resultado) {
         Repositorio repo = Repositorio.obtener(contexto);
         final String cuenta, token;
@@ -171,6 +256,11 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
         }
 
         api.pedir("POST", "/mediciones", cuerpo, token, new ApiRespira.Respuesta() {
+            // --------------------------------------------------------------
+            // + respuesta: Text
+            //       -->
+            //     ok() -->
+            // --------------------------------------------------------------
             @Override public void ok(String respuesta) {
                 try {
                     Set<Integer> errores = indicesRechazados(new JSONObject(respuesta), lote.size());
@@ -186,12 +276,25 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
                 }
             }
 
+            // --------------------------------------------------------------
+            // + e: ErrorApi
+            //       -->
+            //     error() -->
+            // --------------------------------------------------------------
             @Override public void error(ApiRespira.Error e) {
                 terminado(false, resultado);
             }
         });
     }
 
+    // --------------------------------------------------------------
+    // # Valida la respuesta completa antes de decidir qué filas del lote se confirman.
+    // - respuesta: ObjetoJson, cantidad: Z
+    //       -->
+    //     indicesRechazados() --x
+    //       <--
+    //   Set[N] | ErrorDatos
+    // --------------------------------------------------------------
     static Set<Integer> indicesRechazados(JSONObject respuesta, int cantidad) throws JSONException {
         JSONArray lista = respuesta.getJSONArray("errores");
         Set<Integer> indices = new HashSet<>();
@@ -208,6 +311,13 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
         return indices;
     }
 
+    // --------------------------------------------------------------
+    // # Solo confirma los índices aceptados; las filas rechazadas conservan su estado diferenciado.
+    // # effects: lee o escribe la cola SQLite.
+    // - bd: BaseLocal, lote: [Lectura], rechazadas: Set[Z | Ausente]
+    //       -->
+    //     conciliar() --x
+    // --------------------------------------------------------------
     private static void conciliar(SQLiteDatabase bd, List<Lectura> lote, Set<Integer> rechazadas) {
         bd.beginTransaction();
         try {
@@ -223,6 +333,14 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: coordina el trabajo de envío en segundo plano.
+    // - exito: B
+    //       -->
+    //     terminado() -->
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     private void terminado(boolean exito, ApiRespira.Listo<Boolean> resultado) {
         synchronized (this) { enviando = false; }
         principal.post(() -> resultado.ok(exito));
@@ -231,6 +349,14 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
     public static class Trabajo extends JobService {
         private JobParameters activo;
 
+        // --------------------------------------------------------------
+        // # effects: coordina el trabajo de envío en segundo plano.
+        // + params: TrabajoAndroid
+        //       -->
+        //     onStartJob() -->
+        //       <--
+        //   B
+        // --------------------------------------------------------------
         @Override public boolean onStartJob(JobParameters params) {
             activo = params;
             EnvioMediciones.obtener(this).enviar(ok -> {
@@ -242,6 +368,14 @@ public final class EnvioMediciones extends SQLiteOpenHelper {
             return true;
         }
 
+        // --------------------------------------------------------------
+        // # effects: coordina el trabajo de envío en segundo plano.
+        // + params: TrabajoAndroid
+        //       -->
+        //     onStopJob() -->
+        //       <--
+        //   B
+        // --------------------------------------------------------------
         @Override public boolean onStopJob(JobParameters params) {
             if (activo == params) activo = null;
             return true;

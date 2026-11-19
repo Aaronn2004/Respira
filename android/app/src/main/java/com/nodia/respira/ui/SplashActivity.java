@@ -19,6 +19,13 @@ import com.nodia.respira.datos.Repositorio;
 // «Developed by Nodia». Mientras tanto se cargan los datos.
 // ==============================================================
 @SuppressLint("CustomSplashScreen")
+// --------------------------------------------------------------
+// class SplashActivity
+// # Presentación inicial y elección de la pantalla de entrada.
+// # AppCompatActivity <--- SplashActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class SplashActivity extends AppCompatActivity {
 
     private static final long DURACION_MS = 2800;
@@ -26,6 +33,12 @@ public class SplashActivity extends AppCompatActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private volatile boolean listo = false;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -57,18 +70,29 @@ public class SplashActivity extends AppCompatActivity {
         handler.postDelayed(this::seguir, DURACION_MS);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   seguir() -->
+    // --------------------------------------------------------------
     private void seguir() {
         if (!listo) { // carga lenta: se queda la barra hasta que termine
             handler.postDelayed(this::seguir, 200);
             return;
         }
         Repositorio repo = Repositorio.obtener(this);
-        Class<?> destino = repo.onboardingVisto() ? MainActivity.class : OnboardingActivity.class;
+        Class<?> destino = !repo.onboardingVisto() ? OnboardingActivity.class
+                : repo.haySesion() ? MainActivity.class : LoginActivity.class;
         startActivity(new Intent(this, destino));
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         finish();
     }
 
+    // --------------------------------------------------------------
+    // # effects: ajusta las tareas pendientes
+    // +
+    //   onDestroy() -->
+    // --------------------------------------------------------------
     @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);

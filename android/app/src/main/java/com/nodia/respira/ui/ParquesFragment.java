@@ -12,10 +12,23 @@ import java.util.List;
 
 // ==============================================================
 // Pestaña «Parques»: los parques guardados, su estado y su alerta.
-// Se guardan solo en el móvil: no hace falta cuenta.
+// Los parques seguidos se guardan en la cuenta y se conservan en la caché del móvil.
 // ==============================================================
+// --------------------------------------------------------------
+// class ParquesFragment
+// # Listado de zonas y sus magnitudes actuales.
+// # Pestana <--- ParquesFragment
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Vista = { contenido: Text, visible: B, habilitada: B }
+// --------------------------------------------------------------
 public class ParquesFragment extends Pestana {
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + c: Vista
+    //       -->
+    //           pintar() -->
+    // --------------------------------------------------------------
     @Override
     protected void pintar(LinearLayout c) {
         Ui.titulo(c, "Mis parques");
@@ -49,6 +62,6 @@ public class ParquesFragment extends Pestana {
         Ui.boton(c, "Mis alertas", Ui.BOTON_TEXTO, v -> startActivity(new Intent(requireContext(), MisAlertasActivity.class)));
         Ui.nota(c, repo.usuario() != null
                 ? "Tus parques y alertas se guardan en tu cuenta: los verás en cualquier móvil en el que entres."
-                : "Sin cuenta, tus parques se guardan solo en este móvil. Si inicias sesión, pasan a tu cuenta.");
+                : "Tus parques se sincronizan con tu cuenta al iniciar sesión.");
     }
 }

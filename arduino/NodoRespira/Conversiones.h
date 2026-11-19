@@ -34,16 +34,16 @@ namespace Conversiones {
   }
 
   // --------------------------------------------------------------
-  // sensibilidad: R (nA/ppm), ganancia: R (kV/A) --> voltiosPorPpm() --> R (V/ppm)
+  // # Convierte nA/ppm y kV/A a V/ppm.
+  // sensibilidadNA: R, gananciaKV: R --> voltiosPorPpm() --> R
   // --------------------------------------------------------------
   inline float voltiosPorPpm( float sensibilidadNA, float gananciaKV ) {
     return sensibilidadNA * gananciaKV * 1e-6f;
   }
 
   // --------------------------------------------------------------
-  // vGas: R, vRef: R, offsetCero: R, m: R (V/ppm) --> ppmO3() --> R >= 0
-  //   ppm = (Vgas - (Vref + offsetCero)) / M
-  // (los valores negativos por ruido cerca de 0 se dejan en 0)
+  // # Resta el cero calibrado y satura en cero el ruido que produciría ppm negativas.
+  // vGas: R, vRef: R, offsetCero: R, m: R --> ppmO3() --> R
   // --------------------------------------------------------------
   inline float ppmO3( float vGas, float vRef, float offsetCero, float m ) {
     float ppm = ( vGas - ( vRef + offsetCero ) ) / m;
@@ -51,7 +51,8 @@ namespace Conversiones {
   }
 
   // --------------------------------------------------------------
-  // vpp: R, vppRef: R, dbRef: R --> decibelios() --> R (30..130)
+  // # Aplica 20·log10 al cociente de amplitudes y acota la estimación a 30..130 dB.
+  // vpp: R, vppRef: R, dbRef: R --> decibelios() --> R
   // --------------------------------------------------------------
   inline float decibelios( float vpp, float vppRef, float dbRef ) {
     if ( vpp <= 0.0f || vppRef <= 0.0f ) {
@@ -64,7 +65,8 @@ namespace Conversiones {
   }
 
   // --------------------------------------------------------------
-  // valor: R, factor: R, minimo: Z, maximo: Z --> aEntero() --> Z (redondeado y acotado)
+  // # Redondea antes de saturar al intervalo del entero transmitido.
+  // valor: R, factor: R, minimo: Z, maximo: Z --> aEntero() --> Z
   // --------------------------------------------------------------
   inline int16_t aEntero( float valor, float factor, long minimo, long maximo ) {
     long v = lroundf( valor * factor );
@@ -74,12 +76,25 @@ namespace Conversiones {
   }
 
   // El minor del iBeacon lleva el valor como entero de 16 bits:
+  // --------------------------------------------------------------
+  // # El minor transmite milésimas de ppm.
+  // ppm: R --> minorO3() --> N
+  // --------------------------------------------------------------
   inline int16_t minorO3( float ppm ) { return aEntero( ppm, 1000.0f, 0, 32767 ); }            // ppm x 1000
+  // --------------------------------------------------------------
+  // # El minor conserva el signo y transmite décimas de grado.
+  // c: R --> minorTemperatura() --> Z
+  // --------------------------------------------------------------
   inline int16_t minorTemperatura( float c ) { return aEntero( c, 10.0f, -32768, 32767 ); }    // décimas de °C
+  // --------------------------------------------------------------
+  // # El minor transmite décimas de dB.
+  // db: R --> minorRuido() --> N
+  // --------------------------------------------------------------
   inline int16_t minorRuido( float db ) { return aEntero( db, 10.0f, 0, 32767 ); }             // décimas de dB
 
   // --------------------------------------------------------------
-  // tipo: N, contador: N --> major() --> N   (tipo << 8) + contador
+  // # El byte alto identifica la magnitud; el bajo identifica el ciclo de medida.
+  // tipo: N, contador: N --> major() --> N
   // --------------------------------------------------------------
   inline uint16_t major( uint8_t tipo, uint8_t contador ) {
     return ( (uint16_t) tipo << 8 ) + contador;

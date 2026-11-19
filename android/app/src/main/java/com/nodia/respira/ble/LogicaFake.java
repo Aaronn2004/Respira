@@ -16,6 +16,12 @@ public class LogicaFake {
 
     public interface Resultado {
         // codigo: el HTTP (-1 si no hubo red). 201 guardada, 409 repetida.
+        // --------------------------------------------------------------
+        // # effects: entrega el resultado a quien recibe la respuesta.
+        // + exito: B, codigo: Z, detalle: Text
+        //       -->
+        //     callback() -->
+        // --------------------------------------------------------------
         void callback(boolean exito, int codigo, String detalle);
     }
 
@@ -25,20 +31,32 @@ public class LogicaFake {
     // los puntos (el móvil no puede decirlo: lo comprueba el servidor)
     private volatile String token;
 
+    // --------------------------------------------------------------
+    // + token: Text
+    //       -->
+    //     conToken() -->
+    // --------------------------------------------------------------
     public void conToken(String token) {
         this.token = token;
     }
 
     // --------------------------------------------------------------
-    // urlServidor: Text --> LogicaFake()
+    // + url_servidor: Text
+    //       -->
+    //     LogicaFake() -->
     // --------------------------------------------------------------
     public LogicaFake(String urlServidor) {
         this.urlServidor = urlServidor.endsWith("/") ? urlServidor.substring(0, urlServidor.length() - 1) : urlServidor;
     }
 
     // --------------------------------------------------------------
-    // medicion: Medicion --> guardarMedicion() --> exito, codigo, detalle (por callback)
-    // Una repetida (409: ya la mandó otro móvil) también cuenta como entregada.
+    // # El 409 de una lectura repetida también confirma que ya está entregada.
+    // # effects: envía mediciones a la API.
+    // + medicion: Medicion
+    //       -->
+    //     guardarMedicion() <--
+    //       <--
+    //   (exito: B, codigo: Z, detalle: Text)
     // --------------------------------------------------------------
     public void guardarMedicion(Medicion medicion, Resultado resultado) {
         elPeticionario.hacerPeticionREST("POST", urlServidor + "/mediciones", medicion.toJSON(), token,
@@ -46,8 +64,13 @@ public class LogicaFake {
     }
 
     // --------------------------------------------------------------
-    // lista: [Medicion] --> guardarMediciones() --> exito, codigo, detalle
-    // (las que quedaron pendientes sin conexión, de una vez)
+    // # (las que quedaron pendientes sin conexión, de una vez)
+    // # effects: envía mediciones a la API.
+    // + lista: [Medicion]
+    //       -->
+    //     guardarMediciones() <--
+    //       <--
+    //   (exito: B, codigo: Z, detalle: Text)
     // --------------------------------------------------------------
     public void guardarMediciones(List<Medicion> lista, Resultado resultado) {
         StringBuilder sb = new StringBuilder("{\"mediciones\":[");

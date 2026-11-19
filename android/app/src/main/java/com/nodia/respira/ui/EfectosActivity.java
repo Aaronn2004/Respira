@@ -13,8 +13,21 @@ import com.nodia.respira.datos.Salud;
 // tres escalones (Molesta · Daña · Peligro), a quién afecta más y
 // qué hacer. Mismo contenido y diseño que la web.
 // ==============================================================
+// --------------------------------------------------------------
+// class EfectosActivity
+// # Guía de efectos de las magnitudes sobre la salud.
+// # AppCompatActivity <--- EfectosActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class EfectosActivity extends AppCompatActivity {
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

@@ -2,6 +2,8 @@ package com.nodia.respira.ble;
 
 import java.util.Arrays;
 
+// # Ausente representa la ausencia lógica (null en el código).
+
 // ==============================================================
 // TramaIBeacon: interpreta los bytes de un anuncio BLE como iBeacon.
 //
@@ -28,7 +30,9 @@ public class TramaIBeacon {
     private boolean esIBeacon = false;
 
     // --------------------------------------------------------------
-    // bytes: [N] --> TramaIBeacon()
+    // + bytes: [Z]
+    //       -->
+    //     TramaIBeacon() -->
     // --------------------------------------------------------------
     public TramaIBeacon(byte[] bytes) {
         this.losBytes = bytes;
@@ -47,7 +51,12 @@ public class TramaIBeacon {
     }
 
     // --------------------------------------------------------------
-    // bytes: [N] --> buscarCabecera() --> Z   (-1 si no está)
+    // # Busca la cabecera del fabricante sin suponer que el anuncio empieza por ella.
+    // - bytes: [Z]
+    //       -->
+    //     buscarCabecera() --x
+    //       <--
+    //   Z
     // --------------------------------------------------------------
     private static int buscarCabecera(byte[] bytes) {
         if (bytes == null) {
@@ -64,58 +73,109 @@ public class TramaIBeacon {
     }
 
     // --------------------------------------------------------------
-    // esIBeacon() --> B
+    // +
+    //     esIBeacon() <--
+    //       <--
+    //   B
     // --------------------------------------------------------------
     public boolean esIBeacon() {
         return esIBeacon;
     }
 
     // --------------------------------------------------------------
-    // getUUIDComoTexto() --> Text
+    // +
+    //     getUUIDComoTexto() <--
+    //       <--
+    //   Text
     // --------------------------------------------------------------
     public String getUUIDComoTexto() {
         return Utilidades.bytesToString(uuid);
     }
 
     // --------------------------------------------------------------
-    // getMajorEntero() --> N
+    // +
+    //     getMajorEntero() <--
+    //       <--
+    //   Z
     // --------------------------------------------------------------
     public int getMajorEntero() {
         return Utilidades.bytesToIntOK(major);
     }
 
     // --------------------------------------------------------------
-    // getTipoMedicion() --> N    (byte alto del major)
+    // +
+    //     getTipoMedicion() <--
+    //       <--
+    //   Z
     // --------------------------------------------------------------
     public int getTipoMedicion() {
         return getMajorEntero() >> 8;
     }
 
     // --------------------------------------------------------------
-    // getContador() --> N        (byte bajo del major)
+    // +
+    //     getContador() <--
+    //       <--
+    //   Z
     // --------------------------------------------------------------
     public int getContador() {
         return getMajorEntero() & 0xFF;
     }
 
     // --------------------------------------------------------------
-    // getValorEntero() --> N     (minor)
+    // +
+    //     getValorEntero() <--
+    //       <--
+    //   Z
     // --------------------------------------------------------------
     public int getValorEntero() {
         return Utilidades.bytesToIntOK(minor);
     }
 
     // --------------------------------------------------------------
-    // getValorConSigno() --> Z   (minor como entero de 16 bits con signo:
-    // la temperatura puede ser negativa)
+    // # Interpreta los 16 bits del minor con signo para admitir temperaturas negativas.
+    // +
+    //     getValorConSigno() <--
+    //       <--
+    //   Z
     // --------------------------------------------------------------
     public int getValorConSigno() {
         return (short) getValorEntero();
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     getLosBytes() <--
+    //       <--
+    //   [Z] | Ausente
+    // --------------------------------------------------------------
     public byte[] getLosBytes() { return losBytes; }
+    // --------------------------------------------------------------
+    // +
+    //     getUUID() <--
+    //       <--
+    //   [Z] | Ausente
+    // --------------------------------------------------------------
     public byte[] getUUID() { return uuid; }
+    // --------------------------------------------------------------
+    // +
+    //     getMajor() <--
+    //       <--
+    //   [Z] | Ausente
+    // --------------------------------------------------------------
     public byte[] getMajor() { return major; }
+    // --------------------------------------------------------------
+    // +
+    //     getMinor() <--
+    //       <--
+    //   [Z] | Ausente
+    // --------------------------------------------------------------
     public byte[] getMinor() { return minor; }
+    // --------------------------------------------------------------
+    // +
+    //     getTxPower() <--
+    //       <--
+    //   Z
+    // --------------------------------------------------------------
     public byte getTxPower() { return txPower; }
 }

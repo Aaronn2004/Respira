@@ -26,6 +26,13 @@ import java.util.Map;
 // Iniciar sesión (APP-10). 5 intentos fallidos -> 15 min de bloqueo.
 // Sin huella: solo correo y contraseña.
 // ==============================================================
+// --------------------------------------------------------------
+// class LoginActivity
+// # Acceso, bloqueo temporal y activación de trabajadores.
+// # AppCompatActivity <--- LoginActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class LoginActivity extends AppCompatActivity {
 
     private Repositorio repo;
@@ -33,13 +40,19 @@ public class LoginActivity extends AppCompatActivity {
     private TextView errorGlobal;
     private MaterialButton entrar;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         repo = Repositorio.obtener(this);
         LinearLayout c = Ui.pantalla(this, "Iniciar sesión");
         Ui.titulo(c, "Hola de nuevo");
-        Ui.parrafo(c, "Entra para llevar un sensor, ganar puntos y canjearlos.");
+        Ui.parrafo(c, "Inicia sesión para acceder a Respira y consultar el mapa de tu ciudad.");
 
         errorGlobal = Ui.aviso(c, "", Nivel.ALTO);
         errorGlobal.setVisibility(TextView.GONE);
@@ -57,6 +70,11 @@ public class LoginActivity extends AppCompatActivity {
         comprobarBloqueo();
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   comprobarBloqueo() -->
+    // --------------------------------------------------------------
     private void comprobarBloqueo() {
         long hasta = repo.bloqueadoHasta();
         boolean bloqueado = hasta > 0;
@@ -68,11 +86,22 @@ public class LoginActivity extends AppCompatActivity {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - txt: Text
+    //       -->
+    //           mostrarError() -->
+    // --------------------------------------------------------------
     private void mostrarError(String txt) {
         errorGlobal.setText(txt);
         errorGlobal.setVisibility(txt == null ? TextView.GONE : TextView.VISIBLE);
     }
 
+    // --------------------------------------------------------------
+    // # effects: valida la entrada, solicita la operación al repositorio y actualiza la interfaz
+    // -
+    //   entrar() -->
+    // --------------------------------------------------------------
     private void entrar() {
         String m = Ui.leer(email).trim();
         String p = Ui.leer(clave);
@@ -85,6 +114,12 @@ public class LoginActivity extends AppCompatActivity {
         entrar.setEnabled(false);
         mostrarError(null);
         repo.iniciarSesion(m, p, new Repositorio.Hecho<Usuario>() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la interfaz Android
+            // + u: Usuario
+            //       -->
+            //           ok() -->
+            // --------------------------------------------------------------
             @Override
             public void ok(Usuario u) {
                 if (u.requiereCambioClave) {
@@ -95,6 +130,12 @@ public class LoginActivity extends AppCompatActivity {
                 }
             }
 
+            // --------------------------------------------------------------
+            // # effects: actualiza la interfaz Android
+            // + mensaje: Text, campos: Map[Text, Text]
+            //       -->
+            //           error() -->
+            // --------------------------------------------------------------
             @Override
             public void error(String mensaje, Map<String, String> campos) {
                 entrar.setEnabled(true);
@@ -104,11 +145,33 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
     }
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - u: Usuario
+    //       -->
+    //           terminar() -->
+    // --------------------------------------------------------------
     private void terminar(Usuario u) {
         Toast.makeText(this, "Hola, " + u.nombre, Toast.LENGTH_SHORT).show();
-        finish();
+        AccesoSesion.abrirPrincipal(this);
     }
 
+    // --------------------------------------------------------------
+    // # effects: entra en la app si ya se completó el registro o el acceso.
+    // +
+    //     onResume() -->
+    // --------------------------------------------------------------
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (repo.haySesion()) AccesoSesion.abrirPrincipal(this);
+    }
+
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   pedirClaveInicial() -->
+    // --------------------------------------------------------------
     private void pedirClaveInicial() {
         LinearLayout c = Ui.columna(this);
         c.setPadding(Ui.dp(this, 24), 0, Ui.dp(this, 24), 0);
@@ -135,11 +198,23 @@ public class LoginActivity extends AppCompatActivity {
             if (repetir.getError() != null) return;
             guardar.setEnabled(false);
             repo.cambiarClaveInicial(p, new Repositorio.Hecho<Usuario>() {
+                // --------------------------------------------------------------
+                // # effects: actualiza la interfaz Android
+                // + u: Usuario
+                //       -->
+                //           ok() -->
+                // --------------------------------------------------------------
                 @Override public void ok(Usuario u) {
                     dialogo.dismiss();
                     terminar(u);
                 }
 
+                // --------------------------------------------------------------
+                // # effects: actualiza la interfaz Android
+                // + mensaje: Text, campos: Map[Text, Text]
+                //       -->
+                //           error() -->
+                // --------------------------------------------------------------
                 @Override public void error(String mensaje, Map<String, String> campos) {
                     guardar.setEnabled(true);
                     nueva.setError(campos.get("clave"));
@@ -152,6 +227,11 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   cancelarClave() -->
+    // --------------------------------------------------------------
     private void cancelarClave() {
         repo.cancelarClaveInicial();
         entrar.setEnabled(true);

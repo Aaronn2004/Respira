@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
+// # Ausente representa la ausencia lógica (null en el código).
+
 // ==============================================================
 // Reglas: lógica pura (sin Android) para poder probarla con JUnit.
 // ==============================================================
@@ -22,11 +24,19 @@ public final class Reglas {
     private static final Pattern USUARIO = Pattern.compile("^[A-Za-z0-9._]{3,20}$");
     private static final Pattern CODIGO_SENSOR = Pattern.compile("^RSP-[A-Z0-9]{4}$");
 
+    // --------------------------------------------------------------
+    // -
+    //     Reglas() -->
+    // --------------------------------------------------------------
     private Reglas() { }
 
     // --------------------------------------------------------------
-    // minutosDesdeUltima: Z | null --> estadoZona() --> Text
-    //   null o más de 24 h -> sin datos; más de 1 h -> antiguo
+    // # null o más de 24 h -> sin datos; más de 1 h -> antiguo
+    // + minutos_desde_ultima: Z | Ausente
+    //       -->
+    //     estadoZona() --x
+    //       <--
+    //   Text
     // --------------------------------------------------------------
     public static String estadoZona(Integer minutosDesdeUltima) {
         if (minutosDesdeUltima == null || minutosDesdeUltima > 24 * 60) {
@@ -36,28 +46,57 @@ public final class Reglas {
     }
 
     // --------------------------------------------------------------
-    // minutos: N, minutosEnParques: N --> puntosDelDia() --> N
-    //   1 punto cada 5 min válidos; en parques cuentan el doble; máx. 100
+    // # Los minutos en parques aportan un segundo bloque de puntos; se aplica el máximo diario.
+    // + minutos: Z, minutos_en_parques: Z
+    //       -->
+    //     puntosDelDia() --x
+    //       <--
+    //   Z
     // --------------------------------------------------------------
     public static int puntosDelDia(int minutos, int minutosEnParques) {
         int puntos = minutos / MIN_POR_PUNTO + minutosEnParques / MIN_POR_PUNTO;
         return Math.min(MAX_PUNTOS_DIA, Math.max(0, puntos));
     }
 
+    // --------------------------------------------------------------
+    // + texto: Text
+    //       -->
+    //     esEmail() --x
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public static boolean esEmail(String texto) {
         return texto != null && texto.trim().length() <= 120 && EMAIL.matcher(texto.trim()).matches();
     }
 
+    // --------------------------------------------------------------
+    // + texto: Text
+    //       -->
+    //     esNombreUsuario() --x
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public static boolean esNombreUsuario(String texto) {
         return texto != null && USUARIO.matcher(texto.trim()).matches();
     }
 
+    // --------------------------------------------------------------
+    // + texto: Text
+    //       -->
+    //     esCodigoSensor() --x
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public static boolean esCodigoSensor(String texto) {
         return texto != null && CODIGO_SENSOR.matcher(texto.trim().toUpperCase(Locale.ROOT)).matches();
     }
 
     // --------------------------------------------------------------
-    // texto: Text, m: Magnitud --> errorValorAlerta() --> Text | null
+    // + texto: Text, m: Magnitud
+    //       -->
+    //     errorValorAlerta() --x
+    //       <--
+    //   Text | Ausente
     // --------------------------------------------------------------
     public static String errorValorAlerta(String texto, Magnitud m) {
         String limpio = texto == null ? "" : texto.trim().replace(',', '.');
@@ -78,7 +117,11 @@ public final class Reglas {
     }
 
     // --------------------------------------------------------------
-    // minutos: Z | null --> haceTexto() --> Text
+    // + minutos: Z | Ausente
+    //       -->
+    //     haceTexto() --x
+    //       <--
+    //   Text
     // --------------------------------------------------------------
     public static String haceTexto(Integer minutos) {
         if (minutos == null) {
@@ -91,8 +134,12 @@ public final class Reglas {
     }
 
     // --------------------------------------------------------------
-    // lat, lng: R, contorno: [[lat, lng]] --> dentro() --> B
-    //   (ray casting; suficiente para polígonos pequeños)
+    // # Cruce de rayos sobre el polígono en el orden [latitud, longitud].
+    // + lat: R, lng: R, contorno: [[R]]
+    //       -->
+    //     dentro() --x
+    //       <--
+    //   B
     // --------------------------------------------------------------
     public static boolean dentro(double lat, double lng, List<double[]> contorno) {
         boolean dentro = false;

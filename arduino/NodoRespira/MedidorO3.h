@@ -15,22 +15,28 @@
 #include "Configuracion.h"
 #include "Conversiones.h"
 
+// # Conserva el cero calibrado y convierte las lecturas del sensor de ozono.
 class MedidorO3 {
 private:
   float offsetCero = 0.0f;   // Vgas0 - Vref0 en aire limpio (V)
   float m = Conversiones::voltiosPorPpm( Config::O3_SENSIBILIDAD_NA_PPM, Config::O3_GANANCIA_TIA_KV_A );
 
+  // --------------------------------------------------------------
+  // - lectura: R
+  //     -->
+  //         aVoltios() --x
+  //     <--
+  //     R
+  // --------------------------------------------------------------
   float aVoltios( float lectura ) {
     return Conversiones::voltios( lectura, Config::ADC_VOLTIOS_FONDO, Config::ADC_MAXIMO );
   }
 
 public:
   // --------------------------------------------------------------
-  // iniciar() -->
-  // Calibración de cero: media de N muestras de (Vgas - Vref).
-  // OJO: haz el arranque en interior y lejos de impresoras o
-  // fotocopiadoras; si calibras en la calle con ozono, ese ozono se
-  // resta de todas las medidas siguientes.
+  // # Calibra el cero en aire limpio y lejos de impresoras: el ozono presente en el arranque se restaría después de todas las medidas.
+  // # effects: configura el ADC, lee las muestras y espera entre lecturas.
+  // +       iniciar() -->
   // --------------------------------------------------------------
   void iniciar() {
     analogReadResolution( 12 );
@@ -42,10 +48,19 @@ public:
     offsetCero = suma / Config::O3_MUESTRAS_CALIBRACION;
   }
 
+  // --------------------------------------------------------------
+  // +       getOffsetCero() <--
+  //     <--
+  //     R
+  // --------------------------------------------------------------
   float getOffsetCero() { return offsetCero; }
 
   // --------------------------------------------------------------
-  // medir() --> R   (ppm, media de N muestras)
+  // # Promedia las muestras antes de aplicar la calibración; la salida está en ppm.
+  // # effects: lee Vgas y Vref del ADC y espera entre muestras.
+  // +       medir() <--
+  //     <--
+  //     R
   // --------------------------------------------------------------
   float medir() {
     float sumaGas = 0.0f, sumaRef = 0.0f;

@@ -42,6 +42,13 @@ import java.util.Map;
 // sensor que le han prestado (con su ID) y empieza el recorrido.
 // No se vincula nada: el móvil solo «escucha» al sensor por BLE.
 // ==============================================================
+// --------------------------------------------------------------
+// class SensorFragment
+// # Vinculación del sensor, permisos y seguimiento de recorridos.
+// # Pestana <--- SensorFragment
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Vista = { contenido: Text, visible: B, habilitada: B }
+// --------------------------------------------------------------
 public class SensorFragment extends Pestana {
 
     private String codigoPendiente;
@@ -51,6 +58,12 @@ public class SensorFragment extends Pestana {
     private final ActivityResultLauncher<String[]> pedirPermisos =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), this::alResponderPermisos);
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + c: Vista
+    //       -->
+    //           pintar() -->
+    // --------------------------------------------------------------
     @Override
     protected void pintar(LinearLayout c) {
         Ui.titulo(c, "Mi sensor");
@@ -79,6 +92,12 @@ public class SensorFragment extends Pestana {
     }
 
     // ---------- recorrido en curso ----------
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - c: Vista, r: Recorrido
+    //       -->
+    //           pintarRecorrido() -->
+    // --------------------------------------------------------------
     private void pintarRecorrido(LinearLayout c, Recorrido r) {
         LinearLayout card = Ui.tarjeta(c);
         LinearLayout f = Ui.fila(card, r.codigo, "Recorrido · desde las " + r.inicio, null);
@@ -142,6 +161,12 @@ public class SensorFragment extends Pestana {
 
     // ---------- resumen al terminar y recorridos de otros días ----------
     // Datos del servidor (Puntos.php): lo que cuenta es lo que llegó al servidor
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - c: Vista, terminado: Recorrido
+    //       -->
+    //           pintarResumen() -->
+    // --------------------------------------------------------------
     private void pintarResumen(LinearLayout c, Recorrido terminado) {
         Repositorio.Cuenta cu = repo.cuenta();
         ResumenRecorrido rh = cu == null ? null : cu.hoyRecorrido;
@@ -171,6 +196,12 @@ public class SensorFragment extends Pestana {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - c: Vista
+    //       -->
+    //           pintarRecorridosAnteriores() -->
+    // --------------------------------------------------------------
     private void pintarRecorridosAnteriores(LinearLayout c) {
         Repositorio.Cuenta cu = repo.cuenta();
         if (cu == null) {
@@ -197,6 +228,12 @@ public class SensorFragment extends Pestana {
     }
 
     // ---------- formulario del código ----------
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - c: Vista, u: Usuario, anterior: Recorrido
+    //       -->
+    //           pintarFormulario() -->
+    // --------------------------------------------------------------
     private void pintarFormulario(LinearLayout c, Usuario u, Recorrido anterior) {
         if (anterior != null && Recorrido.TERMINADO.equals(anterior.estado)) {
             pintarResumen(c, anterior);
@@ -238,6 +275,12 @@ public class SensorFragment extends Pestana {
             campo.setError(null);
             // El servidor comprueba que ese sensor está prestado a esta cuenta
             repo.comprobarSensor(textoCodigo, hayRed(), new Repositorio.Hecho<String>() {
+                // --------------------------------------------------------------
+                // # effects: actualiza la interfaz Android
+                // + codigo: Text
+                //       -->
+                //           ok() -->
+                // --------------------------------------------------------------
                 @Override
                 public void ok(String codigo) {
                     errorCodigo = null;
@@ -253,6 +296,12 @@ public class SensorFragment extends Pestana {
                     }
                 }
 
+                // --------------------------------------------------------------
+                // # effects: actualiza la interfaz Android
+                // + mensaje: Text, campos: Map[Text, Text]
+                //       -->
+                //           error() -->
+                // --------------------------------------------------------------
                 @Override
                 public void error(String mensaje, Map<String, String> campos) {
                     errorCodigo = mensaje;
@@ -278,6 +327,12 @@ public class SensorFragment extends Pestana {
     }
 
     // ---------- permisos ----------
+    // --------------------------------------------------------------
+    // # effects: consulta los permisos o ajustes del dispositivo
+    // - faltanPermisos() <--
+    //       <--
+    //   resultado: [ Text ]
+    // --------------------------------------------------------------
     private List<String> faltanPermisos() {
         List<String> p = new ArrayList<>();
         Context ctx = requireContext();
@@ -299,6 +354,11 @@ public class SensorFragment extends Pestana {
     }
 
     // Pantalla «Antes de los permisos»: se explica ANTES de que Android pregunte
+    // --------------------------------------------------------------
+    // # effects: muestra la explicación y solicita permisos tras la confirmación
+    // -
+    //   explicarPermisos() -->
+    // --------------------------------------------------------------
     private void explicarPermisos() {
         new MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Dos permisos para empezar")
@@ -310,6 +370,13 @@ public class SensorFragment extends Pestana {
                 .show();
     }
 
+    // --------------------------------------------------------------
+    // # Bluetooth y ubicación son obligatorios; las notificaciones no impiden iniciar el recorrido.
+    // # effects: consulta permisos e inicia el recorrido o muestra cómo concederlos
+    // - res: N
+    //       -->
+    //           alResponderPermisos() -->
+    // --------------------------------------------------------------
     private void alResponderPermisos(Map<String, Boolean> res) {
         boolean bt = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
                 || (Boolean.TRUE.equals(res.getOrDefault(Manifest.permission.BLUETOOTH_SCAN, tiene(Manifest.permission.BLUETOOTH_SCAN)))
@@ -333,10 +400,23 @@ public class SensorFragment extends Pestana {
                 .show();
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta los permisos o ajustes del dispositivo
+    // - permiso: Text
+    //       -->
+    //           tiene() <--
+    //       <--
+    //   resultado: B
+    // --------------------------------------------------------------
     private boolean tiene(String permiso) {
         return ContextCompat.checkSelfPermission(requireContext(), permiso) == PackageManager.PERMISSION_GRANTED;
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta Bluetooth y ubicación, inicia el recorrido y la escucha BLE
+    // -
+    //   empezar() -->
+    // --------------------------------------------------------------
     private void empezar() {
         if (codigoPendiente == null) {
             return;
@@ -354,6 +434,12 @@ public class SensorFragment extends Pestana {
         errorCodigo = null;
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta la conectividad del dispositivo; no realiza peticiones
+    // - hayRed() <--
+    //       <--
+    //   resultado: B
+    // --------------------------------------------------------------
     private boolean hayRed() {
         ConnectivityManager cm = (ConnectivityManager) requireContext().getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) {

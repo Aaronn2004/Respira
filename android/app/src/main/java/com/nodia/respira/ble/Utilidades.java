@@ -1,9 +1,15 @@
 package com.nodia.respira.ble;
 
+// # Conversión de bytes de anuncios BLE a texto, hexadecimal y enteros sin signo.
+
 public class Utilidades {
 
     // --------------------------------------------------------------
-    // bytes: [N] --> bytesToString() --> Text
+    // + bytes: [Z]
+    //       -->
+    //     bytesToString() --x
+    //       <--
+    //   Text
     // --------------------------------------------------------------
     public static String bytesToString(byte[] bytes) {
         if (bytes == null) return "";
@@ -15,7 +21,11 @@ public class Utilidades {
     }
 
     // --------------------------------------------------------------
-    // bytes: [N] --> bytesToHexString() --> Text
+    // + bytes: [Z]
+    //       -->
+    //     bytesToHexString() --x
+    //       <--
+    //   Text
     // --------------------------------------------------------------
     public static String bytesToHexString(byte[] bytes) {
         if (bytes == null) return "";
@@ -27,7 +37,11 @@ public class Utilidades {
     }
 
     // --------------------------------------------------------------
-    // bytes: [N]_2 --> bytesToIntOK() --> N   (big endian, sin signo)
+    // + bytes: [Z]
+    //       -->
+    //     bytesToIntOK() --x
+    //       <--
+    //   Z
     // --------------------------------------------------------------
     public static int bytesToIntOK(byte[] bytes) {
         if (bytes == null || bytes.length < 2) return 0;

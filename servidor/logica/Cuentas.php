@@ -15,10 +15,12 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/Base.php';
 require_once __DIR__ . '/Logica.php';   // MAGNITUDES y RANGO (alertas)
 
+// Base <--- Cuentas
 class Cuentas extends Base {
 
     const SESION_APP_MS = 90 * Base::DIA_MS;   // la app no pide la contraseña cada día
@@ -34,6 +36,12 @@ class Cuentas extends Base {
 
     private $correo;   // (para, asunto, texto) --> B   (se cambia en los tests)
 
+    // --------------------------------------------------------------
+    // # effects: inicializa el estado y la conexión.
+    // + bd: Conexion, prefijo: Text, reloj: Reloj | Ausente, correo: Correo | Ausente
+    //     -->
+    //         __construct() -->
+    // --------------------------------------------------------------
     public function __construct(PDO $bd, string $prefijo = '', ?callable $reloj = null, ?callable $correo = null) {
         parent::__construct($bd, $prefijo, $reloj);
         $this->correo = $correo ?? function ($para, $asunto, $texto) { return false; };
@@ -41,20 +49,45 @@ class Cuentas extends Base {
 
     // ---------- utilidades ----------
 
+    // --------------------------------------------------------------
+    // + token: Text
+    //     -->
+    //         hashToken() --x
+    //     <--
+    //     Text
+    // --------------------------------------------------------------
     public static function hashToken(string $token): string {
         return hash('sha256', $token);
     }
 
+    // --------------------------------------------------------------
+    // # effects: obtiene aleatoriedad del sistema.
+    // -       tokenNuevo() --x
+    //     <--
+    //     Text
+    // --------------------------------------------------------------
     private static function tokenNuevo(): string {
         return bin2hex(random_bytes(32));
     }
 
+    // --------------------------------------------------------------
+    // + m: Text
+    //     -->
+    //         esEmail() --x
+    //     <--
+    //     B
+    // --------------------------------------------------------------
     public static function esEmail(string $m): bool {
         return (bool) preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/', $m);
     }
 
     // --------------------------------------------------------------
-    // fila: usuario (BD) --> perfil() --> lo que ve el propio usuario
+    // # effects: consulta la base de datos.
+    // + u: Registro
+    //     -->
+    //         perfil() <--
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function perfil(array $u): array {
         $servicio = $u['rol'] === 'trabajador'
@@ -63,14 +96,26 @@ class Cuentas extends Base {
             'servicio' => $servicio, 'punto' => null, 'requiere_cambio_clave' => (bool) $u['requiere_cambio_clave']];
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // + id: Text
+    //     -->
+    //         usuarioPorId() <--
+    //     <--
+    //     Registro | Ausente | Error
+    // --------------------------------------------------------------
     public function usuarioPorId(string $id): ?array {
         return $this->fila("SELECT * FROM {$this->p}usuario WHERE id = ?", [$id]);
     }
 
     // --------------------------------------------------------------
-    // rol, clave, email --> errorClave() --> Text | null
-    //   vecinos: 8 caracteres (como la app)
-    //   personal del ayuntamiento: 10, con letras y números, sin su usuario
+    // # personal del ayuntamiento: 10, con letras y números, sin su usuario
+    // # vecinos: al menos 8 caracteres; personal municipal: al menos 10 con letras y números.
+    // + rol: Text, clave: Text, email: Text
+    //     -->
+    //         errorClave() --x
+    //     <--
+    //     Text | Ausente
     // --------------------------------------------------------------
     public static function errorClave(string $rol, string $clave, string $email): ?string {
         if ($clave === '') {
@@ -95,6 +140,15 @@ class Cuentas extends Base {
         return null;
     }
 
+    // --------------------------------------------------------------
+    // # Reintenta solo colisiones de identificador; los duplicados de campos se devuelven al formulario.
+    // # effects: consulta y modifica la base de datos.
+    // - insertar: Operacion, duplicados: Operacion
+    //     -->
+    //         altaSinColision() -->
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     private function altaSinColision(callable $insertar, callable $duplicados): array {
         for ($intento = 0; $intento < 5; $intento++) {
             try {
@@ -116,9 +170,14 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // Registro desde la app (vecinos). Deja la sesión abierta.
-    // nombre, email, clave: Text, acepta: B --> registrar() --> {token, usuario}
-    // Lanza ErroresDeCamposException {nombre|email|clave|acepta: mensaje}
+    // # Registro desde la app (vecinos). Deja la sesión abierta.
+    // # Lanza ErroresDeCamposException {nombre|email|clave|acepta: mensaje}
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + nombre: Text, email: Text, clave: Text, acepta: B
+    //     -->
+    //         registrar() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function registrar(string $nombre, string $email, string $clave, bool $acepta): array {
         $n = trim($nombre);
@@ -174,6 +233,14 @@ class Cuentas extends Base {
         });
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // - u: Registro, cliente: Text
+    //     -->
+    //         abrirSesion() -->
+    //     <--
+    //     Text | Error
+    // --------------------------------------------------------------
     private function abrirSesion(array $u, string $cliente): string {
         $token = self::tokenNuevo();
         $ahora = $this->ahora();
@@ -188,9 +255,14 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // email, clave, cliente ('app' | 'web') --> iniciarSesion() --> {token, usuario}
-    //   401 correo o contraseña mal
-    //   403 cuenta que no corresponde a ese cliente
+    // # 401 correo o contraseña mal
+    // # 403 cuenta que no corresponde a ese cliente
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + email: Text, clave: Text, cliente: Text
+    //     -->
+    //         iniciarSesion() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function iniciarSesion(string $email, string $clave, string $cliente): array {
         $m = strtolower(trim($email));
@@ -236,6 +308,13 @@ class Cuentas extends Base {
         return $resultado;
     }
 
+    // --------------------------------------------------------------
+    // - u: Registro, cliente: Text
+    //     -->
+    //         validarCliente() --x
+    //     <--
+    //     0 | Error
+    // --------------------------------------------------------------
     private function validarCliente(array $u, string $cliente): void {
         if ($cliente === 'web' && !in_array($u['rol'], self::ROLES_PANEL, true)) {
             throw new ProhibidoException($u['rol'] === 'trabajador'
@@ -248,7 +327,12 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // token: Text | null --> usuarioDeSesion() --> usuario | null
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // + token: Text | Ausente
+    //     -->
+    //         usuarioDeSesion() <--
+    //     <--
+    //     Registro | Ausente | Error
     // --------------------------------------------------------------
     public function usuarioDeSesion(?string $token): ?array {
         if ($token === null || $token === '') {
@@ -258,10 +342,26 @@ class Cuentas extends Base {
             WHERE s.token_hash = ? AND s.tipo IN ('app', 'web') AND s.caduca > ?", [self::hashToken($token), self::fechaBD($this->ahora())]);
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + token: Text
+    //     -->
+    //         cerrarSesion() -->
+    //     <--
+    //     0 | Error
+    // --------------------------------------------------------------
     public function cerrarSesion(string $token): void {
         $this->ejecutar("DELETE FROM {$this->p}token WHERE token_hash = ? AND tipo IN ('app', 'web')", [self::hashToken($token)]);
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos.
+    // + u: Registro, clave: Text
+    //     -->
+    //         cambiarClaveInicial() -->
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     public function cambiarClaveInicial(array $u, string $clave): array {
         self::exigirRol($u, ['trabajador']);
         if (!$u['requiere_cambio_clave']) {
@@ -285,8 +385,14 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // Borrar la cuenta (vecinos, desde la app). Se borran sus percepciones
-    // y sus puntos; sus mediciones se quedan, pero sin portador.
+    // # Borrar la cuenta (vecinos, desde la app). Se borran sus percepciones
+    // # y sus puntos; sus mediciones se quedan, pero sin portador.
+    // # effects: consulta y modifica la base de datos.
+    // + u: Registro | Ausente
+    //     -->
+    //         borrarCuenta() -->
+    //     <--
+    //     0 | Error
     // --------------------------------------------------------------
     public function borrarCuenta(?array $u): void {
         self::exigirRol($u, ['vecino']);
@@ -314,7 +420,12 @@ class Cuentas extends Base {
     const CONDICIONES = ['bajo', 'medio', 'alto', 'custom'];
 
     // --------------------------------------------------------------
-    // usuario --> seguimiento() --> {favoritos: [zonaId], alertas: [{zona, magnitud, condicion, valor | null}]}
+    // # effects: consulta la base de datos.
+    // + u: Registro
+    //     -->
+    //         seguimiento() <--
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function seguimiento(array $u): array {
         $fav = array_column($this->filas("SELECT zona_id FROM {$this->p}favorito WHERE usuario_id = ? ORDER BY creado, zona_id",
@@ -329,9 +440,14 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // usuario, {favoritos, alertas} --> guardarSeguimiento() --> seguimiento()
-    // Sustituye todo lo guardado (el móvil manda siempre la lista completa).
-    // Un parque con alerta se sigue aunque no venga en «favoritos».
+    // # Sustituye todo lo guardado (el móvil manda siempre la lista completa).
+    // # Un parque con alerta se sigue aunque no venga en «favoritos».
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + u: Registro | Ausente, c: Registro
+    //     -->
+    //         guardarSeguimiento() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function guardarSeguimiento(?array $u, array $c): array {
         self::exigirRol($u, ['vecino', 'trabajador']);
@@ -394,6 +510,15 @@ class Cuentas extends Base {
         return $this->seguimiento($u);
     }
 
+    // --------------------------------------------------------------
+    // # Solo acepta avisos coherentes con la alerta configurada y las lecturas de la zona.
+    // # effects: consulta y modifica la base de datos.
+    // + u: Registro, aviso: Registro, logica: Logica
+    //     -->
+    //         registrarAlertaEmitida() -->
+    //     <--
+    //     0 | Error
+    // --------------------------------------------------------------
     public function registrarAlertaEmitida(array $u, array $aviso, Logica $logica): void {
         self::exigirRol($u, self::ROLES_APP);
         $zona = (string) ($aviso['zona'] ?? '');
@@ -453,6 +578,14 @@ class Cuentas extends Base {
     //   recuperar  fila en «token» (1 h): crear una contraseña nueva
     // ==============================================================
 
+    // --------------------------------------------------------------
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // - usuarioId: Text
+    //     -->
+    //         crearEnlaceRecuperar() -->
+    //     <--
+    //     Text | Error
+    // --------------------------------------------------------------
     private function crearEnlaceRecuperar(string $usuarioId): string {
         $token = self::tokenNuevo();
         // un enlace nuevo invalida el anterior
@@ -463,9 +596,14 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // email, urlWeb --> solicitarRecuperacion()
-    // Siempre responde igual (no revela qué correos existen). Si la cuenta
-    // existe, envía un correo con el enlace (válido 1 h).
+    // # Siempre responde igual (no revela qué correos existen). Si la cuenta
+    // # existe, envía un correo con el enlace (válido 1 h).
+    // # effects: consulta y modifica la base de datos; envía correo.
+    // + email: Text, urlWeb: Text
+    //     -->
+    //         solicitarRecuperacion() -->
+    //     <--
+    //     0 | Error
     // --------------------------------------------------------------
     public function solicitarRecuperacion(string $email, string $urlWeb): void {
         $m = strtolower(trim($email));
@@ -484,8 +622,13 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // token --> verEnlace() --> {estado: valido|caducado|no_valido, tipo, id, nombre, email, rol, horas}
-    // Un enlace usado ya no existe: se borra al usarlo.
+    // # Un enlace usado ya no existe: se borra al usarlo.
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // + token: Text
+    //     -->
+    //         verEnlace() <--
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function verEnlace(string $token): array {
         $h = self::hashToken($token);
@@ -501,8 +644,13 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // token, clave --> usarEnlace() --> email
-    // Cambia la contraseña y cierra las sesiones abiertas.
+    // # Cambia la contraseña y cierra las sesiones abiertas.
+    // # effects: consulta y modifica la base de datos.
+    // + token: Text, clave: Text
+    //     -->
+    //         usarEnlace() -->
+    //     <--
+    //     Text | Error
     // --------------------------------------------------------------
     public function usarEnlace(string $token, string $clave): string {
         $v = $this->verEnlace($token);
@@ -530,7 +678,12 @@ class Cuentas extends Base {
     // ==============================================================
 
     // --------------------------------------------------------------
-    // trabajadores() --> [{id, ayuntamiento, nombre, email, num_empleado, servicio, alta}]
+    // # effects: consulta la base de datos.
+    // + quien: Registro | Ausente
+    //     -->
+    //         trabajadores() <--
+    //     <--
+    //     [Registro] | Error
     // --------------------------------------------------------------
     public function trabajadores(?array $quien): array {
         self::exigirRol($quien, ['admin']);
@@ -546,7 +699,13 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // Alta de un trabajador con contraseña inicial de cambio obligatorio.
+    // # Alta de un trabajador con contraseña inicial de cambio obligatorio.
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + quien: Registro | Ausente, nombre: Text, email: Text, numEmpleado: Text, servicio: Text, clave: Text, ayuntamiento: Text | Ausente
+    //     -->
+    //         altaTrabajador() -->
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function altaTrabajador(?array $quien, string $nombre, string $email, string $numEmpleado, string $servicio,
                                    string $clave, ?string $ayuntamiento = null): array {
@@ -618,7 +777,12 @@ class Cuentas extends Base {
     }
 
     // --------------------------------------------------------------
-    // vecinos() --> [{id, nombre}]   (para el panel de préstamos)
+    // # effects: consulta la base de datos.
+    // + quien: Registro | Ausente
+    //     -->
+    //         vecinos() <--
+    //     <--
+    //     [Registro] | Error
     // --------------------------------------------------------------
     public function vecinos(?array $quien): array {
         self::exigirRol($quien, self::ROLES_PANEL);

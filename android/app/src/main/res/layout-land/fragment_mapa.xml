@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Google Maps conserva el protagonismo; los controles siguen la paleta de Respira. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/mapa"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <TextView
+        android:id="@+id/sin_clave"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/superficie_2"
+        android:gravity="center"
+        android:padding="32dp"
+        android:text="@string/sin_clave_maps"
+        android:textColor="@color/tinta"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cabecera"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        app:cardBackgroundColor="@color/superficie"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="3dp"
+        app:strokeColor="@color/linea"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="10dp"
+                android:contentDescription="@string/app_name"
+                android:src="@drawable/ic_respira_simbolo" />
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/capa"
+                android:layout_width="196dp"
+                android:layout_height="48dp"
+
+                app:checkedButton="@+id/capa_mediciones"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@id/capa_mediciones"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="8dp"
+                    android:text="@string/capa_mediciones"
+                    android:textAllCaps="false"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/capa_comunidad"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="8dp"
+                    android:text="@string/capa_comunidad"
+                    android:textAllCaps="false"
+                    android:textSize="12sp" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+            <HorizontalScrollView
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1" android:layout_marginStart="10dp"
+                android:fillViewport="false"
+                android:scrollbars="none">
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/filtros"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    app:chipSpacingHorizontal="4dp"
+                    app:selectionRequired="true"
+                    app:singleLine="true"
+                    app:singleSelection="true" />
+            </HorizontalScrollView>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/cuenta"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="Mi cuenta"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:textAllCaps="false"
+                app:cornerRadius="24dp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Controles de mapa con áreas táctiles de 48 dp. -->
+    <LinearLayout
+        android:id="@+id/botones"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="12dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/encuadrar"
+            style="@style/Respira.BotonMapa"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+
+            android:contentDescription="Ver todas las zonas"
+            app:icon="@drawable/ic_encuadrar"
+            app:backgroundTint="@color/superficie"
+            app:cornerRadius="12dp"
+            app:strokeColor="@color/linea"
+            app:strokeWidth="1dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/vista3d"
+            style="@style/Respira.BotonMapa"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:contentDescription="Vista en perspectiva"
+            android:text="3D"
+            app:backgroundTint="@color/superficie"
+            app:cornerRadius="12dp"
+            app:strokeColor="@color/linea"
+            app:strokeWidth="1dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/ubicacion"
+            style="@style/Respira.BotonMapa"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:contentDescription="Mi ubicación"
+            app:icon="@drawable/ic_ubicacion"
+            app:backgroundTint="@color/superficie"
+            app:cornerRadius="12dp"
+            app:strokeColor="@color/linea"
+            app:strokeWidth="1dp" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            app:cardBackgroundColor="@color/superficie"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:strokeColor="@color/linea"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/acercar"
+                    style="@style/Respira.BotonZoom"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:contentDescription="Acercar"
+                    android:text="+" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="48dp"
+                    android:background="@color/linea" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/alejar"
+                    style="@style/Respira.BotonZoom"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:contentDescription="Alejar"
+                    android:text="−" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+    </LinearLayout>
+
+    <!-- La leyenda permanece visible sin competir con la cartografía. -->
+    <LinearLayout
+        android:id="@+id/pie"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp">
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" android:layout_marginEnd="12dp"
+            app:cardBackgroundColor="@color/superficie"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:strokeColor="@color/linea"
+            app:strokeWidth="1dp">
+
+            <TextView
+                android:id="@+id/leyenda"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp"
+                android:textColor="@color/tinta_2"
+                android:textSize="12sp" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/franja"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="236dp"
+            android:layout_height="wrap_content"
+
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="48dp"
+            android:maxLines="2"
+            android:paddingVertical="6dp"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            app:backgroundTint="@color/superficie"
+            app:cornerRadius="12dp" />
+    </LinearLayout>
+</FrameLayout>

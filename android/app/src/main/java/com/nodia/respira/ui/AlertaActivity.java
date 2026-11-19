@@ -33,6 +33,15 @@ import java.util.Map;
 // ==============================================================
 // Configurar la alerta de un parque. Como mucho un aviso cada 3 h.
 // ==============================================================
+// --------------------------------------------------------------
+// class AlertaActivity
+// # Edición del límite de alerta de una zona y magnitud.
+// # AppCompatActivity <--- AlertaActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Entorno = { densidad: R, tema: Text }
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// ResultadoAccion = Completada | Fallo{ mensaje: Text, campos: Map[Text, Text] }
+// --------------------------------------------------------------
 public class AlertaActivity extends AppCompatActivity {
 
     private static final String EXTRA_ZONA = "zona";
@@ -57,16 +66,34 @@ public class AlertaActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String> pedirNotificaciones =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), ok -> terminar(ok));
 
+    // --------------------------------------------------------------
+    // # effects: abre la pantalla de destino
+    // + c: Entorno, zonaId: Text
+    //       -->
+    //           abrir() --x
+    // --------------------------------------------------------------
     public static void abrir(Context c, String zonaId) {
         abrir(c, zonaId, null);
     }
 
+    // --------------------------------------------------------------
+    // # effects: abre la pantalla de destino
+    // + c: Entorno, zonaId: Text, magnitud: Magnitud
+    //       -->
+    //           abrir() --x
+    // --------------------------------------------------------------
     public static void abrir(Context c, String zonaId, Magnitud magnitud) {
         Intent i = new Intent(c, AlertaActivity.class).putExtra(EXTRA_ZONA, zonaId);
         if (magnitud != null) i.putExtra(EXTRA_MAGNITUD, magnitud.id);
         c.startActivity(i);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -120,6 +147,12 @@ public class AlertaActivity extends AppCompatActivity {
         mostrarMagnitud(magnitud);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - m: Magnitud
+    //       -->
+    //           mostrarMagnitud() -->
+    // --------------------------------------------------------------
     private void mostrarMagnitud(Magnitud m) {
         magnitud = m;
         Alerta alerta = repo.alerta(zona.id, m);
@@ -133,6 +166,11 @@ public class AlertaActivity extends AppCompatActivity {
         eliminar.setVisibility(alerta == null ? View.GONE : View.VISIBLE);
     }
 
+    // --------------------------------------------------------------
+    // # effects: valida la entrada, solicita la operación al repositorio y actualiza la interfaz
+    // -
+    //   guardar() -->
+    // --------------------------------------------------------------
     private void guardar() {
         String texto = Ui.leer(valor).trim().replace(',', '.');
         if ("custom".equals(condicion)) {
@@ -155,6 +193,11 @@ public class AlertaActivity extends AppCompatActivity {
                 }));
     }
 
+    // --------------------------------------------------------------
+    // # effects: valida la entrada, solicita la operación al repositorio y actualiza la interfaz
+    // -
+    //   eliminar() -->
+    // --------------------------------------------------------------
     private void eliminar() {
         guardar.setEnabled(false);
         eliminar.setEnabled(false);
@@ -164,12 +207,32 @@ public class AlertaActivity extends AppCompatActivity {
         }));
     }
 
+    // --------------------------------------------------------------
+    // # Las respuestas tardías se ignoran cuando la pantalla ya está terminando.
+    // # Contrato de la respuesta futura; se omite el adaptador de callbacks.
+    // # effects: prepara el tratamiento de la respuesta y sus errores en la interfaz
+    // - resultado() <--
+    //       <--
+    //   resultado: ResultadoAccion
+    // --------------------------------------------------------------
     private Repositorio.Hecho<Boolean> resultado(java.util.function.Consumer<Boolean> realizado) {
         return new Repositorio.Hecho<Boolean>() {
+            // --------------------------------------------------------------
+            // # effects: actualiza la interfaz Android
+            // + servidor: B
+            //       -->
+            //           ok() -->
+            // --------------------------------------------------------------
             @Override public void ok(Boolean servidor) {
                 if (!isFinishing() && !isDestroyed()) realizado.accept(servidor);
             }
 
+            // --------------------------------------------------------------
+            // # effects: actualiza la interfaz Android
+            // + mensaje: Text, campos: Map[Text, Text]
+            //       -->
+            //           error() -->
+            // --------------------------------------------------------------
             @Override public void error(String mensaje, Map<String, String> campos) {
                 if (isFinishing() || isDestroyed()) return;
                 guardar.setEnabled(true);
@@ -180,6 +243,12 @@ public class AlertaActivity extends AppCompatActivity {
         };
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // - notificacionesOk: B
+    //       -->
+    //           terminar() -->
+    // --------------------------------------------------------------
     private void terminar(boolean notificacionesOk) {
         String guardada = sincronizada ? "Alerta guardada en tu cuenta." : "Alerta guardada en este móvil.";
         Toast.makeText(this, guardada + (notificacionesOk ? "" : " Permite las notificaciones para recibir avisos."),

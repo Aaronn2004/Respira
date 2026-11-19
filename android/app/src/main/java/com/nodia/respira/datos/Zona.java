@@ -6,6 +6,8 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
+// # Ausente representa la ausencia lógica (null en el código).
+
 // ==============================================================
 // Zona del mapa: un parque o un barrio.
 // Valor de cada magnitud = media de lo medido por los portadores
@@ -23,6 +25,11 @@ public class Zona {
         public final long momento;
         public final String origen;
 
+        // --------------------------------------------------------------
+        // + valor: R | Ausente, estado: Text, momento: Z, origen: Text
+        //       -->
+        //     Dato() -->
+        // --------------------------------------------------------------
         public Dato(Double valor, String estado, long momento, String origen) {
             this.valor = valor;
             this.estado = estado;
@@ -30,6 +37,13 @@ public class Zona {
             this.origen = origen;
         }
 
+        // --------------------------------------------------------------
+        // + ahora: Z
+        //       -->
+        //     estadoEn() <--
+        //       <--
+        //   Text
+        // --------------------------------------------------------------
         public String estadoEn(long ahora) {
             if (valor == null) return Reglas.ESTADO_SIN_DATOS;
             if (momento <= 0 || "estimado".equals(estado)) return estado;
@@ -50,8 +64,22 @@ public class Zona {
     private boolean simulado;
     private final Map<Magnitud, Double> valores = new EnumMap<>(Magnitud.class);
     private double[] posEtiqueta;           // dónde va el nombre en el mapa (null = centro)
+    private String nombreCorto;
     private final Map<Magnitud, Double> media24 = new EnumMap<>(Magnitud.class);   // promedio de las últimas 24 h
 
+    // --------------------------------------------------------------
+    // + id: Text
+    //   tipo: Text
+    //   nombre: Text
+    //   contorno: [[R]]
+    //   hace_min: Z | Ausente
+    //   num_mediciones: Z
+    //   o3: R | Ausente
+    //   temp: R | Ausente
+    //   ruido: R | Ausente
+    //       -->
+    //     Zona() -->
+    // --------------------------------------------------------------
     public Zona(String id, String tipo, String nombre, List<double[]> contorno,
                 Integer haceMin, int numMediciones, Double o3, Double temp, Double ruido) {
         this.id = id;
@@ -66,43 +94,103 @@ public class Zona {
         valores.put(Magnitud.RUIDO, ruido);
     }
 
+    // --------------------------------------------------------------
+    // + m: Magnitud, v: R | Ausente
+    //       -->
+    //     conMedia24h() -->
+    //       <--
+    //   Zona
+    // --------------------------------------------------------------
     public Zona conMedia24h(Magnitud m, Double v) {
         media24.put(m, v);
         return this;
     }
 
     // promedio de las últimas 24 h (null si no hay o son datos de demostración)
+    // --------------------------------------------------------------
+    // + m: Magnitud
+    //       -->
+    //     media24h() <--
+    //       <--
+    //   R | Ausente
+    // --------------------------------------------------------------
     public Double media24h(Magnitud m) {
         return media24.get(m);
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     esParque() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public boolean esParque() {
         return PARQUE.equals(tipo);
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     tipoTexto() <--
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public String tipoTexto() {
         return esParque() ? "Parque" : PLAYA.equals(tipo) ? "Playa" : "Barrio";
     }
 
+    // --------------------------------------------------------------
+    // + poligonos: [[[[R]]]]
+    //       -->
+    //     conContornos() -->
+    //       <--
+    //   Zona
+    // --------------------------------------------------------------
     public Zona conContornos(List<List<List<double[]>>> poligonos) {
         if (!poligonos.isEmpty()) this.contornos = poligonos;
         return this;
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     contornos() -->
+    //       <--
+    //   [[[[R]]]]
+    // --------------------------------------------------------------
     public List<List<List<double[]>>> contornos() {
         return contornos;
     }
 
+    // --------------------------------------------------------------
+    // + es_simulado: B
+    //       -->
+    //     conSimulado() -->
+    //       <--
+    //   Zona
+    // --------------------------------------------------------------
     public Zona conSimulado(boolean esSimulado) {
         this.simulado = esSimulado;
         return this;
     }
 
+    // --------------------------------------------------------------
+    // + m: Magnitud, dato: Dato
+    //       -->
+    //     conDato() -->
+    //       <--
+    //   Zona
+    // --------------------------------------------------------------
     public Zona conDato(Magnitud m, Dato dato) {
         detalles.put(m, dato);
         return this;
     }
 
+    // --------------------------------------------------------------
+    // + m: Magnitud
+    //       -->
+    //     dato() <--
+    //       <--
+    //   Dato
+    // --------------------------------------------------------------
     public Dato dato(Magnitud m) {
         Dato d = detalles.get(m);
         if (d != null) return d;
@@ -111,15 +199,37 @@ public class Zona {
                 v == null ? "" : simulado ? "simulado" : "");
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta el reloj.
+    // + m: Magnitud
+    //       -->
+    //     estado() <--
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public String estado(Magnitud m) {
         return dato(m).estadoEn(System.currentTimeMillis());
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta el reloj.
+    // + m: Magnitud
+    //       -->
+    //     valor() <--
+    //       <--
+    //   R | Ausente
+    // --------------------------------------------------------------
     public Double valor(Magnitud m) {
         Dato dato = dato(m);
         return Reglas.ESTADO_SIN_DATOS.equals(dato.estadoEn(System.currentTimeMillis())) ? null : dato.valor;
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     estado() <--
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public String estado() {
         if (detalles.isEmpty()) return Reglas.estadoZona(haceMin);
         String estado = Reglas.ESTADO_SIN_DATOS;
@@ -133,19 +243,107 @@ public class Zona {
     }
 
     // Nivel que se pinta en el mapa para la magnitud elegida
+    // --------------------------------------------------------------
+    // + m: Magnitud
+    //       -->
+    //     nivel() <--
+    //       <--
+    //   Nivel
+    // --------------------------------------------------------------
     public Nivel nivel(Magnitud m) {
         return m.nivel(valor(m));
     }
 
+    // --------------------------------------------------------------
+    // # Misma media de niveles que en la web; una magnitud sin datos no puntúa.
+    // # effects: consulta el reloj al comprobar la antigüedad de cada lectura.
+    // +
+    //     nivelGeneral() <--
+    //       <--
+    //   Nivel
+    // --------------------------------------------------------------
+    public Nivel nivelGeneral() {
+        int suma = 0, cantidad = 0;
+        for (Magnitud m : Magnitud.values()) {
+            Nivel nivel = nivel(m);
+            if (nivel != Nivel.NINGUNO) {
+                suma += nivel.ordinal();
+                cantidad++;
+            }
+        }
+        return cantidad == 0 ? Nivel.NINGUNO : Nivel.values()[(int) Math.round(suma / (double) cantidad)];
+    }
+
+    // --------------------------------------------------------------
+    // + etiqueta: Text
+    //       -->
+    //     conNombreCorto() -->
+    //       <--
+    //   Zona
+    // --------------------------------------------------------------
+    public Zona conNombreCorto(String etiqueta) {
+        nombreCorto = etiqueta;
+        return this;
+    }
+
+    // --------------------------------------------------------------
+    // +
+    //     nombreCorto() <--
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
+    public String nombreCorto() {
+        return nombreCorto == null ? nombre : nombreCorto;
+    }
+
+    // --------------------------------------------------------------
+    // # Cada polígono incluye su contorno exterior y, después, sus huecos.
+    // + lat: R, lng: R
+    //       -->
+    //     contiene() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
+    public boolean contiene(double lat, double lng) {
+        for (List<List<double[]>> poligono : contornos) {
+            if (poligono.isEmpty() || !Reglas.dentro(lat, lng, poligono.get(0))) continue;
+            boolean enHueco = false;
+            for (int i = 1; i < poligono.size(); i++) {
+                if (Reglas.dentro(lat, lng, poligono.get(i))) { enHueco = true; break; }
+            }
+            if (!enHueco) return true;
+        }
+        return false;
+    }
+
+    // --------------------------------------------------------------
+    // + pos: [R]
+    //       -->
+    //     conEtiquetaEn() -->
+    //       <--
+    //   Zona
+    // --------------------------------------------------------------
     public Zona conEtiquetaEn(double[] pos) {
         this.posEtiqueta = pos;
         return this;
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     posicionEtiqueta() <--
+    //       <--
+    //   [R]
+    // --------------------------------------------------------------
     public double[] posicionEtiqueta() {
         return posEtiqueta != null ? posEtiqueta : centro();
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     centro() <--
+    //       <--
+    //   [R]
+    // --------------------------------------------------------------
     public double[] centro() {
         double lat = 0, lng = 0;
         for (double[] p : contorno) {
@@ -156,7 +354,10 @@ public class Zona {
     }
 
     // --------------------------------------------------------------
-    // resumen() --> Text   ("Estado general: Moderado · hace 14 min")
+    // +
+    //     resumen() <--
+    //       <--
+    //   Text
     // --------------------------------------------------------------
     public String resumen() {
         if (Reglas.ESTADO_SIN_DATOS.equals(estado())) {
@@ -188,6 +389,12 @@ public class Zona {
     }
 
     // Magnitudes en nivel alto ("Ozono · Ruido") o "" si ninguna
+    // --------------------------------------------------------------
+    // +
+    //     magnitudesAltas() <--
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public String magnitudesAltas() {
         List<String> altas = new ArrayList<>();
         if (!Reglas.ESTADO_SIN_DATOS.equals(estado())) {

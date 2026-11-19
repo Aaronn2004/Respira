@@ -8,6 +8,7 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/../logica/Comunidad.php';
 require_once __DIR__ . '/../logica/Flota.php';
@@ -21,6 +22,10 @@ $ADMIN = ['id' => 'A-0001', 'rol' => 'admin'];
 $REPARTO = ['id' => 'A-0003', 'rol' => 'reparto'];
 $TECNICO = ['id' => 'A-0002', 'rol' => 'tecnico'];
 
+// --------------------------------------------------------------
+// # effects: prepara o modifica los datos de prueba.
+// entorno() --> (bd: Conexion, comunidad: Comunidad, flota: Flota) | Error
+// --------------------------------------------------------------
 function entorno(): array {
     global $T;
     $bd = crearBDPrueba();

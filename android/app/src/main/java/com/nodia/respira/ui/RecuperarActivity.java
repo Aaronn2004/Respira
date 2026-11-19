@@ -17,8 +17,21 @@ import com.nodia.respira.datos.Repositorio;
 // Recuperar contraseña. Por privacidad la respuesta es la misma
 // exista o no la cuenta (no se revela qué correos están dados de alta).
 // ==============================================================
+// --------------------------------------------------------------
+// class RecuperarActivity
+// # Solicitud de recuperación de contraseña.
+// # AppCompatActivity <--- RecuperarActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class RecuperarActivity extends AppCompatActivity {
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -31,6 +44,11 @@ public class RecuperarActivity extends AppCompatActivity {
             if (email.getError() == null) {
                 v.setEnabled(false);
                 Repositorio.obtener(this).recuperar(m, new Repositorio.Hecho<Void>() {
+                    // --------------------------------------------------------------
+                    // # effects: actualiza la interfaz Android
+                    // +
+                    //   ok() -->
+                    // --------------------------------------------------------------
                     @Override
                     public void ok(Void nada) {
                         c.removeAllViews();
@@ -39,6 +57,12 @@ public class RecuperarActivity extends AppCompatActivity {
                         Ui.boton(c, "Volver", Ui.BOTON_BORDE, x -> finish());
                     }
 
+                    // --------------------------------------------------------------
+                    // # effects: actualiza la interfaz Android
+                    // + mensaje: Text, campos: Map[Text, Text]
+                    //       -->
+                    //           error() -->
+                    // --------------------------------------------------------------
                     @Override
                     public void error(String mensaje, Map<String, String> campos) {
                         v.setEnabled(true);

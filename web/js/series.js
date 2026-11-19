@@ -1,3 +1,11 @@
+/* --------------------------------------------------------------
+ * # Firmas lógicas; se conservan los nombres del código.
+ * # Ausente representa null o undefined; R temporal se expresa en milisegundos UTC.
+ * # Valor = R | Text | B | Ausente | [Valor] | Map[Text, Valor].
+ * # Datos = Map[Text, Valor]; los campos y unidades se conservan en la respuesta.
+ * # Los errores describen fallos lógicos, sin exponer mecanismos asíncronos.
+ * -------------------------------------------------------------- */
+
 /* Series de la demostración web. Los periodos, la interpolación y los
    eventos siguen Logica.php, cuyos resultados consume Android. */
 (() => {
@@ -18,12 +26,19 @@
     ruido: { decimales: 1, medio: 55, alto: 65, amplitud: 7 },
   };
 
+  /* --------------------------------------------------------------
+   * # Valida también el día real del calendario; Date.parse puede normalizar fechas imposibles.
+   * fecha: Text --> fechaUtc() --> R | Ausente
+   * -------------------------------------------------------------- */
   function fechaUtc(fecha) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return null;
     const ms = Date.parse(fecha + 'T00:00:00Z');
     return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === fecha ? ms : null;
   }
 
+  /* --------------------------------------------------------------
+   * periodo: Text, opciones: Datos --> intervalo() --> Datos | Ausente
+   * -------------------------------------------------------------- */
   function intervalo(periodo, { desde, hasta, ahora }) {
     const predefinido = PERIODOS[periodo];
     if (predefinido) {
@@ -43,6 +58,9 @@
   }
 
   // PHP round() redondea los puntos medios alejándose de cero.
+  /* --------------------------------------------------------------
+   * valor: R, decimales: N --> redondear() --> R
+   * -------------------------------------------------------------- */
   function redondear(valor, decimales) {
     const escala = 10 ** decimales;
     const absoluto = Math.abs(valor) * escala;
@@ -50,6 +68,9 @@
   }
 
   // Equivalente a Logica::aproximar: solo huecos internos de hasta dos horas.
+  /* --------------------------------------------------------------
+   * valores: [R | Ausente], paso_ms: R, decimales: N --> aproximar() --> [R | Ausente]
+   * -------------------------------------------------------------- */
   function aproximar(valores, paso, decimales) {
     const estimados = new Array(valores.length).fill(null);
     const maxTramos = Math.floor(2 * HORA / paso);
@@ -74,6 +95,9 @@
     return estimados;
   }
 
+  /* --------------------------------------------------------------
+   * zona: Datos, magnitud: Text, modelo: Datos, intervalo: Datos, ahora_ms: R, cerrado: B --> lecturasPorTramo() --> [Datos]
+   * -------------------------------------------------------------- */
   function lecturasPorTramo(zona, magnitud, modelo, { tramos, inicio, fin }, ahora, cerrado) {
     const grupos = Array.from({ length: tramos }, () => ({ suma: 0, cantidad: 0, max: null, momento: null }));
     if (!Number.isFinite(zona?.[magnitud]) || !Number.isFinite(zona.hace) || zona.hace < 0) return grupos;
@@ -112,6 +136,9 @@
     return grupos;
   }
 
+  /* --------------------------------------------------------------
+   * observados: [R | Ausente], grupos: [Datos], modelo: Datos, inicio_ms: R, paso_ms: R --> eventos() --> Datos
+   * -------------------------------------------------------------- */
   function eventos(observados, grupos, modelo, inicio, paso) {
     const alertas = [];
     for (const nivel of ['alto', 'medio']) {
@@ -145,6 +172,10 @@
     return { alertas: alertas.slice(-10), picos };
   }
 
+  /* --------------------------------------------------------------
+   * # effects: consulta el reloj si no se proporciona el instante actual.
+   * zona: Datos, magnitud: Text, periodo: Text, opciones: Datos --> serie() --> Datos | Ausente
+   * -------------------------------------------------------------- */
   function serie(zona, magnitud, periodo, { desde, hasta, ahora = Math.floor(Date.now() / MINUTO) * MINUTO } = {}) {
     const tiempos = intervalo(periodo, { desde, hasta, ahora });
     const modelo = MAGNITUDES[magnitud];
@@ -159,6 +190,9 @@
       ...eventos(observados, grupos, modelo, inicio, paso) };
   }
 
+  /* --------------------------------------------------------------
+   * serie: Datos --> resumen() --> Datos
+   * -------------------------------------------------------------- */
   function resumen({ observados, paso, estadisticas }) {
     if (estadisticas) return estadisticas;
     const datos = observados.filter(valor => valor !== null);
@@ -170,10 +204,16 @@
     };
   }
 
+  /* --------------------------------------------------------------
+   * respuesta: Datos --> desdeApi() --> Datos | Error{mensaje: Text}
+   * -------------------------------------------------------------- */
   function desdeApi(datos) {
     const { valores, aprox, origen, eventos = {}, resumen: estadisticas } = datos;
     const inicio = Date.parse(datos.desde), fin = Date.parse(datos.hasta);
     const paso = datos.paso_ms ?? datos.paso_min * MINUTO;
+    /* --------------------------------------------------------------
+     * valor: Valor --> numeroOpcional() --> B
+     * -------------------------------------------------------------- */
     const numeroOpcional = valor => valor === null || Number.isFinite(valor);
     if (!Array.isArray(valores) || !valores.length || !valores.every(numeroOpcional)
         || !Array.isArray(aprox) || aprox.length !== valores.length || !aprox.every(numeroOpcional)
@@ -185,6 +225,9 @@
         || !Number.isFinite(estadisticas.horas_sin_datos)) {
       throw new Error('Serie no válida');
     }
+    /* --------------------------------------------------------------
+     * evento: Datos --> lectura() --> Datos
+     * -------------------------------------------------------------- */
     const lectura = evento => ({ ...evento, momento: Date.parse(evento.momento) });
     const alertas = (eventos.alertas ?? []).map(a => ({ ...a, desde: Date.parse(a.desde), hasta: Date.parse(a.hasta) }))
       .filter(a => Number.isFinite(a.desde) && Number.isFinite(a.hasta) && Number.isFinite(a.max));

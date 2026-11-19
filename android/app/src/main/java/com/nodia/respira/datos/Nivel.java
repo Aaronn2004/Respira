@@ -2,6 +2,8 @@ package com.nodia.respira.datos;
 
 import com.nodia.respira.R;
 
+// # Nivel = { BAJO | MEDIO | ALTO | NINGUNO }.
+
 // ==============================================================
 // Nivel de una medida respecto a los umbrales de su magnitud.
 // ==============================================================
@@ -17,6 +19,11 @@ public enum Nivel {
     public final int color;
     public final int colorSuave;
 
+    // --------------------------------------------------------------
+    // - id: Text, nombre: Text, color: Z, color_suave: Z
+    //       -->
+    //     Nivel() -->
+    // --------------------------------------------------------------
     Nivel(String id, String nombre, int color, int colorSuave) {
         this.id = id;
         this.nombre = nombre;
@@ -24,6 +31,13 @@ public enum Nivel {
         this.colorSuave = colorSuave;
     }
 
+    // --------------------------------------------------------------
+    // + id: Text
+    //       -->
+    //     desdeId() --x
+    //       <--
+    //   Nivel
+    // --------------------------------------------------------------
     public static Nivel desdeId(String id) {
         for (Nivel n : values()) {
             if (n.id.equals(id)) {

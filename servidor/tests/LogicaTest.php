@@ -7,12 +7,17 @@
 // Fecha:       06/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/../logica/Logica.php';
 require_once __DIR__ . '/bd_prueba.php';
 
 $fallos = 0;
 $total = 0;
+// --------------------------------------------------------------
+// # effects: actualiza los contadores de pruebas y escribe el resultado.
+// nombre: Text, f: Operacion --> prueba()
+// --------------------------------------------------------------
 function prueba(string $nombre, callable $f): void {
     global $fallos, $total;
     $total++;
@@ -24,11 +29,18 @@ function prueba(string $nombre, callable $f): void {
         echo "  FALLA $nombre: " . $e->getMessage() . "\n";
     }
 }
+// --------------------------------------------------------------
+// esperado: Valor, real: Valor, que: Text --> igual() --> 0 | Error
+// --------------------------------------------------------------
 function igual($esperado, $real, string $que = ''): void {
     if ($esperado !== $real) {
         throw new Exception("$que: esperaba " . var_export($esperado, true) . ' y salió ' . var_export($real, true));
     }
 }
+// --------------------------------------------------------------
+// # effects: ejecuta el caso de prueba recibido.
+// clase: Text, f: Operacion --> lanza() --> Error
+// --------------------------------------------------------------
 function lanza(string $clase, callable $f): Throwable {
     try {
         $f();
@@ -43,6 +55,10 @@ function lanza(string $clase, callable $f): Throwable {
 
 // Reloj de prueba: 06/11/2026 10:00:00 UTC, se puede mover
 $AHORA = strtotime('2026-11-06 10:00:00 UTC') * 1000;
+// --------------------------------------------------------------
+// # effects: prepara o modifica los datos de prueba.
+// nueva() --> Logica | Error
+// --------------------------------------------------------------
 function nueva(): Logica {
     global $AHORA;
     return new Logica(crearBDPrueba(), '', function () { global $AHORA; return $AHORA; });
@@ -51,6 +67,10 @@ function nueva(): Logica {
 $Z = json_decode(file_get_contents(__DIR__ . '/zonas_prueba.json'), true);
 $CENTRAL = $Z['central'];
 $CENTRO_BARRIO = $Z['centro_barrio'];
+// --------------------------------------------------------------
+// # effects: lee el reloj y la ubicación de prueba.
+// extra: Registro --> med() --> Registro
+// --------------------------------------------------------------
 function med(array $extra = []): array {
     global $AHORA, $CENTRAL;
     return array_merge(['nodo' => 'RSP-4F7K', 'magnitud' => 'o3', 'valor' => 0.042, 'contador' => 7,

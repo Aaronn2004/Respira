@@ -12,6 +12,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+// # Ausente representa la ausencia lógica (null en el código).
+// # ValorJson = Ausente | B | R | Text | [ValorJson] | Map[Text, ValorJson].
+// # ObjetoJson = Map[Text, ValorJson].
+// # ErrorApi = { codigo: Z, mensaje: Text, campos: Map[Text, Text] }.
+// # T representa el tipo lógico de resultado acordado por quien llama.
+// # ErrorDatos = { detalle: Text }; fallo al leer o interpretar datos.
+
 // ==============================================================
 // ApiRespira: cliente de la API de Respira (servidor/api/index.php).
 //   - Zonas y series de las gráficas (públicas).
@@ -23,10 +30,22 @@ import java.util.Map;
 public class ApiRespira {
 
     public interface Listo<T> {
+        // --------------------------------------------------------------
+        // # effects: entrega el resultado a quien recibe la respuesta.
+        // + datos: T
+        //       -->
+        //     ok() -->
+        // --------------------------------------------------------------
         void ok(T datos);
     }
 
     public interface Fallo {
+        // --------------------------------------------------------------
+        // # effects: entrega el resultado a quien recibe la respuesta.
+        // + detalle: Text
+        //       -->
+        //     error() -->
+        // --------------------------------------------------------------
         void error(String detalle);
     }
 
@@ -39,6 +58,11 @@ public class ApiRespira {
         public final Integer quedan;        // intentos de inicio de sesión que quedan
         public final long hasta;
 
+        // --------------------------------------------------------------
+        // - codigo: Z, mensaje: Text, campos: Map[Text, Text], quedan: Z | Ausente, hasta: Z
+        //       -->
+        //     Error() -->
+        // --------------------------------------------------------------
         Error(int codigo, String mensaje, Map<String, String> campos, Integer quedan, long hasta) {
             this.hasta = hasta;
             this.codigo = codigo;
@@ -49,8 +73,20 @@ public class ApiRespira {
     }
 
     public interface Respuesta {
+        // --------------------------------------------------------------
+        // # effects: entrega el resultado a quien recibe la respuesta.
+        // + cuerpo: Text
+        //       -->
+        //     ok() -->
+        // --------------------------------------------------------------
         void ok(String cuerpo);
 
+        // --------------------------------------------------------------
+        // # effects: entrega el resultado a quien recibe la respuesta.
+        // + e: ErrorApi
+        //       -->
+        //     error() -->
+        // --------------------------------------------------------------
         void error(Error e);
     }
 
@@ -59,14 +95,23 @@ public class ApiRespira {
     private final String base;
     private final PeticionarioREST peticionario = new PeticionarioREST();
 
+    // --------------------------------------------------------------
+    // +
+    //     ApiRespira() -->
+    // --------------------------------------------------------------
     public ApiRespira() {
         String u = BuildConfig.URL_SERVIDOR;
         base = u.endsWith("/") ? u.substring(0, u.length() - 1) : u;
     }
 
     // --------------------------------------------------------------
-    // metodo, ruta ("/yo"), cuerpo | null, token | null --> pedir() --> Respuesta
-    // 2xx --> ok(cuerpo); lo demás --> error(Error)
+    // # El resultado lógico llega de forma asíncrona en el hilo de red.
+    // # effects: accede a la red; entrega el resultado de forma asíncrona.
+    // + metodo: Text, ruta: Text, cuerpo: ObjetoJson | Ausente, token: Text | Ausente
+    //       -->
+    //     pedir() <--
+    //       <--
+    //   Text | ErrorApi
     // --------------------------------------------------------------
     public void pedir(String metodo, String ruta, JSONObject cuerpo, String token, Respuesta r) {
         peticionario.hacerPeticionREST(metodo, base + ruta, cuerpo == null ? null : cuerpo.toString(), token,
@@ -80,7 +125,11 @@ public class ApiRespira {
     }
 
     // --------------------------------------------------------------
-    // codigo, cuerpo --> error() --> Error   ({error, errores: {campo: msg}, campo, quedan})
+    // - codigo: Z, cuerpo: Text
+    //       -->
+    //     error() --x
+    //       <--
+    //   ErrorApi
     // --------------------------------------------------------------
     static Error error(int codigo, String cuerpo) {
         if (codigo == -1) {
@@ -117,7 +166,12 @@ public class ApiRespira {
     }
 
     // --------------------------------------------------------------
-    // obtenerZonas() --> [Zona] (por callback)
+    // # El resultado lógico llega de forma asíncrona en el hilo de red.
+    // # effects: accede a la red; entrega el resultado de forma asíncrona.
+    // +
+    //     obtenerZonas() <--
+    //       <--
+    //   [Zona] | ErrorDatos
     // --------------------------------------------------------------
     public void obtenerZonas(Listo<List<Zona>> listo, Fallo fallo) {
         peticionario.hacerPeticionREST("GET", base + "/zonas", null, (codigo, cuerpo) -> {
@@ -134,7 +188,12 @@ public class ApiRespira {
     }
 
     // --------------------------------------------------------------
-    // json: Text --> zonasDeJSON() --> [Zona]   (barrios primero: se dibujan debajo)
+    // # Los barrios preceden a los parques para que estos se dibujen encima.
+    // - json: Text
+    //       -->
+    //     zonasDeJSON() --x
+    //       <--
+    //   [Zona] | ErrorDatos
     // --------------------------------------------------------------
     static List<Zona> zonasDeJSON(String json) throws Exception {
         JSONArray a = new JSONArray(json);
@@ -186,6 +245,14 @@ public class ApiRespira {
         return barrios;
     }
 
+    // --------------------------------------------------------------
+    // # Cada posición mantiene el orden de Android [latitud, longitud].
+    // - p: [ValorJson]
+    //       -->
+    //     anilloDeJSON() --x
+    //       <--
+    //   [[R]] | ErrorDatos
+    // --------------------------------------------------------------
     private static List<double[]> anilloDeJSON(JSONArray p) throws Exception {
         List<double[]> anillo = new ArrayList<>();
         for (int i = 0; i < p.length(); i++) {
@@ -195,6 +262,14 @@ public class ApiRespira {
         return anillo;
     }
 
+    // --------------------------------------------------------------
+    // # Una fecha inválida se representa con 0.
+    // - o: ObjetoJson, k: Text
+    //       -->
+    //     momento() --x
+    //       <--
+    //   Z
+    // --------------------------------------------------------------
     private static long momento(JSONObject o, String k) {
         try {
             return java.time.Instant.parse(o.optString(k)).toEpochMilli();
@@ -203,11 +278,25 @@ public class ApiRespira {
         }
     }
 
+    // --------------------------------------------------------------
+    // - o: ObjetoJson, k: Text
+    //       -->
+    //     numero() --x
+    //       <--
+    //   R | Ausente
+    // --------------------------------------------------------------
     private static Double numero(JSONObject o, String k) {
         double valor = o.optDouble(k);
         return Double.isFinite(valor) ? valor : null;
     }
 
+    // --------------------------------------------------------------
+    // - v: [ValorJson]
+    //       -->
+    //     numeros() --x
+    //       <--
+    //   [R | Ausente] | ErrorDatos
+    // --------------------------------------------------------------
     private static Double[] numeros(JSONArray v) throws Exception {
         Double[] out = new Double[v.length()];
         for (int i = 0; i < v.length(); i++) {
@@ -217,6 +306,13 @@ public class ApiRespira {
     }
 
     // {valores, aprox, eventos: {alertas: [{desde, hasta, max, nivel}], picos: [{momento, valor}]}} --> Serie
+    // --------------------------------------------------------------
+    // - o: ObjetoJson
+    //       -->
+    //     serieDeJSON() --x
+    //       <--
+    //   Serie | ErrorDatos
+    // --------------------------------------------------------------
     static Serie serieDeJSON(JSONObject o) throws Exception {
         JSONArray a = o.optJSONArray("aprox");
         Serie s = new Serie(numeros(o.getJSONArray("valores")), a == null ? null : numeros(a));
@@ -257,7 +353,13 @@ public class ApiRespira {
     }
 
     // --------------------------------------------------------------
-    // zonaId, magnitud, periodo ("24h" | "7d") --> obtenerSerie() --> Serie
+    // # El resultado lógico llega de forma asíncrona en el hilo de red.
+    // # effects: accede a la red; entrega el resultado de forma asíncrona.
+    // + zona_id: Text, magnitud: Magnitud, periodo: Text
+    //       -->
+    //     obtenerSerie() <--
+    //       <--
+    //   Serie | ErrorDatos
     // --------------------------------------------------------------
     public void obtenerSerie(String zonaId, Magnitud magnitud, String periodo, Listo<Serie> listo, Fallo fallo) {
         String url = base + "/zonas/" + zonaId + "/serie?magnitud=" + magnitud.id + "&periodo=" + periodo;

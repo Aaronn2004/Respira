@@ -15,6 +15,7 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
 
 require_once __DIR__ . '/../logica/Logica.php';
 require_once __DIR__ . '/../logica/Cuentas.php';
@@ -29,7 +30,8 @@ header('Access-Control-Allow-Headers: Content-Type, X-Respira-Token, Authorizati
 header('Cache-Control: no-store');
 
 // --------------------------------------------------------------
-// codigo: N, datos: Object --> responder()
+// # effects: escribe la respuesta HTTP y termina la petición.
+// codigo: Z, datos: Valor --> responder()
 // --------------------------------------------------------------
 function responder(int $codigo, $datos): void {
     http_response_code($codigo);
@@ -39,7 +41,8 @@ function responder(int $codigo, $datos): void {
 }
 
 // --------------------------------------------------------------
-// rutaPedida() --> Text   ("/zonas/central/serie")
+// # effects: lee la petición HTTP.
+// rutaPedida() --> Text
 // --------------------------------------------------------------
 function rutaPedida(): string {
     if (isset($_GET['ruta'])) {
@@ -52,6 +55,10 @@ function rutaPedida(): string {
 }
 
 // token de sesión de la petición (o null)
+// --------------------------------------------------------------
+// # effects: lee la petición HTTP.
+// tokenPedido() --> Text | Ausente
+// --------------------------------------------------------------
 function tokenPedido(): ?string {
     $t = $_SERVER['HTTP_X_RESPIRA_TOKEN'] ?? '';
     if ($t === '') {
@@ -63,13 +70,18 @@ function tokenPedido(): ?string {
     return $t === '' ? null : $t;
 }
 
+// --------------------------------------------------------------
+// # effects: lee el cuerpo HTTP.
+// cuerpo() --> Registro
+// --------------------------------------------------------------
 function cuerpo(): array {
     $c = json_decode(file_get_contents('php://input') ?: 'null', true);
     return is_array($c) ? $c : [];
 }
 
 // --------------------------------------------------------------
-// config() --> {pdo, prefijo, url_web, correo}   (config.php solo existe en el servidor)
+// # effects: lee configuración y entorno; conecta con la base de datos.
+// config() --> Registro
 // --------------------------------------------------------------
 function config(): array {
     $dsn = getenv('RESPIRA_DSN');            // tests: sqlite

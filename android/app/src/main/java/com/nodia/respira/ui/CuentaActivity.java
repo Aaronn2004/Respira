@@ -17,8 +17,21 @@ import com.nodia.respira.datos.Usuario;
 // ==============================================================
 // Mi cuenta: ID para el punto de reparto, cerrar sesión, borrar cuenta.
 // ==============================================================
+// --------------------------------------------------------------
+// class CuentaActivity
+// # Datos de cuenta y cierre de sesión.
+// # AppCompatActivity <--- CuentaActivity
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public class CuentaActivity extends AppCompatActivity {
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreate() -->
+    // --------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

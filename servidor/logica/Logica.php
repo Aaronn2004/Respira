@@ -11,10 +11,14 @@
 // Fecha:       09/11/2026
 // Copyright:   (c) 2026 Aaron Blasco Blay - GTI, UPV
 // ==============================================================
+// # tipos: Base.php (Valor, Registro, Ausente, Error y capacidades lógicas).
+// Punto = [R]_2; Anillo = [Punto]; Poligono = [Anillo]; Area = [Poligono].
+// ResultadoLote = { guardadas: N, repetidas: N, errores: [{ i: N, error: Text }] }.
 
 require_once __DIR__ . '/Base.php';
 require_once __DIR__ . '/Flota.php';
 
+// Base <--- Logica
 class Logica extends Base {
 
     // Magnitudes y rango que puede devolver cada sensor. Fuera de rango
@@ -40,8 +44,12 @@ class Logica extends Base {
     ];
 
     // --------------------------------------------------------------
-    // lat: R, lng: R, poligono: [[lat,lng]] --> dentro() --> B
-    // (algoritmo del rayo: x = lng, y = lat)
+    // # (algoritmo del rayo: x = lng, y = lat)
+    // + lat: R, lng: R, poligono: Anillo
+    //     -->
+    //         dentro() --x
+    //     <--
+    //     B
     // --------------------------------------------------------------
     public static function dentro(float $lat, float $lng, array $poligono): bool {
         $dentro = false;
@@ -58,8 +66,13 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // lat: R, lng: R --> zonaDe() --> Text | null
-    // Un parque o una playa tiene prioridad si también cae en un barrio.
+    // # Un parque o una playa tiene prioridad si también cae en un barrio.
+    // # effects: consulta la base de datos.
+    // + lat: R | Ausente, lng: R | Ausente
+    //     -->
+    //         zonaDe() <--
+    //     <--
+    //     Text | Ausente | Error
     // --------------------------------------------------------------
     public function zonaDe(?float $lat, ?float $lng): ?string {
         if ($lat === null || $lng === null) {
@@ -77,6 +90,13 @@ class Logica extends Base {
         return $barrio;
     }
 
+    // --------------------------------------------------------------
+    // - lat: R, lng: R, poligonos: Area
+    //     -->
+    //         dentroDeZona() --x
+    //     <--
+    //     B
+    // --------------------------------------------------------------
     private static function dentroDeZona(float $lat, float $lng, array $poligonos): bool {
         foreach ($poligonos as $anillos) {
             if (!self::dentro($lat, $lng, $anillos[0])) {
@@ -94,6 +114,12 @@ class Logica extends Base {
 
     private $cacheZonas = null;
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos y actualiza la caché de zonas; lee los contornos geográficos.
+    // -       leerZonas() -->
+    //     <--
+    //     [Registro] | Error
+    // --------------------------------------------------------------
     private function leerZonas(): array {
         if ($this->cacheZonas === null) {
             $filas = $this->filas("SELECT id, ayuntamiento_id, nombre, tipo, area, etiqueta_lat, etiqueta_lng
@@ -122,16 +148,19 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // d: {nodo, magnitud | tipo, valor, medida_en?, lat, lng}, quien: usuario con sesión | null
-    // (la app manda también contador, precision y rssi: se aceptan y no se guardan)
-    // El «portador» (para los puntos) NO lo dice el móvil: es quien tiene
-    // la sesión, y solo si de verdad lleva ese sensor (préstamo en curso
-    // o sensor de su servicio). Si no, la medición se guarda sin portador.
-    //   --> guardarMedicion()
-    //   --> {id, nodo, magnitud, valor, zona, valida, motivo, medida_en}
-    // Solo se guardan mediciones válidas: con ubicación, dentro de una zona
-    // y dentro del rango del sensor. Si no, DatosNoValidosException (400).
-    // NoEncontradoException (404) si el sensor no existe; null si es repetida.
+    // # (la app manda también contador, precision y rssi: se aceptan y no se guardan)
+    // # El «portador» (para los puntos) NO lo dice el móvil: es quien tiene
+    // # la sesión, y solo si de verdad lleva ese sensor (préstamo en curso
+    // # o sensor de su servicio). Si no, la medición se guarda sin portador.
+    // # Solo se guardan mediciones válidas: con ubicación, dentro de una zona
+    // # y dentro del rango del sensor. Si no, DatosNoValidosException (400).
+    // # NoEncontradoException (404) si el sensor no existe; null si es repetida.
+    // # effects: consulta y modifica la base de datos; consulta el reloj inyectado.
+    // + d: Registro, quien: Registro | Ausente
+    //     -->
+    //         guardarMedicion() -->
+    //     <--
+    //     Registro | Ausente | Error
     // --------------------------------------------------------------
     public function guardarMedicion(array $d, ?array $quien = null): ?array {
         $ahora = $this->ahora();
@@ -216,8 +245,15 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // La fecha de la medición permite sincronizar lotes de un préstamo aún abierto
-    // cuyo plazo venció después de captar los datos.
+    // # La fecha de la medición permite sincronizar lotes de un préstamo aún abierto
+    // # cuyo plazo venció después de captar los datos.
+    // # effects: consulta la base de datos.
+    // - quien: Registro | Ausente, nodo: Text, medidaEn: Instante
+    //     -->
+    //         portadorDe() <--
+    //     <--
+    //     Text | Ausente | Error
+    // --------------------------------------------------------------
     private function portadorDe(?array $quien, string $nodo, int $medidaEn): ?string {
         if ($quien === null) {
             return null;
@@ -235,6 +271,13 @@ class Logica extends Base {
         return null;
     }
 
+    // --------------------------------------------------------------
+    // - d: Registro, k: Text, min: R, max: R
+    //     -->
+    //         numeroOpcional() --x
+    //     <--
+    //     R | Ausente | Error
+    // --------------------------------------------------------------
     private static function numeroOpcional(array $d, string $k, float $min, float $max): ?float {
         if (!isset($d[$k]) || $d[$k] === '') {
             return null;
@@ -246,8 +289,13 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // lista: [d] --> guardarMediciones() --> {guardadas, repetidas, errores: [{i, error}]}
-    // (la app manda varias de golpe cuando recupera la conexión)
+    // # (la app manda varias de golpe cuando recupera la conexión)
+    // # effects: consulta y modifica la base de datos.
+    // + lista: [Registro], quien: Registro | Ausente
+    //     -->
+    //         guardarMediciones() -->
+    //     <--
+    //     ResultadoLote | Error
     // --------------------------------------------------------------
     public function guardarMediciones(array $lista, ?array $quien = null): array {
         $r = ['guardadas' => 0, 'repetidas' => 0, 'errores' => []];
@@ -265,8 +313,13 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // Última hora móvil. Para un dato antiguo se indica la media de la última
-    // hora que sí tuvo lecturas de esa magnitud y se publica su fecha.
+    // # Última hora móvil. Para un dato antiguo se indica la media de la última
+    // # hora que sí tuvo lecturas de esa magnitud y se publica su fecha.
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // +       zonas() <--
+    //     <--
+    //     [Registro] | Error
+    // --------------------------------------------------------------
     public function zonas(): array {
         $ahora = $this->ahora();
         $hasta = self::fechaBD($ahora);
@@ -345,6 +398,13 @@ class Logica extends Base {
     // Ponderación por distancia inversa. Dos o más zonas vecinas del mismo
     // ayuntamiento a menos de 1,5 km, solo con lecturas recientes del mismo
     // origen. Se prefieren las reales. Una estimación no alimenta a otra.
+    // --------------------------------------------------------------
+    // - zona: Registro, magnitud: Text, observadas: [R]
+    //     -->
+    //         estimarZona() --x
+    //     <--
+    //     R | Ausente
+    // --------------------------------------------------------------
     private static function estimarZona(array $zona, string $magnitud, array $observadas): ?float {
         [$latitud, $longitud] = $zona['etiqueta'];
         $grupos = ['real' => [], 'simulado' => []];
@@ -376,6 +436,13 @@ class Logica extends Base {
         return null;
     }
 
+    // --------------------------------------------------------------
+    // - fecha: Text | Ausente, campo: Text
+    //     -->
+    //         fechaCivil() --x
+    //     <--
+    //     Instante | Error
+    // --------------------------------------------------------------
     private static function fechaCivil(?string $fecha, string $campo): int {
         if ($fecha === null || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $fecha, $partes)
             || !checkdate((int) $partes[2], (int) $partes[3], (int) $partes[1])) {
@@ -384,6 +451,13 @@ class Logica extends Base {
         return self::msDeFechaBD("$fecha 00:00:00");
     }
 
+    // --------------------------------------------------------------
+    // - referencia: Text | Ausente, ahora: Instante
+    //     -->
+    //         finDeSerie() --x
+    //     <--
+    //     Instante | Error
+    // --------------------------------------------------------------
     private static function finDeSerie(?string $referencia, int $ahora): int {
         if ($referencia === null) {
             return $ahora;
@@ -401,6 +475,14 @@ class Logica extends Base {
 
     // 24 h, 7 d o 30 d, o rango de fechas civiles UTC de hasta 90 días
     // inclusive. Una referencia común sincroniza dos ventanas predefinidas.
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // + zonaId: Text, magnitud: Text, periodo: Text, desde: Date | Ausente, hasta: Date | Ausente, referencia: Text | Ausente
+    //     -->
+    //         serie() <--
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     public function serie(string $zonaId, string $magnitud, string $periodo, ?string $desde = null, ?string $hasta = null,
                           ?string $referencia = null): array {
         if (!in_array($zonaId, array_column($this->leerZonas(), 'id'), true)) {
@@ -491,6 +573,14 @@ class Logica extends Base {
         ];
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta la base de datos.
+    // - zona: Text, magnitud: Text, inicio: Instante, fin: Instante
+    //     -->
+    //         avisosEmitidos() <--
+    //     <--
+    //     Registro | Error
+    // --------------------------------------------------------------
     private function avisosEmitidos(string $zona, string $magnitud, int $inicio, int $fin): array {
         try {
             $filas = $this->filas("SELECT DISTINCT momento, valor, origen FROM {$this->p}alerta_emitida
@@ -514,9 +604,13 @@ class Logica extends Base {
     const HUECO_APROX_MS = 2 * 3600000;
 
     // --------------------------------------------------------------
-    // valores: [R | null], paso: N (ms) --> aproximar() --> [R | null]
-    // Rellena por interpolación lineal SOLO los huecos cortos que tienen
-    // dato a los dos lados. Lo devuelto es aparte: no cuenta en mín./media/máx.
+    // # Rellena por interpolación lineal SOLO los huecos cortos que tienen
+    // # dato a los dos lados. Lo devuelto es aparte: no cuenta en mín./media/máx.
+    // + valores: [R], paso: N, dec: N
+    //     -->
+    //         aproximar() --x
+    //     <--
+    //     [R | Ausente]
     // --------------------------------------------------------------
     public static function aproximar(array $valores, int $paso, int $dec): array {
         $n = count($valores);
@@ -545,15 +639,24 @@ class Logica extends Base {
         return $out;
     }
 
+    // --------------------------------------------------------------
+    // + magnitud: Text, valor: R
+    //     -->
+    //         nivelDe() --x
+    //     <--
+    //     Text
+    // --------------------------------------------------------------
     public static function nivelDe(string $magnitud, float $valor): string {
         [$medio, $alto] = self::LIMITES[$magnitud];
         return $valor >= $alto ? 'alto' : ($valor >= $medio ? 'medio' : 'bajo');
     }
 
     // --------------------------------------------------------------
-    // eventos() --> {alertas: [{desde, hasta, max, nivel}], picos: [{momento, valor}]}
-    //   alertas: ratos seguidos en nivel Alto (y, si no hay, en Medio)
-    //   picos: los 3 valores más altos medidos (en tramos no seguidos), con su hora
+    // + valores: [R], maximos: [R], momentos: [Instante], magnitud: Text, inicio: Instante, paso: N, origenes: [Text]
+    //     -->
+    //         eventos() --x
+    //     <--
+    //     Registro
     // --------------------------------------------------------------
     public static function eventos(array $valores, array $maximos, array $momentos, string $magnitud, int $inicio, int $paso, array $origenes = []): array {
         [$medio, $alto] = self::LIMITES[$magnitud];
@@ -602,9 +705,13 @@ class Logica extends Base {
     }
 
     // --------------------------------------------------------------
-    // nodos() --> [{codigo, tipo, magnitudes, estado, asignado_a,
-    //              ultima_min | null, ultima: {o3, temp, ruido}}]
-    // ultima = último valor válido de cada magnitud (para el panel y «Mi sensor»)
+    // # ultima = último valor válido de cada magnitud (para el panel y «Mi sensor»)
+    // # effects: consulta la base de datos; consulta el reloj inyectado.
+    // + codigo: Text | Ausente
+    //     -->
+    //         nodos() <--
+    //     <--
+    //     Registro | Error
     // --------------------------------------------------------------
     public function nodos(?string $codigo = null): array {
         $ahora = $this->ahora();

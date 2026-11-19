@@ -1,5 +1,8 @@
 package com.nodia.respira.datos;
 
+// # Entrada del historial de puntos, incluida la información del recorrido si existe.
+// # Ausente representa la ausencia lógica (null en el código).
+
 // Línea del historial de puntos: un día con sensor o un canje.
 // Los calcula el servidor (Puntos.php) con las mediciones del día.
 public class Movimiento {
@@ -13,14 +16,42 @@ public class Movimiento {
     public final String nota;      // «Caducado sin recoger…» | null
     public final ResumenRecorrido recorrido;  // estadísticas del día con sensor | null (canjes)
 
+    // --------------------------------------------------------------
+    // + fecha: Text, minutos: Z, minutos_parque: Z, descartados: Z, puntos: Z, canje: Text | Ausente
+    //       -->
+    //     Movimiento() -->
+    // --------------------------------------------------------------
     public Movimiento(String fecha, int minutos, int minutosParque, int descartados, int puntos, String canje) {
         this(fecha, minutos, minutosParque, descartados, puntos, canje, null);
     }
 
+    // --------------------------------------------------------------
+    // + fecha: Text
+    //   minutos: Z
+    //   minutos_parque: Z
+    //   descartados: Z
+    //   puntos: Z
+    //   canje: Text | Ausente
+    //   nota: Text | Ausente
+    //       -->
+    //     Movimiento() -->
+    // --------------------------------------------------------------
     public Movimiento(String fecha, int minutos, int minutosParque, int descartados, int puntos, String canje, String nota) {
         this(fecha, minutos, minutosParque, descartados, puntos, canje, nota, null);
     }
 
+    // --------------------------------------------------------------
+    // + fecha: Text
+    //   minutos: Z
+    //   minutos_parque: Z
+    //   descartados: Z
+    //   puntos: Z
+    //   canje: Text | Ausente
+    //   nota: Text | Ausente
+    //   recorrido: ResumenRecorrido | Ausente
+    //       -->
+    //     Movimiento() -->
+    // --------------------------------------------------------------
     public Movimiento(String fecha, int minutos, int minutosParque, int descartados, int puntos, String canje, String nota,
                       ResumenRecorrido recorrido) {
         this.fecha = fecha;

@@ -88,6 +88,11 @@ test('los picos usan el valor y el instante de una lectura, las alertas usan sus
 });
 
 test('rangos personalizados utilizan UTC, rechazan fechas inválidas o futuras y limitan a 90 días', () => {
+  // --------------------------------------------------------------
+  // # Usa el mismo instante de referencia para probar los límites del rango.
+  // # Serie es el resultado lógico de serie(); Ausente representa null.
+  // desde: Date, hasta: Date --> rango() --> Serie | Ausente
+  // --------------------------------------------------------------
   const rango = (desde, hasta) => serie(zona, 'temp', 'custom', { desde, hasta, ahora });
   assert.equal(rango('2026-11-15', '2026-11-14'), null);
   assert.equal(rango('2026-11-16', '2026-11-17'), null);

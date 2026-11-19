@@ -11,6 +11,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
+// # Resumen del recorrido que acompaña al historial de puntos; las horas se muestran en Europe/Madrid.
+// # Ausente representa la ausencia lógica (null en el código).
+// # ValorJson = Ausente | B | R | Text | [ValorJson] | Map[Text, ValorJson].
+// # ObjetoJson = Map[Text, ValorJson].
+// # ErrorDatos = { detalle: Text }; fallo al leer o interpretar datos.
+
 // ==============================================================
 // Estadísticas del recorrido de un día con sensor. Las calcula el
 // servidor (Puntos.php) con las mediciones de ese día:
@@ -29,6 +35,16 @@ public class ResumenRecorrido {
     public final int lecturas;
     public final List<String> parques;
 
+    // --------------------------------------------------------------
+    // + inicio: Text | Ausente
+    //   fin: Text | Ausente
+    //   duracion_min: Z
+    //   distancia_m: Z
+    //   lecturas: Z
+    //   parques: [Text]
+    //       -->
+    //     ResumenRecorrido() -->
+    // --------------------------------------------------------------
     public ResumenRecorrido(String inicio, String fin, int duracionMin, int distanciaM, int lecturas, List<String> parques) {
         this.inicio = inicio;
         this.fin = fin;
@@ -38,14 +54,23 @@ public class ResumenRecorrido {
         this.parques = Collections.unmodifiableList(new ArrayList<>(parques));
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     vacio() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public boolean vacio() {
         return lecturas == 0;
     }
 
     // --------------------------------------------------------------
-    // {inicio: ISO | null, fin, duracion_min, distancia_m, lecturas, parques: [..]}
-    //   --> deJSON() --> ResumenRecorrido | null
-    // También lee la copia guardada en el móvil (inicio y fin ya en "HH:mm").
+    // # También lee la copia guardada en el móvil (inicio y fin ya en "HH:mm").
+    // + o: ObjetoJson | Ausente
+    //       -->
+    //     deJSON() --x
+    //       <--
+    //   ResumenRecorrido | Ausente | ErrorDatos
     // --------------------------------------------------------------
     public static ResumenRecorrido deJSON(JSONObject o) throws JSONException {
         if (o == null) {
@@ -61,6 +86,12 @@ public class ResumenRecorrido {
                 o.optInt("duracion_min", 0), o.optInt("distancia_m", 0), o.optInt("lecturas", 0), p);
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     json() <--
+    //       <--
+    //   ObjetoJson | ErrorDatos
+    // --------------------------------------------------------------
     public JSONObject json() throws JSONException {
         return new JSONObject().put("inicio", inicio == null ? JSONObject.NULL : inicio)
                 .put("fin", fin == null ? JSONObject.NULL : fin).put("duracion_min", duracionMin)
@@ -68,6 +99,13 @@ public class ResumenRecorrido {
     }
 
     // '2026-11-08T09:00:00.000Z' --> '10:00' (hora de España); 'HH:mm' se deja igual
+    // --------------------------------------------------------------
+    // - iso: Text | Ausente
+    //       -->
+    //     hora() --x
+    //       <--
+    //   Text | Ausente
+    // --------------------------------------------------------------
     static String hora(String iso) {
         if (iso == null || iso.length() <= 5) {
             return iso;
@@ -81,6 +119,13 @@ public class ResumenRecorrido {
     }
 
     // 850 --> "850 m"; 2430 --> "2,4 km"
+    // --------------------------------------------------------------
+    // + metros: Z
+    //       -->
+    //     distanciaTexto() --x
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public static String distanciaTexto(int metros) {
         if (metros < 1000) {
             return metros + " m";
@@ -89,6 +134,13 @@ public class ResumenRecorrido {
     }
 
     // 45 --> "45 min"; 85 --> "1 h 25 min"; 120 --> "2 h"
+    // --------------------------------------------------------------
+    // + min: Z
+    //       -->
+    //     duracionTexto() --x
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public static String duracionTexto(int min) {
         if (min < 60) {
             return min + " min";
@@ -97,6 +149,12 @@ public class ResumenRecorrido {
     }
 
     // "1 h 25 min · 2,4 km · 34 lecturas"
+    // --------------------------------------------------------------
+    // +
+    //     linea() <--
+    //       <--
+    //   Text
+    // --------------------------------------------------------------
     public String linea() {
         return duracionTexto(duracionMin) + " · " + distanciaTexto(distanciaM) + " · " + lecturas
                 + (lecturas == 1 ? " lectura" : " lecturas");

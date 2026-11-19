@@ -2,6 +2,9 @@ package com.nodia.respira.datos;
 
 import java.util.Locale;
 
+// # Magnitud = { O3 | TEMP | RUIDO }.
+// # Ausente representa la ausencia lógica (null en el código).
+
 // ==============================================================
 // Magnitud: lo que mide el sensor (ozono, temperatura y ruido).
 // Los umbrales son orientativos (mismos que el prototipo).
@@ -21,6 +24,18 @@ public enum Magnitud {
     public final double rangoMin;      // rango aceptado en alertas personalizadas
     public final double rangoMax;
 
+    // --------------------------------------------------------------
+    // - id: Text
+    //   nombre: Text
+    //   abreviatura: Text
+    //   unidad: Text
+    //   limite_medio: R
+    //   limite_alto: R
+    //   rango_min: R
+    //   rango_max: R
+    //       -->
+    //     Magnitud() -->
+    // --------------------------------------------------------------
     Magnitud(String id, String nombre, String abreviatura, String unidad,
              double limiteMedio, double limiteAlto, double rangoMin, double rangoMax) {
         this.id = id;
@@ -34,7 +49,11 @@ public enum Magnitud {
     }
 
     // --------------------------------------------------------------
-    // valor: R | null --> nivel() --> Nivel
+    // + valor: R | Ausente
+    //       -->
+    //     nivel() <--
+    //       <--
+    //   Nivel
     // --------------------------------------------------------------
     public Nivel nivel(Double valor) {
         if (valor == null) {
@@ -47,7 +66,11 @@ public enum Magnitud {
     }
 
     // --------------------------------------------------------------
-    // valor: R | null --> formatear() --> Text
+    // + valor: R | Ausente
+    //       -->
+    //     formatear() <--
+    //       <--
+    //   Text
     // --------------------------------------------------------------
     public String formatear(Double valor) {
         if (valor == null) {
@@ -63,6 +86,13 @@ public enum Magnitud {
         }
     }
 
+    // --------------------------------------------------------------
+    // + id: Text
+    //       -->
+    //     desdeId() --x
+    //       <--
+    //   Magnitud
+    // --------------------------------------------------------------
     public static Magnitud desdeId(String id) {
         for (Magnitud m : values()) {
             if (m.id.equals(id)) {

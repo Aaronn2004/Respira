@@ -12,8 +12,12 @@ import java.nio.charset.StandardCharsets;
 public class TramaIBeaconTest {
 
     // --------------------------------------------------------------
-    // conFlags: B, uuid: Text, major: N, minor: N --> construirAnuncio() --> [N]
-    // Construye los bytes de un anuncio iBeacon como los emite la placa.
+    // # Construye los bytes de un anuncio iBeacon como los emite la placa.
+    // - con_flags: B, uuid: Text, major: Z, minor: Z
+    //       -->
+    //     construirAnuncio() --x
+    //       <--
+    //   [Z]
     // --------------------------------------------------------------
     static byte[] construirAnuncio(boolean conFlags, String uuid, int major, int minor) {
         byte[] flags = { 0x02, 0x01, 0x06 };
@@ -30,6 +34,11 @@ public class TramaIBeaconTest {
         return anuncio;
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     extraeUUIDMajorMinorConFlags() --x
+    // --------------------------------------------------------------
     @Test
     public void extraeUUIDMajorMinorConFlags() {
         TramaIBeacon trama = new TramaIBeacon(construirAnuncio(true, "RESPIRA-RSP-4F7K", (11 << 8) + 7, 235));
@@ -41,6 +50,11 @@ public class TramaIBeaconTest {
         assertEquals(-53, trama.getTxPower());
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     funcionaTambienSinFlags() --x
+    // --------------------------------------------------------------
     @Test
     public void funcionaTambienSinFlags() {
         TramaIBeacon trama = new TramaIBeacon(construirAnuncio(false, "RESPIRA-RSP-4F7K", (11 << 8) + 200, 65000));
@@ -49,6 +63,11 @@ public class TramaIBeaconTest {
         assertEquals(65000, trama.getValorEntero()); // sin signo
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     valorConSignoParaTemperaturasNegativas() --x
+    // --------------------------------------------------------------
     @Test
     public void valorConSignoParaTemperaturasNegativas() {
         TramaIBeacon trama = new TramaIBeacon(construirAnuncio(true, "RESPIRA-RSP-4F7K", (12 << 8) + 1, 0xFFC9));
@@ -56,6 +75,11 @@ public class TramaIBeaconTest {
         assertEquals(65481, trama.getValorEntero());
     }
 
+    // --------------------------------------------------------------
+    // # effects: comprueba el contrato mediante aserciones.
+    // +
+    //     noEsIBeaconSiNoHayCabecera() --x
+    // --------------------------------------------------------------
     @Test
     public void noEsIBeaconSiNoHayCabecera() {
         assertFalse(new TramaIBeacon(new byte[] { 0x02, 0x01, 0x06, 0x05, 0x09, 'H', 'o', 'l', 'a' }).esIBeacon());

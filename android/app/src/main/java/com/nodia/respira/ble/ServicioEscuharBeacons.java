@@ -40,6 +40,16 @@ import com.nodia.respira.ui.Notificaciones;
 import java.util.HashMap;
 import java.util.Map;
 
+// # Service <--- ServicioEscuharBeacons; recibe, filtra y geolocaliza anuncios del sensor activo.
+// # Ausente representa la ausencia lógica (null en el código).
+// # ValorJson = Ausente | B | R | Text | [ValorJson] | Map[Text, ValorJson].
+// # ObjetoJson = Map[Text, ValorJson].
+// # EntornoAndroid = { aplicacion: Text }; identifica los recursos y servicios de la app.
+// # Ubicacion = { latitud: R, longitud: R, precision: R, momento: DateTime }.
+// # SolicitudServicio = { accion: Text, extras: Map[Text, ValorJson] }.
+// # AnuncioBle = { bytes: [Z], rssi: Z }.
+// # EscanerBle = { activo: B }; recurso de escucha Bluetooth.
+
 // ==============================================================
 // ServicioEscuharBeacons: escanea BLE en primer plano (con
 // notificación fija, como exige Android) mientras dura el recorrido.
@@ -80,6 +90,11 @@ public class ServicioEscuharBeacons extends Service {
     // Por cada tipo de medida solo se envía cuando cambia el contador.
     private final Map<Integer, Integer> ultimoContadorPorTipo = new HashMap<>();
     private final Runnable vigilar = new Runnable() {
+        // --------------------------------------------------------------
+        // # effects: coordina el servicio y su notificación en Android.
+        // +
+        //     run() -->
+        // --------------------------------------------------------------
         @Override public void run() {
             actualizarEstado();
             if (ejecutando) principal.postDelayed(this, 3_000L);
@@ -89,6 +104,13 @@ public class ServicioEscuharBeacons extends Service {
     private LocationManager gestorUbicacion;
     private Location ultimaUbicacion;
     private final LocationListener oyenteUbicacion = new LocationListener() {
+        // --------------------------------------------------------------
+        // # Acepta la posición si mejora la precisión o la anterior ya tiene más de diez segundos.
+        // # effects: recibe o consulta la ubicación del dispositivo.
+        // + l: Ubicacion
+        //       -->
+        //     onLocationChanged() -->
+        // --------------------------------------------------------------
         @Override
         public void onLocationChanged(@NonNull Location l) {
             if (ultimaUbicacion == null || l.getAccuracy() <= ultimaUbicacion.getAccuracy()
@@ -98,14 +120,29 @@ public class ServicioEscuharBeacons extends Service {
         }
 
         // En Android 9 y 10 el sistema llama también a estos (sin ellos, se cierra la app)
+        // --------------------------------------------------------------
+        // + proveedor: Text, estado: Z, extras: ObjetoJson
+        //       -->
+        //     onStatusChanged() -->
+        // --------------------------------------------------------------
         @Override
         public void onStatusChanged(String proveedor, int estado, android.os.Bundle extras) { }
 
+        // --------------------------------------------------------------
+        // + proveedor: Text
+        //       -->
+        //     onProviderEnabled() -->
+        // --------------------------------------------------------------
         @Override
         public void onProviderEnabled(@NonNull String proveedor) {
             actualizarEstado();
         }
 
+        // --------------------------------------------------------------
+        // + proveedor: Text
+        //       -->
+        //     onProviderDisabled() -->
+        // --------------------------------------------------------------
         @Override
         public void onProviderDisabled(@NonNull String proveedor) {
             actualizarEstado();
@@ -113,7 +150,10 @@ public class ServicioEscuharBeacons extends Service {
     };
 
     // --------------------------------------------------------------
-    // contexto: Context --> arrancar()   (desde la pantalla Sensor)
+    // # effects: coordina el servicio y su notificación en Android.
+    // + contexto: EntornoAndroid
+    //       -->
+    //     arrancar() --x
     // --------------------------------------------------------------
     public static void arrancar(Context contexto) {
         Intent i = new Intent(contexto, ServicioEscuharBeacons.class);
@@ -121,14 +161,34 @@ public class ServicioEscuharBeacons extends Service {
         ContextCompat.startForegroundService(contexto, i);
     }
 
+    // --------------------------------------------------------------
+    // # effects: coordina el servicio y su notificación en Android.
+    // + contexto: EntornoAndroid
+    //       -->
+    //     detener() --x
+    // --------------------------------------------------------------
     public static void detener(Context contexto) {
         contexto.stopService(new Intent(contexto, ServicioEscuharBeacons.class));
     }
 
+    // --------------------------------------------------------------
+    // +
+    //     ejecutando() --x
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public static boolean ejecutando() {
         return ejecutando;
     }
 
+    // --------------------------------------------------------------
+    // # effects: coordina el servicio y su notificación en Android; consulta el reloj.
+    // + intent: SolicitudServicio, flags: Z, start_id: Z
+    //       -->
+    //     onStartCommand() -->
+    //       <--
+    //   Z
+    // --------------------------------------------------------------
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String modo = (intent != null && intent.getStringExtra(EXTRA_MODO) != null)
@@ -155,7 +215,9 @@ public class ServicioEscuharBeacons extends Service {
     }
 
     // --------------------------------------------------------------
-    // ponerEnPrimerPlano(): notificación fija "Recorrido activo"
+    // # effects: coordina el servicio y su notificación en Android.
+    // -
+    //     ponerEnPrimerPlano() -->
     // --------------------------------------------------------------
     private void ponerEnPrimerPlano() {
         Notificaciones.crearCanales(this);
@@ -183,7 +245,9 @@ public class ServicioEscuharBeacons extends Service {
     }
 
     // --------------------------------------------------------------
-    // arrancarUbicacion(): GPS y red cada 5 s (para situar cada dato)
+    // # effects: recibe o consulta la ubicación del dispositivo.
+    // -
+    //     arrancarUbicacion() -->
     // --------------------------------------------------------------
     @SuppressLint("MissingPermission")
     private void arrancarUbicacion() {
@@ -209,6 +273,14 @@ public class ServicioEscuharBeacons extends Service {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o recibe datos del sistema Bluetooth.
+    // + contexto: EntornoAndroid
+    //       -->
+    //     bluetoothActivado() --x
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     @SuppressLint("MissingPermission")
     public static boolean bluetoothActivado(Context contexto) {
         if (!tienePermisoEscanear(contexto) || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -219,6 +291,14 @@ public class ServicioEscuharBeacons extends Service {
         return adaptador != null && adaptador.isEnabled();
     }
 
+    // --------------------------------------------------------------
+    // # effects: recibe o consulta la ubicación del dispositivo.
+    // + contexto: EntornoAndroid
+    //       -->
+    //     ubicacionActivada() --x
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     public static boolean ubicacionActivada(Context contexto) {
         LocationManager gestor = contexto.getSystemService(LocationManager.class);
         return ContextCompat.checkSelfPermission(contexto, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -227,6 +307,11 @@ public class ServicioEscuharBeacons extends Service {
 
     private boolean preparandoUbicacion;
 
+    // --------------------------------------------------------------
+    // # effects: coordina el servicio y su notificación en Android; consulta el reloj.
+    // -
+    //     actualizarEstado() -->
+    // --------------------------------------------------------------
     private void actualizarEstado() {
         Repositorio repo = Repositorio.obtener(this);
         Usuario usuario = repo.usuario();
@@ -262,6 +347,11 @@ public class ServicioEscuharBeacons extends Service {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: recibe o consulta la ubicación del dispositivo.
+    // -
+    //     prepararUbicacionDeNuevo() -->
+    // --------------------------------------------------------------
     private void prepararUbicacionDeNuevo() {
         detenerEscaneo();
         detenerUbicacion();
@@ -270,6 +360,11 @@ public class ServicioEscuharBeacons extends Service {
         ultimaUbicacion = null;
     }
 
+    // --------------------------------------------------------------
+    // # effects: recibe o consulta la ubicación del dispositivo.
+    // -
+    //     detenerUbicacion() -->
+    // --------------------------------------------------------------
     private void detenerUbicacion() {
         if (gestorUbicacion == null) return;
         try {
@@ -279,10 +374,24 @@ public class ServicioEscuharBeacons extends Service {
         }
     }
 
+    // --------------------------------------------------------------
+    // - ahora: Z
+    //       -->
+    //     ubicacionReciente() <--
+    //       <--
+    //   B
+    // --------------------------------------------------------------
     private boolean ubicacionReciente(long ahora) {
         return ultimaUbicacion != null && ahora - ultimaUbicacion.getTime() < 120_000L;
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o recibe datos del sistema Bluetooth.
+    // -
+    //     obtenerEscaner() <--
+    //       <--
+    //   EscanerBle | Ausente
+    // --------------------------------------------------------------
     @SuppressLint("MissingPermission")
     private BluetoothLeScanner obtenerEscaner() {
         BluetoothManager gestor = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
@@ -299,7 +408,12 @@ public class ServicioEscuharBeacons extends Service {
     }
 
     // --------------------------------------------------------------
-    // tienePermisoEscanear() --> B
+    // # effects: consulta o recibe datos del sistema Bluetooth.
+    // + c: EntornoAndroid
+    //       -->
+    //     tienePermisoEscanear() --x
+    //       <--
+    //   B
     // --------------------------------------------------------------
     public static boolean tienePermisoEscanear(Context c) {
         String permiso = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -309,7 +423,10 @@ public class ServicioEscuharBeacons extends Service {
     }
 
     // --------------------------------------------------------------
-    // modo: Text --> arrancarEscaneo()
+    // # effects: consulta o recibe datos del sistema Bluetooth.
+    // - modo: Text
+    //       -->
+    //     arrancarEscaneo() -->
     // --------------------------------------------------------------
     @SuppressLint("MissingPermission") // se comprueba en tienePermisoEscanear()
     private void arrancarEscaneo(String modo) {
@@ -326,6 +443,12 @@ public class ServicioEscuharBeacons extends Service {
         modoActual = modo;
 
         elCallbackDelEscaner = new ScanCallback() {
+            // --------------------------------------------------------------
+            // # effects: consulta o recibe datos del sistema Bluetooth.
+            // + callback_type: Z, resultado: AnuncioBle
+            //       -->
+            //     onScanResult() -->
+            // --------------------------------------------------------------
             @Override
             public void onScanResult(int callbackType, ScanResult resultado) {
                 if (MODO_NUESTRO.equals(modoActual)) {
@@ -335,6 +458,12 @@ public class ServicioEscuharBeacons extends Service {
                 }
             }
 
+            // --------------------------------------------------------------
+            // # effects: consulta o recibe datos del sistema Bluetooth.
+            // + codigo_error: Z
+            //       -->
+            //     onScanFailed() -->
+            // --------------------------------------------------------------
             @Override
             public void onScanFailed(int codigoError) {
                 Log.e(ETIQUETA_LOG, "Error al escanear BLE. Código: " + codigoError);
@@ -354,6 +483,12 @@ public class ServicioEscuharBeacons extends Service {
         Log.d(ETIQUETA_LOG, "Escaneo BLE arrancado en modo " + modo + (uuidBuscado == null ? "" : ", buscando " + uuidBuscado));
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o recibe datos del sistema Bluetooth.
+    // - resultado: AnuncioBle
+    //       -->
+    //     mostrarDispositivo() -->
+    // --------------------------------------------------------------
     @SuppressLint("MissingPermission")
     private void mostrarDispositivo(ScanResult resultado) {
         String nombre = resultado.getScanRecord() != null ? resultado.getScanRecord().getDeviceName() : null;
@@ -362,7 +497,11 @@ public class ServicioEscuharBeacons extends Service {
     }
 
     // --------------------------------------------------------------
-    // resultado: ScanResult --> procesarSiEsNuestroBeacon()
+    // # Filtra el UUID del recorrido y descarta repeticiones del contador por tipo de magnitud.
+    // # effects: consulta o recibe datos del sistema Bluetooth; guarda las mediciones nuevas con su ubicación; consulta el reloj.
+    // - resultado: AnuncioBle
+    //       -->
+    //     procesarSiEsNuestroBeacon() -->
     // --------------------------------------------------------------
     private void procesarSiEsNuestroBeacon(ScanResult resultado) {
         if (resultado.getScanRecord() == null || uuidBuscado == null) {
@@ -397,6 +536,11 @@ public class ServicioEscuharBeacons extends Service {
         repo.estadoSensor(Recorrido.ACTIVO);
     }
 
+    // --------------------------------------------------------------
+    // # effects: consulta o recibe datos del sistema Bluetooth.
+    // -
+    //     detenerEscaneo() -->
+    // --------------------------------------------------------------
     @SuppressLint("MissingPermission")
     private void detenerEscaneo() {
         if (elEscaner != null && elCallbackDelEscaner != null && tienePermisoEscanear(this)) {
@@ -412,6 +556,11 @@ public class ServicioEscuharBeacons extends Service {
         modoActual = null;
     }
 
+    // --------------------------------------------------------------
+    // # effects: coordina el servicio y su notificación en Android.
+    // +
+    //     onDestroy() -->
+    // --------------------------------------------------------------
     @Override
     public void onDestroy() {
         ejecutando = false;
@@ -422,6 +571,13 @@ public class ServicioEscuharBeacons extends Service {
         super.onDestroy();
     }
 
+    // --------------------------------------------------------------
+    // + intent: SolicitudServicio
+    //       -->
+    //     onBind() --x
+    //       <--
+    //   Ausente
+    // --------------------------------------------------------------
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {

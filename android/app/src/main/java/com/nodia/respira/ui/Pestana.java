@@ -17,12 +17,28 @@ import com.nodia.respira.datos.Repositorio;
 // Pestana: base de las pestañas de listas (Parques, Sensor, Puntos, Más).
 // Se repinta entera cuando cambian los datos del Repositorio.
 // ==============================================================
+// --------------------------------------------------------------
+// class Pestana
+// # Base de pestañas que observan y presentan el repositorio.
+// # Fragment <--- Pestana
+// # Proyecciones lógicas de interfaz; se omiten mecanismos de Android.
+// Vista = { contenido: Text, visible: B, habilitada: B }
+// EstadoPantalla = Map[Text, Text | Z | R | B | Ausente]
+// --------------------------------------------------------------
 public abstract class Pestana extends Fragment {
 
     protected LinearLayout contenido;
     protected Repositorio repo;
     private final Runnable alCambiar = this::repintar;
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + container: Vista, savedInstanceState: EstadoPantalla | Ausente
+    //       -->
+    //           onCreateView() -->
+    //       <--
+    //   resultado: Vista
+    // --------------------------------------------------------------
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
@@ -35,6 +51,11 @@ public abstract class Pestana extends Fragment {
         return scroll;
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la suscripción al repositorio; solicita datos al servidor; actualiza la interfaz
+    // +
+    //   onStart() -->
+    // --------------------------------------------------------------
     @Override
     public void onStart() {
         super.onStart();
@@ -43,12 +64,23 @@ public abstract class Pestana extends Fragment {
         repintar();
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la suscripción al repositorio
+    // +
+    //   onStop() -->
+    // --------------------------------------------------------------
     @Override
     public void onStop() {
         repo.dejarDeObservar(alCambiar);
         super.onStop();
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + oculto: B
+    //       -->
+    //           onHiddenChanged() -->
+    // --------------------------------------------------------------
     @Override
     public void onHiddenChanged(boolean oculto) {
         super.onHiddenChanged(oculto);
@@ -57,6 +89,11 @@ public abstract class Pestana extends Fragment {
         }
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // -
+    //   repintar() -->
+    // --------------------------------------------------------------
     private void repintar() {
         if (contenido == null || !isAdded()) {
             return;
@@ -65,8 +102,20 @@ public abstract class Pestana extends Fragment {
         pintar(contenido);
     }
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + c: Vista
+    //       -->
+    //           pintar() -->
+    // --------------------------------------------------------------
     protected abstract void pintar(LinearLayout c);
 
+    // --------------------------------------------------------------
+    // # effects: actualiza la interfaz Android
+    // + idPestana: N
+    //       -->
+    //           irA() -->
+    // --------------------------------------------------------------
     protected void irA(int idPestana) {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).irA(idPestana);
