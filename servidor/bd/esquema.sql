@@ -134,10 +134,8 @@ CREATE TABLE usuario (
   email       VARCHAR(120) NOT NULL,
   clave_hash  VARCHAR(255) NOT NULL COMMENT 'bcrypt (password_hash)',
   alta        DATETIME(3)  NOT NULL,
-  nombre_vecino VARCHAR(20) GENERATED ALWAYS AS (CASE WHEN rol = 'vecino' THEN LOWER(nombre) ELSE NULL END) STORED,
   PRIMARY KEY (id),
   UNIQUE KEY usuario_email (email),
-  UNIQUE KEY usuario_nombre_vecino (nombre_vecino),
   KEY usuario_nombre (nombre),
   CONSTRAINT usuario_id_valido CHECK (id REGEXP '^(U-[0-9]{5}|T-[0-9]{4}|A-[0-9]{4})$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

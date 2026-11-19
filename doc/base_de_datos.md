@@ -16,7 +16,6 @@ Todas las fechas se guardan en **UTC** (`DATETIME(3)`, con milisegundos). Los «
 - **Los campos que admiten NULL** se vacían a propósito:
   - `medicion.portador_id`: cuando nadie con sesión llevaba el sensor (o es simulada).
   - `prestamo.usuario_id` y `canje.usuario_id`: cuando un vecino borra su cuenta (sus datos personales desaparecen, pero el historial del sensor y del regalo se conserva).
-  - `usuario.nombre_vecino`: índice único que solo se rellena para las cuentas ciudadanas.
 - Lo que se puede calcular a partir de otros datos no se guarda dos veces (última medición de un sensor, UUID del iBeacon, orden de las zonas). Excepción a propósito: los puntos de cada día acabado se guardan en `puntos_dia`.
 
 ```
