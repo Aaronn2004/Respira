@@ -39,6 +39,9 @@ public class Serie {
 
     public final Double[] valores;
     public final Double[] aprox;
+    public final long desde;          // instante UTC en ms; no es el inicio del día
+    public final long hasta;
+    public final long pasoMs;
     public final List<Evento> alertas = new ArrayList<>();
     public final List<Evento> picos = new ArrayList<>();
     public final List<Evento> avisos = new ArrayList<>();
@@ -66,7 +69,38 @@ public class Serie {
     //     Serie() -->
     // --------------------------------------------------------------
     public Serie(Double[] valores, Double[] aprox) {
+        this(valores, aprox, 0, 0, 0);
+    }
+
+    public Serie(Double[] valores, Double[] aprox, long desde, long hasta, long pasoMs) {
+        // Sin metadatos se conserva la serie, pero no se inventan horas.
+        if (desde != 0 || hasta != 0 || pasoMs != 0) {
+            if (hasta <= desde || pasoMs <= 0
+                    || 1 + (hasta - desde - 1) / pasoMs != valores.length) {
+                throw new IllegalArgumentException("Intervalo temporal incompatible con la serie");
+            }
+        }
         this.valores = valores;
         this.aprox = aprox == null ? new Double[valores.length] : aprox;
+        this.desde = desde;
+        this.hasta = hasta;
+        this.pasoMs = pasoMs;
+    }
+
+    public boolean tieneIntervalo() {
+        return pasoMs > 0;
+    }
+
+    // Cada punto representa la media del intervalo, situada en su centro.
+    public long instanteDelTramo(int indice) {
+        if (!tieneIntervalo()) throw new IllegalStateException("Serie sin intervalo temporal");
+        if (indice < 0 || indice >= valores.length) throw new IndexOutOfBoundsException();
+        long inicio = desde + indice * pasoMs;
+        return inicio + Math.min(pasoMs, hasta - inicio) / 2;
+    }
+
+    public double posicionTemporal(long instante) {
+        if (!tieneIntervalo()) throw new IllegalStateException("Serie sin intervalo temporal");
+        return (instante - desde) / (double) (hasta - desde);
     }
 }

@@ -315,7 +315,14 @@ public class ApiRespira {
     // --------------------------------------------------------------
     static Serie serieDeJSON(JSONObject o) throws Exception {
         JSONArray a = o.optJSONArray("aprox");
-        Serie s = new Serie(numeros(o.getJSONArray("valores")), a == null ? null : numeros(a));
+        Double[] valores = numeros(o.getJSONArray("valores"));
+        Double[] aprox = a == null ? null : numeros(a);
+        boolean conIntervalo = o.has("desde") || o.has("hasta") || o.has("paso_ms");
+        Serie s = conIntervalo
+                ? new Serie(valores, aprox,
+                        java.time.Instant.parse(o.getString("desde")).toEpochMilli(),
+                        java.time.Instant.parse(o.getString("hasta")).toEpochMilli(), o.getLong("paso_ms"))
+                : new Serie(valores, aprox);
         JSONArray origen = o.optJSONArray("origen");
         if (origen != null) {
             s.origen = new String[origen.length()];

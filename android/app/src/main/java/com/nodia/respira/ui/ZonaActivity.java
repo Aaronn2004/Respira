@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.view.View;
 
 import java.util.DoubleSummaryStatistics;
 
@@ -217,8 +219,11 @@ public class ZonaActivity extends AppCompatActivity {
             }
             serie = serieServidor;
         } else {
-            serie = new Serie(DatosDemo.serie(zona, magnitud, periodoElegido), null);
-            Ui.nota(c, "Datos de demostración: no hay conexión con el servidor.");
+            Double[] demo = DatosDemo.serie(zona, magnitud, periodoElegido);
+            long hasta = System.currentTimeMillis();
+            long pasoMs = dia ? 30 * 60000L : 3 * 3600000L;
+            serie = new Serie(demo, null, hasta - demo.length * pasoMs, hasta, pasoMs);
+            Ui.nota(c, "Datos de demostración: no hay conexión con el servidor. Horario de ejemplo relativo a este momento.");
         }
         if (java.util.Arrays.stream(serie.valores).allMatch(java.util.Objects::isNull)) {
             Ui.vacio(c, "Sin datos en este periodo", "Elige otra magnitud u otro periodo para consultar la evolución.", null, null);
@@ -226,9 +231,38 @@ public class ZonaActivity extends AppCompatActivity {
         }
         LinearLayout card = Ui.tarjeta(c);
         GraficaView g = new GraficaView(this);
-        g.mostrar(serie.valores, serie.aprox, serie.origen, magnitud, dia);
+        g.mostrar(serie, magnitud);
+        Ui.nota(card, "Línea: medias por intervalo · P1–P3: picos de lecturas");
+        if (serie.alertas.stream().anyMatch(a -> "alto".equals(a.nivel))) {
+            Ui.nota(card, "Franjas verticales cálidas: intervalos En Alto. Bandas horizontales: niveles de valor.");
+        }
+        if (serie.tieneIntervalo()) {
+            Ui.nota(card, "Ventana: " + franja(serie.desde, serie.hasta) + " · Europe/Madrid");
+        }
         if (serie.tieneSimulacion()) Ui.nota(card, "Trazo discontinuo: datos simulados.");
         card.addView(g);
+        LinearLayout referencias = new LinearLayout(this);
+        referencias.setOrientation(LinearLayout.VERTICAL);
+        referencias.setVisibility(View.GONE);
+        card.addView(referencias);
+        TextView pagina = Ui.texto(referencias, "", 12, false, com.nodia.respira.R.color.tinta_3);
+        LinearLayout controles = new LinearLayout(this);
+        controles.setOrientation(LinearLayout.HORIZONTAL);
+        referencias.addView(controles);
+        MaterialButton anterior = Ui.boton(controles, "Anterior", Ui.BOTON_TEXTO, v -> g.cambiarReferencias(-1));
+        MaterialButton siguiente = Ui.boton(controles, "Siguiente", Ui.BOTON_TEXTO, v -> g.cambiarReferencias(1));
+        anterior.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        siguiente.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        anterior.setContentDescription("Grupo anterior de horas de eventos");
+        siguiente.setContentDescription("Grupo siguiente de horas de eventos");
+        g.alCambiarReferencias((actualPagina, total) -> {
+            referencias.setVisibility(total > 0 ? View.VISIBLE : View.GONE);
+            controles.setVisibility(total > 1 ? View.VISIBLE : View.GONE);
+            pagina.setText(total > 1 ? "Horas de eventos · grupo " + (actualPagina + 1) + " de " + total
+                    : "Horas de eventos · A: alerta · P: pico");
+            anterior.setEnabled(actualPagina > 0);
+            siguiente.setEnabled(actualPagina + 1 < total);
+        });
 
         // mínimo, media y máximo: solo con lo medido (lo aproximado no cuenta)
         DoubleSummaryStatistics resumen = new DoubleSummaryStatistics();
@@ -245,12 +279,14 @@ public class ZonaActivity extends AppCompatActivity {
             if (serie.alertas.isEmpty() && serie.picos.isEmpty() && serie.avisos.isEmpty()) {
                 Ui.nota(ev, "No hay alertas ni picos en este periodo.");
             }
-            for (Serie.Evento a : serie.alertas) {
+            for (int i = 0; i < serie.alertas.size(); i++) {
+                Serie.Evento a = serie.alertas.get(i);
                 Nivel nv = Nivel.desdeId(a.nivel);
-                evento(ev, a, "En " + nv.nombre + " " + franja(a.desde, a.hasta), "Máximo ", nv);
+                evento(ev, a, "A" + (i + 1) + " · En " + nv.nombre + " " + franja(a.desde, a.hasta), "Máximo ", nv);
             }
-            for (Serie.Evento p : serie.picos) {
-                evento(ev, p, "Pico · " + hora(p.desde, true), "", magnitud.nivel(p.valor));
+            for (GraficaHistorica.Pico pico : GraficaHistorica.picos(serie)) {
+                Serie.Evento p = pico.evento;
+                evento(ev, p, "Pico " + pico.etiqueta + " · " + hora(p.desde, true), "", magnitud.nivel(p.valor));
             }
             for (Serie.Evento a : serie.avisos) {
                 evento(ev, a, "Aviso emitido · " + hora(a.desde, true), "", magnitud.nivel(a.valor));
@@ -290,7 +326,7 @@ public class ZonaActivity extends AppCompatActivity {
     private static final java.time.format.DateTimeFormatter FMT_DIA = java.time.format.DateTimeFormatter.ofPattern("EEE d HH:mm", new java.util.Locale("es", "ES"));
 
     // --------------------------------------------------------------
-    // # effects: lee la zona horaria del dispositivo
+    // # Usa la misma zona horaria española que el eje de la gráfica.
     // + ms: DateTime, conDia: B
     //       -->
     //           hora() --x
@@ -298,12 +334,14 @@ public class ZonaActivity extends AppCompatActivity {
     //   resultado: Text
     // --------------------------------------------------------------
     public static String hora(long ms, boolean conDia) {
-        java.time.ZonedDateTime t = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault());
-        return (conDia ? FMT_DIA : FMT_HORA).format(t);
+        java.time.ZonedDateTime t = java.time.Instant.ofEpochMilli(ms).atZone(GraficaHistorica.ZONA);
+        String texto = (conDia ? FMT_DIA : FMT_HORA).format(t);
+        return GraficaHistorica.ZONA.getRules().getValidOffsets(t.toLocalDateTime()).size() > 1
+                ? texto + " " + t.getOffset().getId() : texto;
     }
 
     // --------------------------------------------------------------
-    // # effects: lee la zona horaria del dispositivo
+    // # Usa la misma zona horaria española que el eje de la gráfica.
     // + desde: DateTime, hasta: DateTime
     //       -->
     //           franja() --x
@@ -311,7 +349,7 @@ public class ZonaActivity extends AppCompatActivity {
     //   resultado: Text
     // --------------------------------------------------------------
     static String franja(long desde, long hasta) {
-        java.time.ZoneId z = java.time.ZoneId.systemDefault();
+        java.time.ZoneId z = GraficaHistorica.ZONA;
         boolean mismoDia = java.time.Instant.ofEpochMilli(desde).atZone(z).toLocalDate()
                 .equals(java.time.Instant.ofEpochMilli(hasta).atZone(z).toLocalDate());
         return hora(desde, true) + " – " + (mismoDia ? hora(hasta, false) : hora(hasta, true));
